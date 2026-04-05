@@ -51,7 +51,7 @@ class RepositoriesRenderer:
             # Create informative empty state panel consistent with other components
             empty_state_panel = Panel(
                 Text.from_markup(
-                    "ℹ️  No snapshot repositories are currently configured.\n\n"
+                    "💡 No snapshot repositories are currently configured.\n\n"
                     "Repositories are required for creating backups of your Elasticsearch data.\n"
                     "Common repository types include:\n"
                     "• [cyan]S3[/cyan] - Amazon S3 storage\n"
@@ -333,9 +333,9 @@ class RepositoriesRenderer:
     def _get_type_icon(self, repo_type: str) -> str:
         """Get appropriate icon for repository type."""
         type_icons = {
-            's3': '☁️',
-            'gcs': '☁️',
-            'azure': '☁️',
+            's3': '🌐',
+            'gcs': '🌐',
+            'azure': '🌐',
             'fs': '📁',
             'hdfs': '📂',
             'url': '🌐'

@@ -159,9 +159,9 @@ class TestRepositoriesRenderer(unittest.TestCase):
 
     def test_get_type_icon(self):
         """Test type icon retrieval."""
-        self.assertEqual(self.renderer._get_type_icon('s3'), '☁️')
-        self.assertEqual(self.renderer._get_type_icon('gcs'), '☁️')
-        self.assertEqual(self.renderer._get_type_icon('azure'), '☁️')
+        self.assertEqual(self.renderer._get_type_icon('s3'), '🌐')
+        self.assertEqual(self.renderer._get_type_icon('gcs'), '🌐')
+        self.assertEqual(self.renderer._get_type_icon('azure'), '🌐')
         self.assertEqual(self.renderer._get_type_icon('fs'), '📁')
         self.assertEqual(self.renderer._get_type_icon('hdfs'), '📂')
         self.assertEqual(self.renderer._get_type_icon('unknown'), '❓')
