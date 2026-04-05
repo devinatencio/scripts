@@ -1,0 +1,6 @@
+my-index-001
+my-index-002
+logs-2024.01.01
+logs-2024.01.02
+metrics-prod-2024.01.01
+app-logs-staging-001

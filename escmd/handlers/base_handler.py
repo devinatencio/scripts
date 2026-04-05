@@ -19,18 +19,28 @@ from rich import box
 
 class BaseHandler(ABC):
     """Abstract base class for all command handlers."""
-    
-    def __init__(self, es_client, args, console, config_file, location_config, current_location=None):
+
+    def __init__(
+        self,
+        es_client,
+        args,
+        console,
+        config_file,
+        location_config,
+        current_location=None,
+        logger=None,
+    ):
         """
         Initialize the base handler with common dependencies.
-        
+
         Args:
             es_client: Elasticsearch client instance
             args: Parsed command line arguments
             console: Rich console instance for output formatting
-            config_file: Configuration file path
+            config_file: Path to configuration file
             location_config: Location-specific configuration
             current_location: Current location identifier
+            logger: Logger instance for file logging (optional)
         """
         self.es_client = es_client
         self.args = args
@@ -38,6 +48,7 @@ class BaseHandler(ABC):
         self.config_file = config_file
         self.location_config = location_config
         self.current_location = current_location
+        self.logger = logger or logging.getLogger(self.__class__.__name__)
 
     def _get_cluster_connection_info(self):
         """Get cluster connection information for display."""
@@ -47,9 +58,11 @@ class BaseHandler(ABC):
 
     def _find_shard_matches(self, shards_data, indice):
         """Find shards matching a given index pattern."""
-        pattern = rf'.*{indice}.*'
-        matches = [shard for shard in shards_data if re.findall(pattern, shard['index'])]
-        return sorted(matches, key=lambda x: (x['prirep'], int(x['shard'])))
+        pattern = rf".*{indice}.*"
+        matches = [
+            shard for shard in shards_data if re.findall(pattern, shard["index"])
+        ]
+        return sorted(matches, key=lambda x: (x["prirep"], int(x["shard"])))
 
     def _print_shard_info(self, matches):
         """Print information about matching shards."""
@@ -59,14 +72,16 @@ class BaseHandler(ABC):
 
     def _get_shard_info(self, shard):
         """Get formatted shard information string."""
-        shard_name = shard['index']
-        shard_state = shard['state']
-        shard_shard = shard['shard']
-        shard_prirep = shard['prirep']
-        shard_primary_ornot = 'true' if shard_prirep == "p" else 'false'
+        shard_name = shard["index"]
+        shard_state = shard["state"]
+        shard_shard = shard["shard"]
+        shard_prirep = shard["prirep"]
+        shard_primary_ornot = "true" if shard_prirep == "p" else "false"
 
         if shard_state == "UNASSIGNED":
-            shard_reason = self.es_client.get_index_allocation_explain(shard_name, shard_shard, shard_primary_ornot)
-            unassigned_info = shard_reason['unassigned_info']
+            shard_reason = self.es_client.get_index_allocation_explain(
+                shard_name, shard_shard, shard_primary_ornot
+            )
+            unassigned_info = shard_reason["unassigned_info"]
             return f"{shard_name} {shard_prirep} {shard_shard} {shard_state} Reason: {unassigned_info['reason']} Last Status: {unassigned_info['last_allocation_status']}"
         return f"{shard_name} {shard_prirep} {shard_shard} {shard_state}"

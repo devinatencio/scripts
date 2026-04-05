@@ -10,6 +10,12 @@ Comprehensive index management including listing, freezing, dangling index clean
 ./escmd.py indices --status red       # Filter by health status
 ./escmd.py indices "logs-*"           # Filter by regex pattern
 ./escmd.py indices --delete "temp-*"  # Delete indices matching pattern
+
+# Rollover outlier analysis and ingest watch
+./escmd.py indices-analyze            # Doc-count outliers vs sibling medians (defaults)
+./escmd.py help indices-analyze       # Flags and examples
+./escmd.py indices-watch-collect --interval 60   # Sample _cat stats to JSON (see help topic)
+./escmd.py indices-watch-report                  # Summarize samples without ES (see help topic)
 ./escmd.py indice my-index-name       # Single index details
 ./escmd.py freeze my-index-name       # Freeze an index
 ./escmd.py unfreeze my-index-name     # Unfreeze an index
@@ -79,6 +85,53 @@ Display comprehensive index information with rich formatting and powerful filter
 - **Advanced Filtering**: Pattern matching, status filtering, and ILM phase detection
 - **Legend Panels**: Optional legend and quick actions (configurable)
 - **Smart Paging**: Automatic paging for large datasets
+
+### 📈 Rollover-series traffic analysis (`indices-analyze`)
+
+Find backing indices whose **document count** is high compared to **siblings in the same rollover series** (names matching `...-YYYY.MM.DD-NNNNNN`, including `.ds-` data stream backing indices). Each index is compared to a **leave-one-out median** of peer `docs.count`; rows qualify when the ratio is at least **`--min-ratio`** (default **5**). **Store size** vs peer median is included for context. Output sorts by **highest docs ratio** first.
+
+```bash
+./escmd.py indices-analyze                      # Default cluster, default filters
+./escmd.py indices-analyze 'logs-*'            # Optional regex (same as indices)
+./escmd.py indices-analyze stream --min-ratio 2
+./escmd.py indices-analyze stream --min-docs 0 --within-days 14
+./escmd.py indices-analyze --format json       # summary + rows for scripts
+./escmd.py help indices-analyze                # Full flag list
+```
+
+| Option | Description |
+|--------|-------------|
+| `regex` | Optional pattern; same semantics as `indices` |
+| `--format` | `table` (default) or `json` |
+| `--status` | `green`, `yellow`, or `red` |
+| `--min-peers` | Minimum other indices in the series (default **1**) |
+| `--min-ratio` | Minimum docs / peer median docs (default **5**) |
+| `--min-docs` | Minimum document count on the outlier index (default **1000000**; **0** disables) |
+| `--top` | Limit to top N rows after sort |
+| `--within-days` | Only generations whose date in the index name is within the last N **UTC** days |
+| `--pager` | Force pager |
+
+### 💰 S3 storage estimate (`indices-s3-estimate`)
+
+Rough **object-storage cost** from **primary shard size** only (`pri.store.size`), for indices whose **rollover date in the name** falls in the last **`--within-days`** UTC calendar days (default **30**), using the same name pattern as **`indices-analyze`**. Supply your **USD/GiB-month** rate (for example S3 Standard list price). Optional **`--buffer-percent`** scales totals before pricing. Output includes **month 1** cost plus **cumulative** buffered size and cost for **months 2 and 3** (2× and 3× the monthly slice × price, steady accrual). Not a substitute for an AWS bill; snapshot size may differ from live index store.
+
+```bash
+./escmd.py indices-s3-estimate --price-per-gib-month 0.023
+./escmd.py indices-s3-estimate 'logs-*' --price-per-gib-month 0.023 --buffer-percent 10
+./escmd.py help indices-s3-estimate
+```
+
+| Option | Description |
+|--------|-------------|
+| `regex` | Optional pattern; same semantics as `indices` |
+| `--price-per-gib-month` | Required; USD per gibibyte-month (1024³ bytes) |
+| `--within-days` | Rollover date in name on or after UTC today minus N days (default **30**) |
+| `--buffer-percent` | Scale bytes by (1 + P/100) before applying price |
+| `--include-undated` | Include indices without `YYYY.MM.DD` in the name (use carefully) |
+| `--status` | `green`, `yellow`, or `red` |
+| `--format` | `table` (default) or `json` |
+
+For **short-window ingest rates** and **HOT** markers without relying on a single `_cat` snapshot, use **`indices-watch-collect`** then **`indices-watch-report`** (see **`./escmd.py help`** topics).
 
 **Index Information Displayed:**
 - **Index Name**: Full index name with pattern recognition

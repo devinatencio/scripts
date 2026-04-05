@@ -1,0 +1,81 @@
+# ESCMD Main Configuration File
+# This file contains core application settings, cluster groups, and password management
+# Server definitions are maintained separately in elastic_servers.yml
+
+# Core application settings
+settings:
+  # box_style: SQUARE_DOUBLE_HEAD
+  health_style: dashboard
+  classic_style: panel
+  enable_paging: false
+  paging_threshold: 50
+  # Maximum number of ILM unmanaged indices to show before truncating
+  ilm_display_limit: 50
+  # Show Legend Panels (at bottom)
+  show_legend_panels: false
+  # Enable ASCII only mode
+  ascii_mode: false
+  # Themes File
+  themes_file: themes.yml
+  # Connection Timeout
+  connection_timeout: 30
+  read_timeout: 120
+  snapshot_timeout: 120
+  # S3 Snapshot Index
+  restored_snapshots_index: rc_snapshots
+  # Dangling Cleanup
+  dangling_cleanup:
+    max_retries: 3
+    retry_delay: 5
+    timeout: 60
+    default_log_level: INFO
+    enable_progress_bar: true
+    confirmation_required: true
+  # Elasticsearch Creds
+  elastic_username: kibana_system
+
+# Logical groupings of clusters for easier management
+  test:
+    description: "Development and Testing"
+    clusters:
+      - dev
+      - dev-test
+
+# Metrics Configuration for InfluxDB/VictoriaMetrics
+# Used when --metrics flag is specified with dangling command
+metrics:
+  # Metrics database type: influxdb, influxdb2, or victoriametrics
+  type: influxdb
+  # Database endpoint URL (default/fallback)
+  endpoint: http://localhost:8086
+  # Database name (InfluxDB v1) or bucket (InfluxDB v2) (default/fallback)
+  database: escmd
+  # Authentication credentials
+  username:
+  password:
+  # Token for InfluxDB v2 authentication (alternative to username/password)
+  token:
+  # Organization for InfluxDB v2
+  org:
+  # Bucket for InfluxDB v2 (alternative to database)
+  bucket:
+  # SSL verification
+  verify_ssl: true
+  # Request timeout in seconds
+  timeout: 10
+
+  # Environment-specific metrics configurations
+  # These settings override the defaults above when --env parameter is used
+  environments:
+    lab:
+      endpoint: http://influxdb.ops.example.com:8086
+      database: elk-stats
+    us:
+      endpoint: http://influxdb.us.example.com:8086
+      database: elk-stats
+
+# Centralized password management by environment
+# Format: passwords.<env>.<username>: <password>
+#passwords:
+#  env:
+#   username: password

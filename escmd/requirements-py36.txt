@@ -1,0 +1,13 @@
+# Python 3.6 Compatible Requirements
+# This file contains package versions that are compatible with Python 3.6
+
+elasticsearch==7.17.12
+PyYAML==6.0.1
+Requests==2.31.0
+rich==12.6.0
+setuptools==53.0.0
+urllib3==1.26.16
+cryptography==36.0.2
+inquirerpy==0.3.4
+psutil==5.9.8
+Jinja2==3.0.3

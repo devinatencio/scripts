@@ -9,15 +9,17 @@ from .special_commands import (
     handle_locations,
     handle_get_default,
     handle_set_default,
-    handle_show_settings
+    handle_show_settings,
+    handle_cluster_groups
 )
 
 __all__ = [
     'create_argument_parser',
-    'show_custom_help', 
+    'show_custom_help',
     'handle_version',
-    'handle_locations', 
+    'handle_locations',
     'handle_get_default',
     'handle_set_default',
-    'handle_show_settings'
+    'handle_show_settings',
+    'handle_cluster_groups'
 ]

@@ -21,7 +21,7 @@ class TestHealthHandler:
         args = argparse.Namespace()
         args.format = 'table'
         args.command = 'health'
-        
+
         return HealthHandler(
             es_client=mock_es_client,
             args=args,
@@ -34,46 +34,45 @@ class TestHealthHandler:
     def test_handle_ping_success(self, health_handler, mock_es_client):
         """Test successful ping command."""
         # Setup mock return values
-        mock_es_client.test_connection.return_value = True
+        mock_es_client.ping.return_value = True
         mock_es_client.get_cluster_health.return_value = {
             'cluster_name': 'test-cluster',
             'status': 'green',
             'number_of_nodes': 3,
             'number_of_data_nodes': 2
         }
-        
+
         with patch('builtins.print') as mock_print:
             health_handler.handle_ping()
-            
+
         # Verify ES client methods were called
-        mock_es_client.test_connection.assert_called_once()
+        mock_es_client.ping.assert_called_once()
         mock_es_client.get_cluster_health.assert_called_once()
 
     def test_handle_ping_json_format(self, health_handler, mock_es_client):
         """Test ping command with JSON output format."""
         health_handler.args.format = 'json'
-        
-        mock_es_client.test_connection.return_value = True
+
+        mock_es_client.ping.return_value = True
         expected_health_data = {
             'cluster_name': 'test-cluster',
             'status': 'green',
             'number_of_nodes': 3
         }
         mock_es_client.get_cluster_health.return_value = expected_health_data
-        
+
         with patch('builtins.print') as mock_print:
             health_handler.handle_ping()
-            
+
         # Should print JSON data
         mock_print.assert_called()
         # Check that JSON was printed (the exact call will contain formatted JSON)
         printed_calls = [call[0][0] for call in mock_print.call_args_list]
         assert any('test-cluster' in str(call) for call in printed_calls)
 
-    def test_handle_health_quick_mode(self, health_handler, mock_es_client):
-        """Test health command in quick mode."""
-        health_handler.args.quick = True
-        
+    def test_handle_health_default_mode(self, health_handler, mock_es_client):
+        """Test health command in default (quick) mode."""
+        # health command is now quick by default - no flag needed
         mock_es_client.get_cluster_health.return_value = {
             'cluster_name': 'test-cluster',
             'status': 'green',
@@ -83,59 +82,65 @@ class TestHealthHandler:
             'active_shards': 20,
             'unassigned_shards': 0
         }
-        
-        with patch.object(health_handler, '_handle_health_quick') as mock_quick:
+        mock_es_client.style_system.get_semantic_style.return_value = "cyan"
+        mock_es_client.style_system.create_semantic_text.return_value = "Complete"
+
+        with patch('builtins.print'):
             health_handler.handle_health()
-            mock_quick.assert_called_once()
+            # Verify basic health data was retrieved
+            mock_es_client.get_cluster_health.assert_called_once()
 
     def test_handle_health_json_format(self, health_handler, mock_es_client):
         """Test health command with JSON output."""
         health_handler.args.format = 'json'
-        
+
         expected_health_data = {
             'cluster_name': 'test-cluster',
             'status': 'green',
             'number_of_nodes': 3
         }
         mock_es_client.get_cluster_health.return_value = expected_health_data
-        
+
         with patch('builtins.print') as mock_print:
             health_handler.handle_health()
-            
+
         mock_es_client.get_cluster_health.assert_called_once()
         # Should print JSON
         expected_json = json.dumps(expected_health_data)
         mock_print.assert_called_with(expected_json)
 
-    def test_handle_health_comparison_mode(self, health_handler):
-        """Test health command in comparison mode."""
+    def test_handle_health_detail_comparison_mode(self, health_handler):
+        """Test health-detail command in comparison mode."""
         health_handler.args.compare = True
-        
+
         with patch.object(health_handler, '_handle_health_compare') as mock_compare:
-            health_handler.handle_health()
+            health_handler.handle_health_detail()
             mock_compare.assert_called_once()
 
-    def test_handle_health_group_mode(self, health_handler):
-        """Test health command in group mode."""
+    def test_handle_health_detail_group_mode(self, health_handler):
+        """Test health-detail command in group mode."""
         health_handler.args.group = True
-        
+
         with patch.object(health_handler, '_handle_health_group') as mock_group:
-            health_handler.handle_health()
+            health_handler.handle_health_detail()
             mock_group.assert_called_once()
 
     def test_handle_cluster_check(self, health_handler, mock_es_client):
         """Test cluster check functionality."""
+        # Set JSON format to trigger the perform_cluster_health_checks path
+        health_handler.args.format = 'json'
+
         # Mock the cluster check method
-        mock_es_client.comprehensive_cluster_check.return_value = {
+        mock_es_client.perform_cluster_health_checks.return_value = {
             'status': 'healthy',
             'issues': [],
             'summary': 'All checks passed'
         }
-        
+
         with patch('builtins.print'):
             health_handler.handle_cluster_check()
-            
-        mock_es_client.comprehensive_cluster_check.assert_called_once()
+
+        mock_es_client.perform_cluster_health_checks.assert_called_once()
 
     def test_sanitize_for_json(self, health_handler):
         """Test the _sanitize_for_json utility method."""
@@ -149,9 +154,9 @@ class TestHealthHandler:
                 'inner_int': 456
             }
         }
-        
+
         result = health_handler._sanitize_for_json(test_data)
-        
+
         assert result['string_field'] == 'test'
         assert result['int_field'] == 123
         assert result['float_field'] == 45.67
@@ -161,12 +166,12 @@ class TestHealthHandler:
 
     def test_ping_connection_failure(self, health_handler, mock_es_client):
         """Test ping command when connection fails."""
-        mock_es_client.test_connection.return_value = False
-        
+        mock_es_client.ping.return_value = False
+
         with patch('builtins.print') as mock_print:
             health_handler.handle_ping()
-            
-        mock_es_client.test_connection.assert_called_once()
+
+        mock_es_client.ping.assert_called_once()
         # Should not call get_cluster_health if connection fails
         mock_es_client.get_cluster_health.assert_not_called()
 
@@ -182,11 +187,11 @@ class TestHealthHandler:
             'status': health_status,
             'number_of_nodes': 3
         }
-        
+
         # Set the style in location config
         health_handler.location_config['health_style'] = expected_style
-        
+
         with patch('builtins.print'):
             health_handler.handle_health()
-            
+
         mock_es_client.get_cluster_health.assert_called_once()

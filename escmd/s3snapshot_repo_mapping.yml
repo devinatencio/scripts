@@ -1,0 +1,7 @@
+# S3 Snapshot Repository Mapping Configuration
+# This file defines which Elasticsearch clusters should have elastic_s3snapshot_repo configured
+# Format: cluster_name: repository_name
+
+# Add additional cluster to repository mappings below as needed
+# Example:
+# cluster-name: repo-name

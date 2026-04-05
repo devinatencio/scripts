@@ -373,7 +373,7 @@ python3 escmd.py show-settings
 python3 escmd.py ping
 
 # 4. Test basic commands
-python3 escmd.py health --quick
+python3 escmd.py health
 
 # 5. Test rich formatting
 python3 escmd.py --help

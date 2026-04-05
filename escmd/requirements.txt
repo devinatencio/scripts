@@ -1,6 +1,10 @@
 elasticsearch==7.17.12
 PyYAML==6.0.1
 Requests==2.31.0
-rich==13.7.1
+rich>=14.3.3
 setuptools==53.0.0
 urllib3==1.26.16
+cryptography>=3.4.0
+inquirerpy==0.3.4
+psutil>=7.0.0
+Jinja2>=3.0.0

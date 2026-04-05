@@ -46,7 +46,7 @@ for cluster in "${CLUSTERS[@]}"; do
     echo "Checking cluster: $cluster" >> $LOG_FILE
     
     # Health check with JSON output for parsing
-    HEALTH_STATUS=$(./escmd.py -l $cluster health --quick --format json)
+    HEALTH_STATUS=$(./escmd.py -l $cluster health --format json)
     STATUS=$(echo $HEALTH_STATUS | jq -r '.status')
     
     if [ "$STATUS" != "green" ]; then
@@ -334,7 +334,7 @@ METRICS_FILE="/var/lib/prometheus/escmd-metrics.prom"
 
 for cluster in "${CLUSTERS[@]}"; do
     # Collect cluster health metrics
-    HEALTH=$(./escmd.py -l $cluster health --quick --format json)
+    HEALTH=$(./escmd.py -l $cluster health --format json)
     STATUS=$(echo $HEALTH | jq -r '.status')
     NODES=$(echo $HEALTH | jq -r '.nodes.total')
     SHARDS_ACTIVE=$(echo $HEALTH | jq -r '.shards.active')
@@ -465,7 +465,7 @@ echo "Planning to freeze indices older than: $FREEZE_DATE"
 ./escmd.py -l production unfreeze "urgent-logs-*" --regex --yes
 
 # 4. Monitor cluster during unfreeze operations
-./escmd.py -l production health --quick
+./escmd.py -l production health
 ```
 
 #### Automated Freeze/Unfreeze Workflow
@@ -494,7 +494,7 @@ echo "$(date): Freezing indices older than $FREEZE_DATE" >> $LOG_FILE
 
 # Health check after freeze operations
 echo "$(date): Post-freeze health check" >> $LOG_FILE
-HEALTH_STATUS=$(./escmd.py -l $CLUSTER health --quick)
+HEALTH_STATUS=$(./escmd.py -l $CLUSTER health)
 echo "$HEALTH_STATUS" >> $LOG_FILE
 
 # Alert if health degraded

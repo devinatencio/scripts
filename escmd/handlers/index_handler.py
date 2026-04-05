@@ -1,12 +1,5 @@
 """
-IndexHandler - Handles index-related operations
-
-This module contains handlers for:
-- flush: Synced flush operations with retry logic
-- freeze: Index freezing for read-only optimization  
-- indice: Detailed information about a specific index
-- indices: List and manage indices with filtering options
-- recovery: Index recovery status monitoring
+IndexHandler - Handles index-related operationsß
 """
 
 from .base_handler import BaseHandler
@@ -16,6 +9,7 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.columns import Columns
 from rich.table import Table as InnerTable
+from rich.prompt import Confirm
 
 
 class IndexHandler(BaseHandler):
@@ -29,18 +23,22 @@ class IndexHandler(BaseHandler):
             # Get cluster information for context
             try:
                 health_data = self.es_client.get_cluster_health()
-                cluster_name = health_data.get('cluster_name', 'Unknown')
-                total_nodes = health_data.get('number_of_nodes', 0)
+                cluster_name = health_data.get("cluster_name", "Unknown")
+                total_nodes = health_data.get("number_of_nodes", 0)
             except:
-                cluster_name = 'Unknown'
+                cluster_name = "Unknown"
                 total_nodes = 0
 
             # Create title panel
             title_panel = Panel(
-                Text(f"🔄 Elasticsearch Flush Operation", style="bold cyan", justify="center"),
+                self.es_client.style_system.create_semantic_text(
+                    "🔄 Elasticsearch Flush Operation", "info", justify="center"
+                ),
                 subtitle=f"Synced flush across cluster: {cluster_name} | Nodes: {total_nodes}",
-                border_style="cyan",
-                padding=(1, 2)
+                border_style=self.es_client.style_system._get_style(
+                    "table_styles", "border_style", "white"
+                ),
+                padding=(1, 2),
             )
 
             # Show operation in progress
@@ -69,40 +67,53 @@ class IndexHandler(BaseHandler):
                         use_ssl=self.es_client.use_ssl,
                         authentication=self.es_client.elastic_authentication,
                         username=self.es_client.elastic_username,
-                        password=self.es_client.elastic_password
+                        password=self.es_client.elastic_password,
                     )
 
                 # Check results
                 if isinstance(flushsync, dict):
-                    failed_shards = flushsync.get('_shards', {}).get('failed', 0)
-                    total_shards = flushsync.get('_shards', {}).get('total', 0)
-                    successful_shards = flushsync.get('_shards', {}).get('successful', 0)
+                    failed_shards = flushsync.get("_shards", {}).get("failed", 0)
+                    total_shards = flushsync.get("_shards", {}).get("total", 0)
+                    successful_shards = flushsync.get("_shards", {}).get(
+                        "successful", 0
+                    )
 
                     if failed_shards > 0 and retry_count <= max_retries:
                         # Show retry information
                         retry_panel = Panel(
-                            Text(f"⚠️ Flush attempt {retry_count} completed with {failed_shards}/{total_shards} failed shards.\n"
+                            self.es_client.style_system.create_semantic_text(
+                                f"🔶 Flush attempt {retry_count} completed with {failed_shards}/{total_shards} failed shards.\n"
                                 f"💤 Waiting 10 seconds before retry {retry_count + 1}...",
-                                style="yellow", justify="center"),
+                                "warning",
+                                justify="center",
+                            ),
                             title=f"🔄 Retry {retry_count}/{max_retries + 1}",
-                            border_style="yellow",
-                            padding=(1, 2)
+                            border_style=self.es_client.style_system.get_semantic_style(
+                                "warning"
+                            ),
+                            padding=(1, 2),
                         )
                         console.print(retry_panel)
 
                         # Wait 10 seconds before retry
                         import time
+
                         time.sleep(10)
                     elif failed_shards == 0:
                         # Success - show completion message if retries were needed
                         if retry_count > 1:
                             success_panel = Panel(
-                                Text(f"🎉 Flush operation successful after {retry_count} attempts!\n"
+                                self.es_client.style_system.create_semantic_text(
+                                    f"🎉 Flush operation successful after {retry_count} attempts!\n"
                                     f"All {total_shards} shards successfully flushed.",
-                                    style="green", justify="center"),
+                                    "success",
+                                    justify="center",
+                                ),
                                 title="✅ Operation Complete",
-                                border_style="green",
-                                padding=(1, 2)
+                                border_style=self.es_client.style_system.get_semantic_style(
+                                    "success"
+                                ),
+                                padding=(1, 2),
                             )
                             console.print(success_panel)
                         break
@@ -113,12 +124,17 @@ class IndexHandler(BaseHandler):
             # Check if we hit max retries
             if failed_shards > 0 and retry_count > max_retries:
                 max_retry_panel = Panel(
-                    Text(f"⚠️ Maximum retry attempts ({max_retries + 1}) exceeded.\n"
+                    self.es_client.style_system.create_semantic_text(
+                        f"🔶 Maximum retry attempts ({max_retries + 1}) exceeded.\n"
                         f"Final result: {failed_shards}/{total_shards} shards still failed.",
-                        style="red", justify="center"),
+                        "error",
+                        justify="center",
+                    ),
                     title="❌ Max Retries Exceeded",
-                    border_style="red",
-                    padding=(1, 2)
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "error"
+                    ),
+                    padding=(1, 2),
                 )
                 console.print(max_retry_panel)
                 print()
@@ -126,13 +142,15 @@ class IndexHandler(BaseHandler):
             # Process and display results
             if isinstance(flushsync, dict):
                 # Extract statistics from flush response
-                total_shards = flushsync.get('_shards', {}).get('total', 0)
-                successful_shards = flushsync.get('_shards', {}).get('successful', 0)
-                failed_shards = flushsync.get('_shards', {}).get('failed', 0)
-                skipped_shards = flushsync.get('_shards', {}).get('skipped', 0)
+                total_shards = flushsync.get("_shards", {}).get("total", 0)
+                successful_shards = flushsync.get("_shards", {}).get("successful", 0)
+                failed_shards = flushsync.get("_shards", {}).get("failed", 0)
+                skipped_shards = flushsync.get("_shards", {}).get("skipped", 0)
 
                 # Calculate success rate
-                success_rate = (successful_shards / total_shards * 100) if total_shards > 0 else 0
+                success_rate = (
+                    (successful_shards / total_shards * 100) if total_shards > 0 else 0
+                )
 
                 # Create operation summary panel
                 summary_table = InnerTable(show_header=False, box=None, padding=(0, 1))
@@ -143,22 +161,28 @@ class IndexHandler(BaseHandler):
                 summary_table.add_row("Total Shards:", "📊", f"{total_shards:,}")
                 summary_table.add_row("Successful:", "✅", f"{successful_shards:,}")
                 summary_table.add_row("Failed:", "❌", f"{failed_shards:,}")
-                summary_table.add_row("Skipped:", "⏭️", f"{skipped_shards:,}")
+                summary_table.add_row("Skipped:", "💤", f"{skipped_shards:,}")
                 summary_table.add_row("Success Rate:", "📈", f"{success_rate:.1f}%")
 
                 # Add retry information if retries were performed
                 if retry_count > 1:
                     summary_table.add_row("Retry Attempts:", "🔄", f"{retry_count}")
                     if failed_shards == 0:
-                        summary_table.add_row("Final Status:", "🎉", "Success after retries")
+                        summary_table.add_row(
+                            "Final Status:", "🎉", "Success after retries"
+                        )
                     elif retry_count > max_retries:
-                        summary_table.add_row("Final Status:", "⚠️", "Max retries exceeded")
+                        summary_table.add_row(
+                            "Final Status:", "🔶", "Max retries exceeded"
+                        )
 
                 summary_panel = Panel(
                     summary_table,
                     title="📊 Flush Summary",
-                    border_style="green" if failed_shards == 0 else "yellow",
-                    padding=(1, 2)
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "success" if failed_shards == 0 else "warning"
+                    ),
+                    padding=(1, 2),
                 )
 
                 # Create operation details panel
@@ -168,7 +192,11 @@ class IndexHandler(BaseHandler):
                 details_table.add_column("Value", no_wrap=True)
 
                 # Determine operation type and status based on retry attempts
-                operation_type = "Synced Flush with Auto-Retry" if retry_count > 1 else "Synced Flush"
+                operation_type = (
+                    "Synced Flush with Auto-Retry"
+                    if retry_count > 1
+                    else "Synced Flush"
+                )
                 if failed_shards == 0:
                     if retry_count > 1:
                         status_text = f"Success (after {retry_count} attempts)"
@@ -181,7 +209,7 @@ class IndexHandler(BaseHandler):
                     status_icon = "❌"
                 else:
                     status_text = "Partial Success"
-                    status_icon = "⚠️"
+                    status_icon = "🔶"
 
                 details_table.add_row("Operation:", "🔄", operation_type)
                 details_table.add_row("Cluster:", "🏢", cluster_name)
@@ -190,24 +218,28 @@ class IndexHandler(BaseHandler):
 
                 details_panel = Panel(
                     details_table,
-                    title="⚙️ Operation Details",
-                    border_style="blue",
-                    padding=(1, 2)
+                    title="🔩 Operation Details",
+                    border_style=self.es_client.style_system._get_style(
+                        "table_styles", "border_style", "white"
+                    ),
+                    padding=(1, 2),
                 )
 
                 # Show detailed results if there are failures
-                if failed_shards > 0 or 'failures' in flushsync:
+                if failed_shards > 0 or "failures" in flushsync:
                     if retry_count > max_retries:
                         failures_content = f"❌ Flush operation failed after {retry_count} attempts (including {retry_count - 1} retries).\n\n"
-                        failures_content += f"⚠️ {failed_shards}/{total_shards} shards still failed after maximum retry attempts:\n\n"
+                        failures_content += f"🔶 {failed_shards}/{total_shards} shards still failed after maximum retry attempts:\n\n"
                     else:
-                        failures_content = "⚠️ Some shards failed to flush:\n\n"
+                        failures_content = "🔶 Some shards failed to flush:\n\n"
 
-                    failures = flushsync.get('failures', [])
+                    failures = flushsync.get("failures", [])
                     for i, failure in enumerate(failures[:5]):  # Show first 5 failures
-                        index = failure.get('index', 'Unknown')
-                        shard = failure.get('shard', 'Unknown')
-                        reason = failure.get('reason', {}).get('reason', 'Unknown error')
+                        index = failure.get("index", "Unknown")
+                        shard = failure.get("shard", "Unknown")
+                        reason = failure.get("reason", {}).get(
+                            "reason", "Unknown error"
+                        )
                         failures_content += f"• {index}[{shard}]: {reason}\n"
 
                     if len(failures) > 5:
@@ -219,30 +251,49 @@ class IndexHandler(BaseHandler):
 
                     failures_panel = Panel(
                         failures_content.rstrip(),
-                        title="❌ Persistent Flush Failures" if retry_count > max_retries else "⚠️ Flush Failures",
-                        border_style="red",
-                        padding=(1, 2)
+                        title="❌ Persistent Flush Failures"
+                        if retry_count > max_retries
+                        else "🔶 Flush Failures",
+                        border_style=self.es_client.style_system.get_semantic_style(
+                            "error"
+                        ),
+                        padding=(1, 2),
                     )
                 else:
                     # Success message
                     if retry_count > 1:
-                        success_text = Text(f"🎉 All shards flushed successfully after {retry_count} attempts!\n\nThe synced flush operation completed successfully with automatic retry recovery.", style="green")
+                        success_text = self.es_client.style_system.create_semantic_text(
+                            f"🎉 All shards flushed successfully after {retry_count} attempts!\n\nThe synced flush operation completed successfully with automatic retry recovery.",
+                            "success",
+                        )
                         title = "🎉 Success with Auto-Retry"
                     else:
-                        success_text = Text("🎉 All shards flushed successfully!\n\nThe synced flush operation completed without errors.", style="green")
+                        success_text = self.es_client.style_system.create_semantic_text(
+                            "🎉 All shards flushed successfully!\n\nThe synced flush operation completed without errors.",
+                            "success",
+                        )
                         title = "✅ Success"
 
                     failures_panel = Panel(
                         success_text,
                         title=title,
-                        border_style="green",
-                        padding=(1, 2)
+                        border_style=self.es_client.style_system.get_semantic_style(
+                            "success"
+                        ),
+                        padding=(1, 2),
                     )
 
                 # Create quick actions panel
                 actions_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-                actions_table.add_column("Action", style="bold cyan", no_wrap=True)
-                actions_table.add_column("Command", style="dim white")
+                actions_table.add_column(
+                    "Action",
+                    style=self.es_client.style_system.get_semantic_style("primary"),
+                    no_wrap=True,
+                )
+                actions_table.add_column(
+                    "Command",
+                    style=self.es_client.style_system.get_semantic_style("secondary"),
+                )
 
                 actions_table.add_row("Check health:", "./escmd.py health")
                 actions_table.add_row("View shards:", "./escmd.py shards")
@@ -252,8 +303,10 @@ class IndexHandler(BaseHandler):
                 actions_panel = Panel(
                     actions_table,
                     title="🚀 Related Commands",
-                    border_style="magenta",
-                    padding=(1, 2)
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "primary"
+                    ),
+                    padding=(1, 2),
                 )
 
                 # Display results
@@ -268,10 +321,14 @@ class IndexHandler(BaseHandler):
             else:
                 # Simple response display
                 simple_panel = Panel(
-                    Text(f"🔄 Flush completed: {flushsync}", style="green", justify="center"),
+                    self.es_client.style_system.create_semantic_text(
+                        f"🔄 Flush completed: {flushsync}", "success", justify="center"
+                    ),
                     title="✅ Flush Operation Complete",
-                    border_style="green",
-                    padding=(1, 2)
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "success"
+                    ),
+                    padding=(1, 2),
                 )
                 print()
                 console.print(simple_panel)
@@ -279,232 +336,116 @@ class IndexHandler(BaseHandler):
 
         except Exception as e:
             error_panel = Panel(
-                Text(f"❌ Flush operation failed: {str(e)}", style="bold red", justify="center"),
+                self.es_client.style_system.create_semantic_text(
+                    f"❌ Flush operation failed: {str(e)}", "error", justify="center"
+                ),
                 subtitle="Check cluster connectivity and permissions",
-                border_style="red",
-                padding=(1, 2)
+                border_style=self.es_client.style_system.get_semantic_style("error"),
+                padding=(1, 2),
             )
             print()
             console.print(error_panel)
             print()
+
+    def _is_regex_pattern(self, pattern):
+        """
+        Automatically detect if a pattern contains regex metacharacters.
+
+        Args:
+            pattern (str): The pattern to analyze
+
+        Returns:
+            bool: True if pattern appears to contain regex syntax
+        """
+        if not pattern:
+            return False
+
+        # Common regex metacharacters that indicate regex usage
+        regex_indicators = [
+            r"\.\*",  # .* (very common in Elasticsearch patterns)
+            r"\.\+",  # .+
+            r"\[.*\]",  # [character class]
+            r"\{.*\}",  # {quantifier}
+            r"\|",  # | (alternation)
+            r"\^",  # ^ (start anchor)
+            r"\$",  # $ (end anchor)
+            r"\+",  # + (one or more)
+            r"\?",  # ? (zero or one)
+            r"\(",  # ( (grouping start)
+            r"\)",  # ) (grouping end)
+            r"\\[a-zA-Z]",  # escaped characters like \d, \w, etc.
+        ]
+
+        # Check for regex indicators
+        for indicator in regex_indicators:
+            if re.search(indicator, pattern):
+                return True
+
+        # Special case: if pattern ends with .* it's almost certainly regex
+        if pattern.endswith(".*"):
+            return True
+
+        # Special case: if pattern contains * but not at the end (glob-like)
+        # Convert common glob patterns to suggest regex usage
+        if "*" in pattern and not pattern.endswith("*"):
+            return True
+
+        # Special case: single asterisk is likely a regex wildcard
+        if pattern == "*":
+            return True
+
+        # Special case: dots in the middle of patterns with other chars might be regex
+        # But be conservative - only if there are other regex-like indicators
+        # Don't treat simple index names with dots as regex (like index.with.dots)
+        if "." in pattern and len(pattern) > 1:
+            # Only consider it regex if there are other indicators or it's a clear pattern
+            dot_count = pattern.count(".")
+            # If there are multiple dots or dots with other special chars, likely regex
+            if dot_count > 2 or any(
+                char in pattern
+                for char in ["*", "+", "?", "[", "]", "^", "$", "|", "(", ")"]
+            ):
+                return True
+
+        return False
 
     def handle_freeze(self):
-        """Enhanced freeze command with Rich formatting and validation details."""
-        console = self.console
-
-        try:
-            # Get cluster information for context
-            try:
-                health_data = self.es_client.get_cluster_health()
-                cluster_name = health_data.get('cluster_name', 'Unknown')
-            except:
-                cluster_name = 'Unknown'
-
-            # Create title panel
-            title_panel = Panel(
-                Text(f"🧊 Elasticsearch Index Freeze Operation", style="bold cyan", justify="center"),
-                subtitle=f"Target Index: {self.args.indice} | Cluster: {cluster_name}",
-                border_style="cyan",
-                padding=(1, 2)
-            )
-
-            print()
-            console.print(title_panel)
-            print()
-
-            # Validate index exists
-            with console.status(f"Validating index '{self.args.indice}'..."):
-                cluster_active_indices = self.es_client.get_indices_stats(pattern=None, status=None)
-
-            # Ensure cluster_active_indices is a list
-            if isinstance(cluster_active_indices, str):
-                try:
-                    import json
-                    cluster_active_indices = json.loads(cluster_active_indices)
-                except json.JSONDecodeError:
-                    cluster_active_indices = []
-
-            if not cluster_active_indices:
-                error_panel = Panel(
-                    Text(f"❌ No active indices found in cluster", style="bold red", justify="center"),
-                    subtitle="Unable to retrieve cluster indices",
-                    border_style="red",
-                    padding=(1, 2)
-                )
-                console.print(error_panel)
-                return
-
-            # Find matching index
-            if not self.es_client.find_matching_index(cluster_active_indices, self.args.indice):
-                # Show available indices for reference
-                try:
-                    available_indices = [idx.get('index', 'Unknown') for idx in cluster_active_indices[:10] if isinstance(idx, dict)]
-                except (AttributeError, TypeError):
-                    available_indices = ['Unable to retrieve index list']
-
-                error_content = f"Index '{self.args.indice}' not found in the cluster.\n\n"
-                error_content += "Available indices (showing first 10):\n"
-                for idx in available_indices:
-                    error_content += f"• {idx}\n"
-
-                error_panel = Panel(
-                    error_content.rstrip(),
-                    title="❌ Index Not Found",
-                    border_style="red",
-                    padding=(1, 2)
-                )
-                console.print(error_panel)
-                return
-
-            # Get index details before freezing
-            try:
-                index_info = next((idx for idx in cluster_active_indices if isinstance(idx, dict) and idx.get('index') == self.args.indice), {})
-                health = index_info.get('health', 'unknown')
-                status = index_info.get('status', 'unknown')
-                docs_count = index_info.get('docs.count', '0')
-                size = index_info.get('store.size', '0')
-            except:
-                health = 'unknown'
-                status = 'unknown'
-                docs_count = '0'
-                size = '0'
-                size = '0'
-
-            # Create validation summary panel
-            validation_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-            validation_table.add_column("Label", style="bold", no_wrap=True)
-            validation_table.add_column("Icon", justify="left", width=3)
-            validation_table.add_column("Value", no_wrap=True)
-
-            health_icon = "🟢" if health == 'green' else "🟡" if health == 'yellow' else "🔴"
-            status_icon = "📂" if status == 'open' else "🔒"
-
-            validation_table.add_row("Index Name:", "📋", self.args.indice)
-            validation_table.add_row("Health:", health_icon, health.title())
-            validation_table.add_row("Status:", status_icon, status.title())
-            
-            # Format documents count safely
-            try:
-                formatted_docs = f"{int(docs_count):,}" if docs_count and str(docs_count).isdigit() else str(docs_count)
-            except (ValueError, TypeError):
-                formatted_docs = str(docs_count) if docs_count else '0'
-            
-            validation_table.add_row("Documents:", "📊", formatted_docs)
-            validation_table.add_row("Size:", "💾", size)
-
-            validation_panel = Panel(
-                validation_table,
-                title="✅ Index Validation",
-                border_style="green",
-                padding=(1, 2)
-            )
-
-            # Create freeze operation details panel
-            operation_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-            operation_table.add_column("Label", style="bold", no_wrap=True)
-            operation_table.add_column("Icon", justify="left", width=3)
-            operation_table.add_column("Value", no_wrap=True)
-
-            operation_table.add_row("Operation:", "🧊", "Freeze Index")
-            operation_table.add_row("Effect:", "🔒", "Read-Only Mode")
-            operation_table.add_row("Storage:", "💾", "Optimized")
-            operation_table.add_row("Searchable:", "🔍", "Yes")
-            operation_table.add_row("Writable:", "✏️", "No")
-
-            operation_panel = Panel(
-                operation_table,
-                title="⚙️ Freeze Operation",
-                border_style="blue",
-                padding=(1, 2)
-            )
-
-            # Display validation
-            console.print(Columns([validation_panel, operation_panel], expand=True))
-            print()
-
-            # Perform freeze operation
-            with console.status(f"Freezing index '{self.args.indice}'..."):
-                freeze_result = self.es_client.freeze_index(self.args.indice)
-
-            if freeze_result:
-                # Success panel
-                success_text = f"🎉 Index '{self.args.indice}' has been successfully frozen!\n\n"
-                success_text += "The index is now:\n"
-                success_text += "• ✅ Read-only (no new writes allowed)\n"
-                success_text += "• 💾 Storage optimized for reduced memory usage\n"
-                success_text += "• 🔍 Still searchable but with potential latency\n"
-                success_text += "• 🧊 Frozen state persists until manually unfrozen"
-
-                success_panel = Panel(
-                    success_text,
-                    title="✅ Freeze Operation Successful",
-                    border_style="green",
-                    padding=(1, 2)
-                )
-
-                # Create quick actions panel
-                actions_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-                actions_table.add_column("Action", style="bold cyan", no_wrap=True)
-                actions_table.add_column("Command", style="dim white")
-
-                actions_table.add_row("Verify status:", f"./escmd.py indice {self.args.indice}")
-                actions_table.add_row("List indices:", "./escmd.py indices")
-                actions_table.add_row("Unfreeze index:", f"./escmd.py unfreeze {self.args.indice}")
-                actions_table.add_row("Check settings:", "./escmd.py settings")
-
-                actions_panel = Panel(
-                    actions_table,
-                    title="🚀 Next Steps",
-                    border_style="magenta",
-                    padding=(1, 2)
-                )
-
-                console.print(success_panel)
-                print()
-                console.print(actions_panel)
-                print()
-
-            else:
-                # Failure panel
-                error_panel = Panel(
-                    Text(f"❌ Failed to freeze index '{self.args.indice}'", style="bold red", justify="center"),
-                    subtitle="Check index permissions and cluster status",
-                    border_style="red",
-                    padding=(1, 2)
-                )
-                console.print(error_panel)
-                print()
-
-        except Exception as e:
-            error_panel = Panel(
-                Text(f"❌ Freeze operation error: {str(e)}", style="bold red", justify="center"),
-                subtitle=f"Failed to freeze index: {self.args.indice}",
-                border_style="red",
-                padding=(1, 2)
-            )
-            print()
-            console.print(error_panel)
-            print()
-
-    def handle_unfreeze(self):
-        """Enhanced unfreeze command with regex support and confirmation prompts."""
+        """Enhanced freeze command with regex support and confirmation prompts."""
         import re
+
         console = self.console
+
+        # Handle --exact flag to disable auto-detection
+        if hasattr(self.args, "exact") and self.args.exact:
+            self.args.regex = False
+        # Auto-detect regex patterns if --regex not explicitly set and --exact not used
+        elif not self.args.regex:
+            auto_detected = self._is_regex_pattern(self.args.pattern)
+            if auto_detected:
+                self.args.regex = True
+                console.print(
+                    f"[dim yellow]Auto-detected regex pattern: '{self.args.pattern}' (use --exact to disable)[/dim yellow]"
+                )
+                console.print()
 
         try:
             # Get cluster information for context
             try:
                 health_data = self.es_client.get_cluster_health()
-                cluster_name = health_data.get('cluster_name', 'Unknown')
+                cluster_name = health_data.get("cluster_name", "Unknown")
             except:
-                cluster_name = 'Unknown'
+                cluster_name = "Unknown"
 
             # Create title panel
             title_panel = Panel(
-                Text(f"❄️  Elasticsearch Index Unfreeze Operation", style="bold cyan", justify="center"),
+                self.es_client.style_system.create_semantic_text(
+                    "🧊 Elasticsearch Index Freeze Operation", "info", justify="center"
+                ),
                 subtitle=f"Pattern: {self.args.pattern} | Cluster: {cluster_name}",
-                border_style="cyan",
-                padding=(1, 2)
+                border_style=self.es_client.style_system._get_style(
+                    "table_styles", "border_style", "white"
+                ),
+                padding=(1, 2),
             )
 
             print()
@@ -513,61 +454,82 @@ class IndexHandler(BaseHandler):
 
             # Get all indices to search through
             with console.status(f"Retrieving cluster indices..."):
-                cluster_active_indices = self.es_client.get_indices_stats(pattern=None, status=None)
+                cluster_active_indices = self.es_client.get_indices_stats(
+                    pattern=None, status=None
+                )
 
             # Ensure cluster_active_indices is a list
             if isinstance(cluster_active_indices, str):
                 try:
                     import json
+
                     cluster_active_indices = json.loads(cluster_active_indices)
                 except json.JSONDecodeError:
                     cluster_active_indices = []
 
             if not cluster_active_indices:
                 error_panel = Panel(
-                    Text(f"❌ No active indices found in cluster", style="bold red", justify="center"),
+                    self.es_client.style_system.create_semantic_text(
+                        f"❌ No active indices found in cluster",
+                        "error",
+                        justify="center",
+                    ),
                     subtitle="Unable to retrieve cluster indices",
-                    border_style="red",
-                    padding=(1, 2)
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "error"
+                    ),
+                    padding=(1, 2),
                 )
                 console.print(error_panel)
                 return
 
             # Find matching indices
             matching_indices = []
-            
+
             if self.args.regex:
                 # Use regex matching
                 try:
                     pattern = re.compile(self.args.pattern)
                     for idx in cluster_active_indices:
                         if isinstance(idx, dict):
-                            index_name = idx.get('index', '')
+                            index_name = idx.get("index", "")
                             if pattern.search(index_name):
                                 matching_indices.append(idx)
                 except re.error as e:
                     error_panel = Panel(
-                        Text(f"❌ Invalid regex pattern: {str(e)}", style="bold red", justify="center"),
+                        self.es_client.style_system.create_semantic_text(
+                            f"❌ Invalid regex pattern: {str(e)}",
+                            "error",
+                            justify="center",
+                        ),
                         subtitle="Please check your regex syntax",
-                        border_style="red",
-                        padding=(1, 2)
+                        border_style=self.es_client.style_system.get_semantic_style(
+                            "error"
+                        ),
+                        padding=(1, 2),
                     )
                     console.print(error_panel)
                     return
             else:
                 # Exact match
                 for idx in cluster_active_indices:
-                    if isinstance(idx, dict) and idx.get('index') == self.args.pattern:
+                    if isinstance(idx, dict) and idx.get("index") == self.args.pattern:
                         matching_indices.append(idx)
 
             if not matching_indices:
                 # Show available indices for reference
                 try:
-                    available_indices = [idx.get('index', 'Unknown') for idx in cluster_active_indices[:10] if isinstance(idx, dict)]
+                    available_indices = [
+                        idx.get("index", "Unknown")
+                        for idx in cluster_active_indices[:10]
+                        if isinstance(idx, dict)
+                    ]
                 except (AttributeError, TypeError):
-                    available_indices = ['Unable to retrieve index list']
+                    available_indices = ["Unable to retrieve index list"]
 
-                error_content = f"No indices found matching pattern '{self.args.pattern}'\n\n"
+                error_content = (
+                    f"No indices found matching pattern '{self.args.pattern}'\n\n"
+                )
                 error_content += "Available indices (showing first 10):\n"
                 for idx in available_indices:
                     error_content += f"• {idx}\n"
@@ -575,49 +537,63 @@ class IndexHandler(BaseHandler):
                 error_panel = Panel(
                     error_content.rstrip(),
                     title="❌ No Matching Indices",
-                    border_style="red",
-                    padding=(1, 2)
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "error"
+                    ),
+                    padding=(1, 2),
                 )
                 console.print(error_panel)
                 return
 
             # Display matching indices
             indices_table = InnerTable(show_header=True, box=None, padding=(0, 1))
-            indices_table.add_column("Index Name", style="bold cyan", no_wrap=True)
+            indices_table.add_column(
+                "Index Name",
+                style=self.es_client.style_system.get_semantic_style("primary"),
+                no_wrap=True,
+            )
             indices_table.add_column("Health", justify="center", width=8)
             indices_table.add_column("Status", justify="center", width=8)
             indices_table.add_column("Documents", justify="right", width=12)
             indices_table.add_column("Size", justify="right", width=10)
 
             for idx in matching_indices:
-                index_name = idx.get('index', 'Unknown')
-                health = idx.get('health', 'unknown')
-                status = idx.get('status', 'unknown')
-                docs_count = idx.get('docs.count', '0')
-                size = idx.get('store.size', '0')
+                index_name = idx.get("index", "Unknown")
+                health = idx.get("health", "unknown")
+                status = idx.get("status", "unknown")
+                docs_count = idx.get("docs.count", "0")
+                size = idx.get("store.size", "0")
 
                 # Format documents count safely
                 try:
-                    formatted_docs = f"{int(docs_count):,}" if docs_count and str(docs_count).isdigit() else str(docs_count)
+                    formatted_docs = (
+                        f"{int(docs_count):,}"
+                        if docs_count and str(docs_count).isdigit()
+                        else str(docs_count)
+                    )
                 except (ValueError, TypeError):
-                    formatted_docs = str(docs_count) if docs_count else '0'
+                    formatted_docs = str(docs_count) if docs_count else "0"
 
-                health_icon = "🟢" if health == 'green' else "🟡" if health == 'yellow' else "🔴"
-                status_icon = "📂" if status == 'open' else "🔒"
+                health_icon = (
+                    "🟢" if health == "green" else "🟡" if health == "yellow" else "🔴"
+                )
+                status_icon = "📂" if status == "open" else "🔒"
 
                 indices_table.add_row(
-                    index_name,
-                    f"{health_icon} {health.title()}",
-                    f"{status_icon} {status.title()}",
-                    formatted_docs,
-                    size
+                    str(index_name),
+                    f"{health_icon} {str(health).title()}",
+                    f"{status_icon} {str(status).title()}",
+                    str(formatted_docs),
+                    str(size),
                 )
 
             indices_panel = Panel(
                 indices_table,
                 title=f"🎯 Found {len(matching_indices)} Matching Indices",
-                border_style="blue",
-                padding=(1, 2)
+                border_style=self.es_client.style_system._get_style(
+                    "table_styles", "border_style", "white"
+                ),
+                padding=(1, 2),
             )
 
             console.print(indices_panel)
@@ -625,9 +601,367 @@ class IndexHandler(BaseHandler):
 
             # Confirmation prompt for multiple indices
             if len(matching_indices) > 1 and not self.args.yes:
-                from rich.prompt import Confirm
-                
-                warning_text = f"⚠️  You are about to unfreeze {len(matching_indices)} indices.\n\n"
+                warning_text = (
+                    f"🔶  You are about to freeze {len(matching_indices)} indices.\n\n"
+                )
+                warning_text += "This operation will:\n"
+                warning_text += "• Make all selected indices read-only\n"
+                warning_text += "• Optimize storage for reduced memory usage\n"
+                warning_text += (
+                    "• Indices remain searchable but with potential latency\n\n"
+                )
+                warning_text += "Are you sure you want to continue?"
+
+                warning_panel = Panel(
+                    warning_text,
+                    title="🔶 Multiple Indices Confirmation",
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "warning"
+                    ),
+                    padding=(1, 2),
+                )
+
+                console.print(warning_panel)
+                print()
+
+                # Custom confirmation that supports y/n/yes/no
+                while True:
+                    try:
+                        response = (
+                            input("Proceed with freezing all matched indices? [y/N]: ")
+                            .strip()
+                            .lower()
+                        )
+                        if response in ["y", "yes"]:
+                            proceed = True
+                            break
+                        elif response in [
+                            "n",
+                            "no",
+                            "",
+                        ]:  # Empty input defaults to 'no'
+                            proceed = False
+                            break
+                        else:
+                            console.print(
+                                "[yellow]Please enter 'yes', 'no', 'y', or 'n'[/yellow]"
+                            )
+                            continue
+                    except (EOFError, KeyboardInterrupt):
+                        proceed = False
+                        break
+
+                if not proceed:
+                    cancelled_panel = Panel(
+                        self.es_client.style_system.create_semantic_text(
+                            "❌ Operation cancelled by user",
+                            "warning",
+                            justify="center",
+                        ),
+                        subtitle="No indices were frozen",
+                        border_style=self.es_client.style_system.get_semantic_style(
+                            "warning"
+                        ),
+                        padding=(1, 2),
+                    )
+                    console.print(cancelled_panel)
+                    return
+
+            # Perform freeze operations
+            successful_indices = []
+            failed_indices = []
+
+            for idx in matching_indices:
+                index_name = idx.get("index", "Unknown")
+
+                with console.status(f"Freezing index '{index_name}'..."):
+                    result = self.es_client.freeze_index(index_name)
+
+                if result:
+                    successful_indices.append(index_name)
+                else:
+                    failed_indices.append(index_name)
+
+            # Display results
+            if successful_indices:
+                success_text = (
+                    f"🎉 Successfully frozen {len(successful_indices)} indices!\n\n"
+                )
+                success_text += "Frozen indices:\n"
+                for idx in successful_indices:
+                    success_text += f"• ✅ {idx}\n"
+
+                success_text += "\nThese indices are now:\n"
+                success_text += "• 🔒 Read-only (no new writes allowed)\n"
+                success_text += "• 💾 Storage optimized for reduced memory usage\n"
+                success_text += "• 🔍 Still searchable but with potential latency\n"
+                success_text += "• 🧊 Frozen state persists until manually unfrozen"
+
+                success_panel = Panel(
+                    success_text.rstrip(),
+                    title="✅ Freeze Operation Successful",
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "success"
+                    ),
+                    padding=(1, 2),
+                )
+                console.print(success_panel)
+                print()
+
+            if failed_indices:
+                failure_text = f"❌ Failed to freeze {len(failed_indices)} indices:\n\n"
+                for idx in failed_indices:
+                    failure_text += f"• ❌ {idx}\n"
+
+                failure_panel = Panel(
+                    failure_text.rstrip(),
+                    title="🔶 Some Operations Failed",
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "error"
+                    ),
+                    padding=(1, 2),
+                )
+                console.print(failure_panel)
+                print()
+
+            # Create next steps panel
+            actions_table = InnerTable(show_header=False, box=None, padding=(0, 1))
+            actions_table.add_column(
+                "Action",
+                style=self.es_client.style_system.get_semantic_style("primary"),
+                no_wrap=True,
+            )
+            actions_table.add_column(
+                "Command",
+                style=self.es_client.style_system.get_semantic_style("secondary"),
+            )
+
+            actions_table.add_row("Verify status:", "./escmd.py indices")
+            actions_table.add_row(
+                "Check specific index:", "./escmd.py indice <index-name>"
+            )
+            if successful_indices:
+                actions_table.add_row(
+                    "Unfreeze again:", f"./escmd.py unfreeze <index-name>"
+                )
+
+            actions_panel = Panel(
+                actions_table,
+                title="🚀 Next Steps",
+                border_style=self.es_client.style_system.get_semantic_style("primary"),
+                padding=(1, 2),
+            )
+            console.print(actions_panel)
+            print()
+
+        except Exception as e:
+            error_panel = Panel(
+                self.es_client.style_system.create_semantic_text(
+                    f"❌ Freeze operation error: {str(e)}", "error", justify="center"
+                ),
+                subtitle=f"Failed to process pattern: {self.args.pattern}",
+                border_style=self.es_client.style_system.get_semantic_style("error"),
+                padding=(1, 2),
+            )
+            print()
+            console.print(error_panel)
+            print()
+
+    def handle_unfreeze(self):
+        """Enhanced unfreeze command with regex support and confirmation prompts."""
+        import re
+
+        console = self.console
+
+        # Handle --exact flag to disable auto-detection
+        if hasattr(self.args, "exact") and self.args.exact:
+            self.args.regex = False
+        # Auto-detect regex patterns if --regex not explicitly set and --exact not used
+        elif not self.args.regex:
+            auto_detected = self._is_regex_pattern(self.args.pattern)
+            if auto_detected:
+                self.args.regex = True
+                console.print(
+                    f"[dim yellow]Auto-detected regex pattern: '{self.args.pattern}' (use --exact to disable)[/dim yellow]"
+                )
+                console.print()
+
+        try:
+            # Get cluster information for context
+            try:
+                health_data = self.es_client.get_cluster_health()
+                cluster_name = health_data.get("cluster_name", "Unknown")
+            except:
+                cluster_name = "Unknown"
+
+            # Create title panel
+            title_panel = Panel(
+                self.es_client.style_system.create_semantic_text(
+                    "🔥 Elasticsearch Index Unfreeze Operation", "info", justify="center"
+                ),
+                subtitle=f"Pattern: {self.args.pattern} | Cluster: {cluster_name}",
+                border_style=self.es_client.style_system._get_style(
+                    "table_styles", "border_style", "white"
+                ),
+                padding=(1, 2),
+            )
+
+            print()
+            console.print(title_panel)
+            print()
+
+            # Get all indices to search through
+            with console.status(f"Retrieving cluster indices..."):
+                cluster_active_indices = self.es_client.get_indices_stats(
+                    pattern=None, status=None
+                )
+
+            # Ensure cluster_active_indices is a list
+            if isinstance(cluster_active_indices, str):
+                try:
+                    import json
+
+                    cluster_active_indices = json.loads(cluster_active_indices)
+                except json.JSONDecodeError:
+                    cluster_active_indices = []
+
+            if not cluster_active_indices:
+                error_panel = Panel(
+                    self.es_client.style_system.create_semantic_text(
+                        f"❌ No active indices found in cluster",
+                        "error",
+                        justify="center",
+                    ),
+                    subtitle="Unable to retrieve cluster indices",
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "error"
+                    ),
+                    padding=(1, 2),
+                )
+                console.print(error_panel)
+                return
+
+            # Find matching indices
+            matching_indices = []
+
+            if self.args.regex:
+                # Use regex matching
+                try:
+                    pattern = re.compile(self.args.pattern)
+                    for idx in cluster_active_indices:
+                        if isinstance(idx, dict):
+                            index_name = idx.get("index", "")
+                            if pattern.search(index_name):
+                                matching_indices.append(idx)
+                except re.error as e:
+                    error_panel = Panel(
+                        self.es_client.style_system.create_semantic_text(
+                            f"❌ Invalid regex pattern: {str(e)}",
+                            "error",
+                            justify="center",
+                        ),
+                        subtitle="Please check your regex syntax",
+                        border_style=self.es_client.style_system.get_semantic_style(
+                            "error"
+                        ),
+                        padding=(1, 2),
+                    )
+                    console.print(error_panel)
+                    return
+            else:
+                # Exact match
+                for idx in cluster_active_indices:
+                    if isinstance(idx, dict) and idx.get("index") == self.args.pattern:
+                        matching_indices.append(idx)
+
+            if not matching_indices:
+                # Show available indices for reference
+                try:
+                    available_indices = [
+                        idx.get("index", "Unknown")
+                        for idx in cluster_active_indices[:10]
+                        if isinstance(idx, dict)
+                    ]
+                except (AttributeError, TypeError):
+                    available_indices = ["Unable to retrieve index list"]
+
+                error_content = (
+                    f"No indices found matching pattern '{self.args.pattern}'\n\n"
+                )
+                error_content += "Available indices (showing first 10):\n"
+                for idx in available_indices:
+                    error_content += f"• {idx}\n"
+
+                error_panel = Panel(
+                    error_content.rstrip(),
+                    title="❌ No Matching Indices",
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "error"
+                    ),
+                    padding=(1, 2),
+                )
+                console.print(error_panel)
+                return
+
+            # Display matching indices
+            indices_table = InnerTable(show_header=True, box=None, padding=(0, 1))
+            indices_table.add_column(
+                "Index Name",
+                style=self.es_client.style_system.get_semantic_style("primary"),
+                no_wrap=True,
+            )
+            indices_table.add_column("Health", justify="center", width=8)
+            indices_table.add_column("Status", justify="center", width=8)
+            indices_table.add_column("Documents", justify="right", width=12)
+            indices_table.add_column("Size", justify="right", width=10)
+
+            for idx in matching_indices:
+                index_name = idx.get("index", "Unknown")
+                health = idx.get("health", "unknown")
+                status = idx.get("status", "unknown")
+                docs_count = idx.get("docs.count", "0")
+                size = idx.get("store.size", "0")
+
+                # Format documents count safely
+                try:
+                    formatted_docs = (
+                        f"{int(docs_count):,}"
+                        if docs_count and str(docs_count).isdigit()
+                        else str(docs_count)
+                    )
+                except (ValueError, TypeError):
+                    formatted_docs = str(docs_count) if docs_count else "0"
+
+                health_icon = (
+                    "🟢" if health == "green" else "🟡" if health == "yellow" else "🔴"
+                )
+                status_icon = "📂" if status == "open" else "🔒"
+
+                indices_table.add_row(
+                    str(index_name),
+                    f"{health_icon} {str(health).title()}",
+                    f"{status_icon} {str(status).title()}",
+                    str(formatted_docs),
+                    str(size),
+                )
+
+            indices_panel = Panel(
+                indices_table,
+                title=f"🎯 Found {len(matching_indices)} Matching Indices",
+                border_style=self.es_client.style_system._get_style(
+                    "table_styles", "border_style", "white"
+                ),
+                padding=(1, 2),
+            )
+
+            console.print(indices_panel)
+            print()
+
+            # Confirmation prompt for multiple indices
+            if len(matching_indices) > 1 and not self.args.yes:
+                warning_text = (
+                    f"🔶  You are about to unfreeze {len(matching_indices)} indices.\n\n"
+                )
                 warning_text += "This operation will:\n"
                 warning_text += "• Make all selected indices writable again\n"
                 warning_text += "• Remove storage optimizations\n"
@@ -636,20 +970,57 @@ class IndexHandler(BaseHandler):
 
                 warning_panel = Panel(
                     warning_text,
-                    title="⚠️ Multiple Indices Confirmation",
-                    border_style="yellow",
-                    padding=(1, 2)
+                    title="🔶 Multiple Indices Confirmation",
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "warning"
+                    ),
+                    padding=(1, 2),
                 )
 
                 console.print(warning_panel)
                 print()
 
-                if not Confirm.ask("Proceed with unfreezing all matched indices?", default=False):
+                # Custom confirmation that supports y/n/yes/no
+                while True:
+                    try:
+                        response = (
+                            input(
+                                "Proceed with unfreezing all matched indices? [y/N]: "
+                            )
+                            .strip()
+                            .lower()
+                        )
+                        if response in ["y", "yes"]:
+                            proceed = True
+                            break
+                        elif response in [
+                            "n",
+                            "no",
+                            "",
+                        ]:  # Empty input defaults to 'no'
+                            proceed = False
+                            break
+                        else:
+                            console.print(
+                                "[yellow]Please enter 'yes', 'no', 'y', or 'n'[/yellow]"
+                            )
+                            continue
+                    except (EOFError, KeyboardInterrupt):
+                        proceed = False
+                        break
+
+                if not proceed:
                     cancelled_panel = Panel(
-                        Text("❌ Operation cancelled by user", style="bold yellow", justify="center"),
+                        self.es_client.style_system.create_semantic_text(
+                            "❌ Operation cancelled by user",
+                            "warning",
+                            justify="center",
+                        ),
                         subtitle="No indices were unfrozen",
-                        border_style="yellow",
-                        padding=(1, 2)
+                        border_style=self.es_client.style_system.get_semantic_style(
+                            "warning"
+                        ),
+                        padding=(1, 2),
                     )
                     console.print(cancelled_panel)
                     return
@@ -659,11 +1030,11 @@ class IndexHandler(BaseHandler):
             failed_indices = []
 
             for idx in matching_indices:
-                index_name = idx.get('index', 'Unknown')
-                
+                index_name = idx.get("index", "Unknown")
+
                 with console.status(f"Unfreezing index '{index_name}'..."):
                     result = self.es_client.unfreeze_index(index_name)
-                
+
                 if result:
                     successful_indices.append(index_name)
                 else:
@@ -671,11 +1042,13 @@ class IndexHandler(BaseHandler):
 
             # Display results
             if successful_indices:
-                success_text = f"🎉 Successfully unfrozen {len(successful_indices)} indices!\n\n"
+                success_text = (
+                    f"🎉 Successfully unfrozen {len(successful_indices)} indices!\n\n"
+                )
                 success_text += "Unfrozen indices:\n"
                 for idx in successful_indices:
                     success_text += f"• ✅ {idx}\n"
-                
+
                 success_text += "\nThese indices are now:\n"
                 success_text += "• ✏️  Writable (accepting new documents)\n"
                 success_text += "• 🔄 Using normal memory management\n"
@@ -684,51 +1057,70 @@ class IndexHandler(BaseHandler):
                 success_panel = Panel(
                     success_text.rstrip(),
                     title="✅ Unfreeze Operation Successful",
-                    border_style="green",
-                    padding=(1, 2)
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "success"
+                    ),
+                    padding=(1, 2),
                 )
                 console.print(success_panel)
                 print()
 
             if failed_indices:
-                failure_text = f"❌ Failed to unfreeze {len(failed_indices)} indices:\n\n"
+                failure_text = (
+                    f"❌ Failed to unfreeze {len(failed_indices)} indices:\n\n"
+                )
                 for idx in failed_indices:
                     failure_text += f"• ❌ {idx}\n"
 
                 failure_panel = Panel(
                     failure_text.rstrip(),
-                    title="⚠️ Some Operations Failed",
-                    border_style="red",
-                    padding=(1, 2)
+                    title="🔶 Some Operations Failed",
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "error"
+                    ),
+                    padding=(1, 2),
                 )
                 console.print(failure_panel)
                 print()
 
             # Create next steps panel
             actions_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-            actions_table.add_column("Action", style="bold cyan", no_wrap=True)
-            actions_table.add_column("Command", style="dim white")
+            actions_table.add_column(
+                "Action",
+                style=self.es_client.style_system.get_semantic_style("primary"),
+                no_wrap=True,
+            )
+            actions_table.add_column(
+                "Command",
+                style=self.es_client.style_system.get_semantic_style("secondary"),
+            )
 
             actions_table.add_row("Verify status:", "./escmd.py indices")
-            actions_table.add_row("Check specific index:", "./escmd.py indice <index-name>")
+            actions_table.add_row(
+                "Check specific index:", "./escmd.py indice <index-name>"
+            )
             if successful_indices:
-                actions_table.add_row("Freeze again:", f"./escmd.py freeze <index-name>")
+                actions_table.add_row(
+                    "Freeze again:", f"./escmd.py freeze <index-name>"
+                )
 
             actions_panel = Panel(
                 actions_table,
                 title="🚀 Next Steps",
-                border_style="magenta",
-                padding=(1, 2)
+                border_style=self.es_client.style_system.get_semantic_style("primary"),
+                padding=(1, 2),
             )
             console.print(actions_panel)
             print()
 
         except Exception as e:
             error_panel = Panel(
-                Text(f"❌ Unfreeze operation error: {str(e)}", style="bold red", justify="center"),
+                self.es_client.style_system.create_semantic_text(
+                    f"❌ Unfreeze operation error: {str(e)}", "error", justify="center"
+                ),
                 subtitle=f"Failed to process pattern: {self.args.pattern}",
-                border_style="red",
-                padding=(1, 2)
+                border_style=self.es_client.style_system.get_semantic_style("error"),
+                padding=(1, 2),
             )
             print()
             console.print(error_panel)
@@ -737,16 +1129,16 @@ class IndexHandler(BaseHandler):
     def handle_indice(self):
         """Display detailed information about a specific index."""
         indice = self.args.indice
-        
+
         # Check if index name was provided
         if not indice:
             from rich.syntax import Syntax
             from rich.console import Console
             from rich.panel import Panel
             from rich.text import Text
-            
+
             console = Console()
-            
+
             # Create syntax-highlighted examples
             usage_code = """# Show details for a specific index
 ./escmd.py indice myindex-001
@@ -759,34 +1151,57 @@ class IndexHandler(BaseHandler):
 
 # To search indices with patterns:
 ./escmd.py indices "logs-*" """
-            
-            syntax = Syntax(usage_code, "bash", theme="monokai", line_numbers=False, background_color="default")
-            
+
+            syntax = Syntax(
+                usage_code,
+                "bash",
+                theme="monokai",
+                line_numbers=False,
+                background_color="default",
+            )
+
             # Create the error message
             error_text = Text()
-            error_text.append("❌ Index name is required.\n\n", style="bold red")
-            error_text.append("Usage: ", style="bold white")
-            error_text.append("./escmd.py indice <index_name>", style="bold cyan")
-            
+            error_text.append(
+                "❌ Index name is required.\n\n",
+                style=self.es_client.style_system.get_semantic_style("error"),
+            )
+            error_text.append(
+                "Usage: ",
+                style=self.es_client.style_system.get_semantic_style("primary"),
+            )
+            error_text.append(
+                "./escmd.py indice <index_name>",
+                style=self.es_client.style_system.get_semantic_style("info"),
+            )
+
             # Print error message
             console.print("\n")
-            console.print(Panel(
-                error_text,
-                title="Missing Index Name",
-                border_style="red",
-                padding=(1, 2)
-            ))
-            
+            console.print(
+                Panel(
+                    error_text,
+                    title="Missing Index Name",
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "error"
+                    ),
+                    padding=(1, 2),
+                )
+            )
+
             # Print syntax-highlighted examples
-            console.print(Panel(
-                syntax,
-                title="🚀 Command Examples",
-                border_style="green",
-                padding=(1, 2)
-            ))
+            console.print(
+                Panel(
+                    syntax,
+                    title="🚀 Command Examples",
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "success"
+                    ),
+                    padding=(1, 2),
+                )
+            )
             console.print("\n")
             return
-            
+
         self.es_client.print_detailed_indice_info(indice)
 
     def handle_indices(self):
@@ -799,13 +1214,517 @@ class IndexHandler(BaseHandler):
             self._handle_regex_indices()
             return
 
-        if self.args.format == 'json':
-            print(self.es_client.filter_indices(pattern=None, status=self.args.status))
+        if self.args.format == "json":
+            indices = self.es_client.filter_indices(
+                pattern=None, status=self.args.status
+            )
+
+            if self.args.delete:
+                # For JSON format with deletion, create comprehensive output
+                output = {"indices": indices, "deletion_requested": True}
+
+                # Perform deletion and capture results
+                deletion_result = self._handle_indices_deletion_json(indices)
+                output["deletion_results"] = deletion_result
+
+                print(json.dumps(output, indent=2))
+            else:
+                # Just print indices without deletion
+                print(json.dumps(indices, indent=2))
         else:
-            indices = self.es_client.filter_indices(pattern=None, status=self.args.status)
-            # Check if pager argument exists and use it
-            use_pager = getattr(self.args, 'pager', False)
-            self.es_client.print_table_indices(indices, use_pager=use_pager)
+            # Get filtered indices
+            indices = self.es_client.filter_indices(
+                pattern=None, status=self.args.status
+            )
+
+            # If filtering by status and no results, provide better feedback
+            if not indices and self.args.status:
+                # Get total indices count for context
+                all_indices = self.es_client.filter_indices(pattern=None, status=None)
+                if all_indices:
+                    self._display_no_matching_status_message(
+                        self.args.status, len(all_indices)
+                    )
+                else:
+                    # Use original message if truly no indices exist
+                    use_pager = getattr(self.args, "pager", False)
+                    self.es_client.print_table_indices(indices, use_pager=use_pager)
+            else:
+                # Check if pager argument exists and use it
+                use_pager = getattr(self.args, "pager", False)
+                self.es_client.print_table_indices(indices, use_pager=use_pager)
+
+            # Handle deletion if requested
+            if self.args.delete:
+                self._handle_indices_deletion(indices)
+
+    def handle_indices_analyze(self):
+        """Compare backing indices to siblings in the same rollover series."""
+        from processors.index_traffic_analyzer import analyze_index_traffic
+
+        pattern = getattr(self.args, "regex", None)
+        status = getattr(self.args, "status", None)
+        min_peers = getattr(self.args, "min_peers", 1)
+        min_ratio = getattr(self.args, "min_ratio", 5.0)
+        min_docs = getattr(self.args, "min_docs", 1_000_000)
+        top = getattr(self.args, "top", None)
+        within_days = getattr(self.args, "within_days", None)
+
+        indices = self.es_client.filter_indices(pattern=pattern, status=status)
+        result = analyze_index_traffic(
+            indices,
+            min_peers=min_peers,
+            min_ratio=min_ratio,
+            min_docs=min_docs,
+            top=top,
+            within_days=within_days,
+        )
+
+        if getattr(self.args, "format", "table") == "json":
+            print(json.dumps(result, indent=2))
+            return
+
+        use_pager = getattr(self.args, "pager", False)
+        if hasattr(self.es_client, "index_renderer"):
+            self.es_client.index_renderer.print_indices_traffic_analysis(
+                result, console=self.console, use_pager=use_pager
+            )
+        else:
+            print(json.dumps(result, indent=2))
+
+    def handle_indices_s3_estimate(self):
+        """Estimate monthly S3 cost from summed primary store for dated indices in a UTC window."""
+        from processors.s3_storage_estimate import estimate_s3_monthly_storage_cost
+
+        pattern = getattr(self.args, "regex", None)
+        status = getattr(self.args, "status", None)
+        within_days = int(getattr(self.args, "within_days", 30) or 30)
+        buffer_percent = float(getattr(self.args, "buffer_percent", 0.0) or 0.0)
+        price = float(getattr(self.args, "price_per_gib_month", 0.0) or 0.0)
+        include_undated = bool(getattr(self.args, "include_undated", False))
+
+        indices = self.es_client.filter_indices(pattern=pattern, status=status)
+        result = estimate_s3_monthly_storage_cost(
+            indices,
+            within_days=within_days,
+            buffer_percent=buffer_percent,
+            price_per_gib_month_usd=price,
+            include_undated=include_undated,
+        )
+
+        if getattr(self.args, "format", "table") == "json":
+            print(json.dumps(result, indent=2))
+            return
+
+        if hasattr(self.es_client, "index_renderer"):
+            self.es_client.index_renderer.print_s3_storage_estimate(
+                result, console=self.console
+            )
+        else:
+            print(json.dumps(result, indent=2))
+
+    def handle_indices_watch_collect(self):
+        """Periodically snapshot index stats to JSON files (multi-host retry)."""
+        import signal
+        import time
+        from datetime import datetime, timezone
+        from pathlib import Path
+
+        from processors.indices_watch import (
+            default_run_dir,
+            list_indices_stats_with_failover,
+            save_sample_file,
+            utc_today_iso,
+            write_run_metadata,
+        )
+
+        interval = max(1, int(getattr(self.args, "interval", 60) or 60))
+        duration = getattr(self.args, "duration", None)
+        pattern = getattr(self.args, "regex", None)
+        status = getattr(self.args, "status", None)
+        retries = max(1, int(getattr(self.args, "retries", 3) or 3))
+        retry_delay = max(0.0, float(getattr(self.args, "retry_delay", 2.0) or 2.0))
+
+        cluster = self.current_location or "default"
+        collect_out = getattr(self.args, "collect_output_dir", None)
+        day_iso = utc_today_iso()
+        if collect_out and str(collect_out).strip():
+            out_dir = Path(str(collect_out).strip()).expanduser()
+        else:
+            out_dir = default_run_dir(cluster, day_iso)
+
+        out_dir.mkdir(parents=True, exist_ok=True)
+        write_run_metadata(
+            out_dir,
+            cluster=cluster,
+            interval_seconds=interval,
+            duration_seconds=duration,
+            pattern=pattern,
+            status=status,
+        )
+
+        stop_flag = {"stop": False}
+
+        def on_sigint(_signum, _frame):
+            stop_flag["stop"] = True
+
+        signal.signal(signal.SIGINT, on_sigint)
+
+        self.console.print(
+            f"[bold]indices-watch-collect[/bold] → {out_dir}  interval={interval}s"
+        )
+        if duration:
+            self.console.print(f"duration={duration}s (Ctrl+C stops early)")
+        else:
+            self.console.print("Run until Ctrl+C")
+
+        seq = 0
+        start = time.time()
+        while not stop_flag["stop"]:
+            if duration is not None and (time.time() - start) >= duration:
+                break
+            loop_start = time.time()
+            data, host = list_indices_stats_with_failover(
+                self.es_client,
+                pattern=pattern,
+                status=status,
+                retries_per_host=retries,
+                retry_delay_sec=retry_delay,
+            )
+            if host is None:
+                self.console.print(
+                    "[red]Sample failed on all hosts; retrying next interval[/red]"
+                )
+            else:
+                seq += 1
+                now = datetime.now(timezone.utc)
+                path = save_sample_file(
+                    out_dir,
+                    cluster=cluster,
+                    indices=data,
+                    captured_at=now,
+                    host_used=host,
+                    sequence=seq,
+                )
+                self.console.print(
+                    f"  saved {path.name}  ({len(data)} indices) host={host}"
+                )
+
+            elapsed_loop = time.time() - loop_start
+            rem = interval - elapsed_loop
+            while rem > 0 and not stop_flag["stop"]:
+                if duration is not None and (time.time() - start) >= duration:
+                    stop_flag["stop"] = True
+                    break
+                sleep_chunk = min(1.0, rem)
+                time.sleep(sleep_chunk)
+                rem -= sleep_chunk
+
+        self.console.print("[dim]indices-watch-collect finished[/dim]")
+
+    def handle_indice_add_metadata(self):
+        """Add metadata to a specific index."""
+        import json
+        from rich.panel import Panel
+        from rich.text import Text
+
+        indice_name = self.args.indice_name
+        metadata_json = self.args.metadata_json
+
+        # Validate JSON input
+        try:
+            metadata = json.loads(metadata_json)
+        except json.JSONDecodeError as e:
+            error_text = Text()
+            error_text.append(
+                "❌ Invalid JSON format.\n\n",
+                style=self.es_client.style_system.get_semantic_style("error"),
+            )
+            error_text.append(
+                f"Error: {str(e)}",
+                style=self.es_client.style_system.get_semantic_style("error"),
+            )
+
+            self.console.print("\n")
+            self.console.print(
+                Panel(
+                    error_text,
+                    title="JSON Parse Error",
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "error"
+                    ),
+                    padding=(1, 2),
+                )
+            )
+            self.console.print("\n")
+            return
+
+        # Check if index exists
+        try:
+            indices_data = self.es_client.filter_indices(pattern=None, status=None)
+            index_exists = any(index["index"] == indice_name for index in indices_data)
+
+            if not index_exists:
+                error_text = Text()
+                error_text.append(
+                    f"❌ Index '{indice_name}' not found.\n\n",
+                    style=self.es_client.style_system.get_semantic_style("error"),
+                )
+                error_text.append(
+                    "Please check the index name and try again.",
+                    style=self.es_client.style_system.get_semantic_style("primary"),
+                )
+
+                self.console.print("\n")
+                self.console.print(
+                    Panel(
+                        error_text,
+                        title="Index Not Found",
+                        border_style=self.es_client.style_system.get_semantic_style(
+                            "error"
+                        ),
+                        padding=(1, 2),
+                    )
+                )
+                self.console.print("\n")
+                return
+
+        except Exception as e:
+            error_text = Text()
+            error_text.append(
+                "❌ Error checking index existence.\n\n",
+                style=self.es_client.style_system.get_semantic_style("error"),
+            )
+            error_text.append(
+                f"Error: {str(e)}",
+                style=self.es_client.style_system.get_semantic_style("error"),
+            )
+
+            self.console.print("\n")
+            self.console.print(
+                Panel(
+                    error_text,
+                    title="Connection Error",
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "error"
+                    ),
+                    padding=(1, 2),
+                )
+            )
+            self.console.print("\n")
+            return
+
+        # Add metadata to index mapping
+        try:
+            # Get current index mapping to check for existing _meta
+            current_mapping = self.es_client.es.indices.get_mapping(index=indice_name)
+            existing_mapping = current_mapping[indice_name]["mappings"]
+
+            # Extract _meta content if user provided it wrapped in _meta
+            if (
+                isinstance(metadata, dict)
+                and "_meta" in metadata
+                and len(metadata) == 1
+            ):
+                # User provided {"_meta": {...}}, extract the inner content
+                metadata_content = metadata["_meta"]
+            else:
+                # User provided the content directly
+                metadata_content = metadata
+
+            # Merge with existing _meta if it exists
+            existing_meta = existing_mapping.get("_meta", {})
+            if isinstance(existing_meta, dict) and isinstance(metadata_content, dict):
+                # Deep merge the metadata
+                for key, value in metadata_content.items():
+                    if (
+                        key in existing_meta
+                        and isinstance(existing_meta[key], dict)
+                        and isinstance(value, dict)
+                    ):
+                        existing_meta[key].update(value)
+                    else:
+                        existing_meta[key] = value
+                final_meta = existing_meta
+            else:
+                final_meta = metadata_content
+
+            # Update index mapping with new metadata
+            mapping_update = {"_meta": final_meta}
+
+            self.es_client.es.indices.put_mapping(
+                index=indice_name, body=mapping_update
+            )
+
+            # Success message
+            success_text = Text()
+            success_text.append(
+                f"✅ Metadata successfully added to index '{indice_name}'.\n\n",
+                style=self.es_client.style_system.get_semantic_style("success"),
+            )
+            success_text.append(
+                "Added metadata:\n",
+                style=self.es_client.style_system.get_semantic_style("primary"),
+            )
+            success_text.append(
+                json.dumps(final_meta, indent=2),
+                style=self.es_client.style_system.get_semantic_style("info"),
+            )
+
+            self.console.print("\n")
+            self.console.print(
+                Panel(
+                    success_text,
+                    title="Metadata Added Successfully",
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "success"
+                    ),
+                    padding=(1, 2),
+                )
+            )
+            self.console.print("\n")
+
+        except Exception as e:
+            error_text = Text()
+            error_text.append(
+                "❌ Error adding metadata to index.\n\n",
+                style=self.es_client.style_system.get_semantic_style("error"),
+            )
+            error_text.append(
+                f"Error: {str(e)}",
+                style=self.es_client.style_system.get_semantic_style("error"),
+            )
+
+            self.console.print("\n")
+            self.console.print(
+                Panel(
+                    error_text,
+                    title="Metadata Update Error",
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "error"
+                    ),
+                    padding=(1, 2),
+                )
+            )
+            self.console.print("\n")
+
+    def _display_no_matching_status_message(self, status_filter, total_indices_count):
+        """Display a themed message when no indices match the status filter."""
+        from rich.panel import Panel
+        from display.style_system import StyleSystem
+        from display.theme_manager import ThemeManager
+
+        # Get theme manager for styling
+        config_manager = getattr(self.es_client, "config_manager", None)
+        theme_manager = ThemeManager(config_manager)
+        style_system = StyleSystem(theme_manager)
+
+        # Create the message content
+        message_lines = [
+            f"No indices found with status: [bold]{status_filter}[/bold]",
+            "",
+            f"Total indices in cluster: [cyan]{total_indices_count}[/cyan]",
+            "",
+            "Try one of these options:",
+            f"• [dim]./escmd.py indices[/dim] - Show all indices",
+            f"• [dim]./escmd.py indices --status green[/dim] - Show green indices",
+            f"• [dim]./escmd.py indices --status yellow[/dim] - Show yellow indices",
+            f"• [dim]./escmd.py indices --status red[/dim] - Show red indices",
+        ]
+
+        content = "\n".join(message_lines)
+
+        # Create a themed info panel
+        panel = style_system.create_info_panel(
+            content, f"Index Status Filter: {status_filter}", "🔍"
+        )
+
+        self.console.print(panel)
+
+    def handle_create_index(self):
+        """Create a new empty index with optional settings and mappings."""
+        import json
+
+        # Get index name
+        index_name = self.args.index_name
+
+        # Validate index name
+        if not index_name or not index_name.strip():
+            self.console.print("[red]❌ Error: Index name is required[/red]")
+            return
+
+        # Build settings
+        settings = {
+            "number_of_shards": self.args.shards,
+            "number_of_replicas": self.args.replicas,
+        }
+
+        # Parse custom settings if provided
+        if hasattr(self.args, "settings") and self.args.settings:
+            try:
+                custom_settings = json.loads(self.args.settings)
+                settings.update(custom_settings)
+            except json.JSONDecodeError as e:
+                self.console.print(
+                    f"[red]❌ Error: Invalid JSON in settings: {e}[/red]"
+                )
+                return
+
+        # Parse custom mappings if provided
+        mappings = None
+        if hasattr(self.args, "mappings") and self.args.mappings:
+            try:
+                mappings = json.loads(self.args.mappings)
+            except json.JSONDecodeError as e:
+                self.console.print(
+                    f"[red]❌ Error: Invalid JSON in mappings: {e}[/red]"
+                )
+                return
+
+        # Show creation summary
+        self.console.print(f"\n[bold blue]📋 Creating Index: {index_name}[/bold blue]")
+        self.console.print(f"  Primary Shards: {settings['number_of_shards']}")
+        self.console.print(f"  Replica Shards: {settings['number_of_replicas']}")
+
+        if len(settings) > 2:  # More than just shards and replicas
+            self.console.print("  Custom Settings: Yes")
+        if mappings:
+            self.console.print("  Custom Mappings: Yes")
+
+        # Create the index
+        try:
+            result = self.es_client.create_index(
+                index_name, {"index": settings}, mappings
+            )
+
+            if self.args.format == "json":
+                print(json.dumps(result, indent=2))
+            else:
+                if result.get("success"):
+                    self.console.print(
+                        f"\n[green]✅ {result.get('message', 'Index created successfully')}[/green]"
+                    )
+                    if result.get("acknowledged"):
+                        self.console.print("  Cluster acknowledged: ✓")
+                    if result.get("shards_acknowledged"):
+                        self.console.print("  Shards acknowledged: ✓")
+
+                    # Show next steps with proper Rich formatting
+                    next_steps = f"""
+[dim]💡 Next steps:
+  • View index: ./escmd.py indice {index_name}
+  • List indices: ./escmd.py indices
+  • Add documents via your application or curl[/dim]"""
+                    self.console.print(next_steps)
+                else:
+                    self.console.print(
+                        f"\n[red]❌ {result.get('message', 'Index creation failed')}[/red]"
+                    )
+                    if "error" in result:
+                        self.console.print(f"  Error: {result['error']}")
+
+        except Exception as e:
+            self.console.print(f"\n[red]❌ Unexpected error creating index: {e}[/red]")
 
     def handle_recovery(self):
         """Monitor index recovery status."""
@@ -815,28 +1734,135 @@ class IndexHandler(BaseHandler):
         else:
             with self.console.status("Retrieving recovery data..."):
                 es_recovery = self.es_client.get_recovery_status()
-                self.es_client.print_enhanced_recovery_status(es_recovery)
+            # Clear any remaining status display and add space
+            print("\n")
+            self.es_client.health_commands.print_enhanced_recovery_status(es_recovery)
 
     def _handle_cold_indices(self):
         """Handle cold indices listing."""
-        _data = self.es_client.get_indices_stats(pattern=self.args.regex, status=self.args.status)
-        print(_data)
-        index_ilms = self.es_client.get_index_ilms(short=True)
-        cold_indices = [index for index, info in index_ilms.items() if info.get('phase') == 'cold']
-        print(f"Cold Indices: {cold_indices}")
+        try:
+            # Get all indices data
+            indices_data = self.es_client.get_indices_stats(
+                pattern=self.args.regex, status=self.args.status
+            )
+
+            # Get ILM information to identify cold indices
+            index_ilms = self.es_client.get_index_ilms(short=True)
+
+            # Filter indices to only show those in cold phase
+            cold_indices_names = [
+                index
+                for index, info in index_ilms.items()
+                if info.get("phase") == "cold"
+            ]
+
+            if not cold_indices_names:
+                # Show message if no cold indices found
+                self.es_client.show_message_box(
+                    "Cold Indices",
+                    "No indices found in the 'cold' ILM phase.\n\nThis could mean:\n• No indices are using ILM policies\n• No indices have progressed to the cold phase\n• The cluster may not have ILM configured",
+                    message_style="yellow",
+                    panel_style="bold blue",
+                )
+                return
+
+            # Filter the indices data to only include cold indices
+            if isinstance(indices_data, list):
+                cold_indices_data = [
+                    idx
+                    for idx in indices_data
+                    if idx.get("index") in cold_indices_names
+                ]
+            else:
+                # Handle case where indices_data might be a dict or other format
+                cold_indices_data = []
+
+            if not cold_indices_data:
+                # Fallback: create basic data structure for cold indices
+                cold_indices_data = []
+                for index_name in cold_indices_names:
+                    cold_indices_data.append(
+                        {
+                            "index": index_name,
+                            "health": "unknown",
+                            "status": "open",
+                            "docs_count": 0,
+                            "shards": 0,
+                            "pri_size": "0b",
+                            "size": "0b",
+                            "phase": "🧊 cold",
+                        }
+                    )
+
+            # Display cold indices in table format
+            if self.args.format == "json":
+                import json
+
+                print(json.dumps(cold_indices_data, indent=2))
+            else:
+                # Add cold phase indicator to each index for display
+                for idx in cold_indices_data:
+                    ilm_info = index_ilms.get(idx["index"], {})
+                    idx["ilm_phase"] = f"🧊 {ilm_info.get('phase', 'cold')}"
+                    idx["ilm_policy"] = ilm_info.get("policy", "N/A")
+                    idx["ilm_age"] = ilm_info.get("age", "N/A")
+
+                # Show summary message
+                self.es_client.show_message_box(
+                    "Cold Indices Found",
+                    f"Found {len(cold_indices_data)} indices in the cold ILM phase.\n\nThese indices have been moved to cold storage tier for long-term retention.",
+                    message_style="white",
+                    panel_style="bold blue",
+                )
+
+                # Use the standard table display
+                use_pager = getattr(self.args, "pager", False)
+                self.es_client.print_table_indices(
+                    cold_indices_data, use_pager=use_pager
+                )
+
+        except Exception as e:
+            self.es_client.show_message_box(
+                "Error",
+                f"Failed to retrieve cold indices information:\n{str(e)}",
+                message_style="red",
+                panel_style="red",
+            )
 
     def _handle_regex_indices(self):
         """Handle indices matching regex patterns."""
-        if self.args.format == 'json':
-            print(self.es_client.get_indices_stats(pattern=self.args.regex, status=self.args.status))
+        if self.args.format == "json":
+            indices = self.es_client.filter_indices(
+                pattern=self.args.regex, status=self.args.status
+            )
+
+            if self.args.delete:
+                # For JSON format with deletion, create comprehensive output
+                output = {"indices": indices, "deletion_requested": True}
+
+                # Perform deletion and capture results
+                deletion_result = self._handle_indices_deletion_json(indices)
+                output["deletion_results"] = deletion_result
+
+                print(json.dumps(output, indent=2))
+            else:
+                # Just print indices without deletion (convert to JSON format for consistency)
+                print(json.dumps(indices, indent=2))
             return
 
-        indices = self.es_client.filter_indices(pattern=self.args.regex, status=self.args.status)
+        indices = self.es_client.filter_indices(
+            pattern=self.args.regex, status=self.args.status
+        )
         if not indices:
-            self.es_client.show_message_box("Indices", f"Pattern: {self.args.regex}\nThere were no matching indices found", message_style="white", panel_style="bold white")
+            self.es_client.show_message_box(
+                "Indices",
+                f"Pattern: {self.args.regex}\nThere were no matching indices found",
+                message_style="white",
+                panel_style="bold white",
+            )
             return
 
-        use_pager = getattr(self.args, 'pager', False)
+        use_pager = getattr(self.args, "pager", False)
         self.es_client.print_table_indices(indices, use_pager=use_pager)
 
         if self.args.delete:
@@ -844,13 +1870,97 @@ class IndexHandler(BaseHandler):
 
     def _handle_indices_deletion(self, indices):
         """Handle deletion of multiple indices with confirmation."""
-        while True:
-            confirm_delete = input("Are you sure you want to delete these indices? (y/n): ")
-            if confirm_delete.lower() in ('yes', 'y', 'no', 'n'):
-                break
-            print("Invalid input. Please enter 'y', 'n', 'yes', 'no'.")
-
-        if confirm_delete.lower() in ('y', 'yes'):
-            self.es_client.delete_indices(indices)
+        # Extract index names from the indices data
+        if isinstance(indices, list) and indices and isinstance(indices[0], dict):
+            index_names = [idx.get("index", "unknown") for idx in indices]
         else:
-            print("Aborted process... script exiting.")
+            index_names = indices if isinstance(indices, list) else [str(indices)]
+
+        # Show confirmation with Rich prompt (unless --yes flag is used)
+        if getattr(self.args, "yes", False):
+            self.console.print(
+                f"[dim]🔶  Auto-confirmed deletion of {len(index_names)} indices (--yes flag)[/dim]"
+            )
+        elif not Confirm.ask(
+            f"🔶  Are you sure you want to delete {len(index_names)} indices?"
+        ):
+            self.console.print("[yellow]Operation cancelled.[/yellow]")
+            return
+
+        # Perform deletion
+        try:
+            result = self.es_client.delete_indices(indices)
+
+            # Show results
+            if isinstance(result, dict):
+                successful = result.get("successful_deletions", [])
+                failed = result.get("failed_deletions", [])
+
+                if successful:
+                    self.console.print(
+                        f"[green]✅ Successfully deleted {len(successful)} indices:[/green]"
+                    )
+                    for index in successful:
+                        self.console.print(f"  • {index}")
+
+                if failed:
+                    self.console.print(
+                        f"[red]❌ Failed to delete {len(failed)} indices:[/red]"
+                    )
+                    for failure in failed:
+                        if isinstance(failure, dict):
+                            self.console.print(
+                                f"  • {failure.get('index', 'unknown')}: {failure.get('error', 'unknown error')}"
+                            )
+                        else:
+                            self.console.print(f"  • {failure}")
+            else:
+                self.console.print("[green]✅ Deletion completed.[/green]")
+
+        except Exception as e:
+            self.console.print(f"[red]❌ Error during deletion: {e}[/red]")
+
+    def _handle_indices_deletion_json(self, indices):
+        """Handle deletion of multiple indices for JSON output format."""
+        # Extract index names from the indices data
+        if isinstance(indices, list) and indices and isinstance(indices[0], dict):
+            index_names = [idx.get("index", "unknown") for idx in indices]
+        else:
+            index_names = indices if isinstance(indices, list) else [str(indices)]
+
+        # Check for confirmation (unless --yes flag is used)
+        if not getattr(self.args, "yes", False):
+            if not Confirm.ask(
+                f"🔶  Are you sure you want to delete {len(index_names)} indices?"
+            ):
+                return {
+                    "status": "cancelled",
+                    "message": "Operation cancelled by user",
+                    "total_requested": len(index_names),
+                }
+
+        # Perform deletion
+        try:
+            result = self.es_client.delete_indices(indices)
+
+            # Return structured result for JSON output
+            if isinstance(result, dict):
+                result["status"] = "completed"
+                return result
+            else:
+                return {
+                    "status": "completed",
+                    "message": "Deletion completed successfully",
+                    "total_requested": len(index_names),
+                    "successful_deletions": index_names,
+                    "failed_deletions": [],
+                }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Error during deletion: {str(e)}",
+                "total_requested": len(index_names),
+                "successful_deletions": [],
+                "failed_deletions": [{"error": str(e)}],
+            }

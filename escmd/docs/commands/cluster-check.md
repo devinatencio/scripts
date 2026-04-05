@@ -17,6 +17,7 @@ Advanced cluster health monitoring with ILM error detection, replica validation,
 # Configuration options
 ./escmd.py cluster-check --max-shard-size 100        # Custom shard threshold
 ./escmd.py cluster-check --skip-ilm                  # Skip ILM checks
+./escmd.py cluster-check --ilm-limit 20              # Show more ILM unmanaged indices
 ```
 
 ## Overview
@@ -38,6 +39,7 @@ Identifies indices with Index Lifecycle Management errors and policy issues:
 ./escmd.py cluster-check                    # Shows ILM errors in health report
 ./escmd.py cluster-check --skip-ilm         # Skip ILM checks entirely
 ./escmd.py cluster-check --show-details     # Extended ILM error information
+./escmd.py cluster-check --ilm-limit 25     # Show up to 25 unmanaged indices
 ```
 
 **What It Detects:**
@@ -216,9 +218,24 @@ Machine-readable format for automation and monitoring:
 | `--max-shard-size` | Shard size threshold in GB | `50` |
 | `--show-details` | Extended information display | `false` |
 | `--skip-ilm` | Skip ILM checks entirely | `false` |
+| `--ilm-limit` | Max unmanaged indices to show before truncating | `10` (config) |
 | `--fix-replicas` | Set replica count for 0-replica indices | None |
 | `--dry-run` | Preview replica fixes without applying | `false` |
 | `--force` | Skip confirmation prompts | `false` |
+
+### Configuration File Settings
+
+The cluster-check command respects configuration settings in `escmd.yml`:
+
+```yaml
+settings:
+  ilm_display_limit: 15  # Default: 10, show up to 15 unmanaged indices
+```
+
+**Configuration Options:**
+- `ilm_display_limit`: Controls how many unmanaged ILM indices are displayed before showing "X more unmanaged" message
+- Default value: `10`
+- Command-line override: `--ilm-limit` argument takes precedence over config file setting
 
 ### Use Cases
 
@@ -227,8 +244,8 @@ Machine-readable format for automation and monitoring:
 # Morning cluster health check
 ./escmd.py cluster-check
 
-# Weekly detailed review
-./escmd.py cluster-check --show-details
+# Weekly detailed review with extended ILM list
+./escmd.py cluster-check --show-details --ilm-limit 50
 ```
 
 #### 🤖 Automation & Monitoring
@@ -242,8 +259,8 @@ jq '.checks.ilm_results.error_count' /var/log/cluster-health.json
 
 #### 🚨 Issue Resolution
 ```bash
-# Comprehensive issue assessment
-./escmd.py cluster-check --show-details
+# Comprehensive issue assessment with full ILM listing
+./escmd.py cluster-check --show-details --ilm-limit 100
 
 # Fix replica issues immediately
 ./escmd.py cluster-check --fix-replicas 1 --dry-run

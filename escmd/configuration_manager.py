@@ -5,43 +5,200 @@ from rich.console import Console
 from rich.table import Table
 from rich import box
 
+
 class ConfigurationManager:
-    def __init__(self, config_file_path, state_file_path):
-        self.config_file_path = config_file_path
-        self.state_file_path = state_file_path
-        self.config = self._read_yaml_file()
-        self.default_settings = self.config.get('settings', {}) if self.config else {}
-        self.servers_settings = self.config.get('servers', [{"name": 'DEFAULT', "hostname": 'localhost', "port": 9200, "use_ssl": False}]) if self.config else [{"name": 'DEFAULT', "hostname": 'localhost', "port": 9200, "use_ssl": False}]
-        self.servers_dict = self._convert_dict_list_to_dict(self.servers_settings)
-        self.cluster_groups = self.config.get('cluster_groups', {}) if self.config else {}
-        self.passwords = self.config.get('passwords', {}) if self.config else {}  # Load password configurations
+    def __init__(
+        self,
+        config_file_path=None,
+        state_file_path=None,
+        main_config_path=None,
+        servers_config_path=None,
+    ):
+        """
+        Initialize ConfigurationManager with support for dual-file configuration.
+
+        Args:
+            config_file_path: Legacy single-file configuration path (for backward compatibility)
+            state_file_path: State file path
+            main_config_path: Path to main configuration file (escmd.yml)
+            servers_config_path: Path to servers configuration file (elastic_servers.yml)
+        """
+        self.state_file_path = state_file_path or "test_state.json"
+
+        # Determine configuration mode: dual-file or legacy single-file
+        if main_config_path or servers_config_path:
+            # Dual-file mode (new approach)
+            self.main_config_path = main_config_path or "escmd.yml"
+            self.servers_config_path = servers_config_path or "elastic_servers.yml"
+            self.config_file_path = None  # Not used in dual-file mode
+            self.is_dual_file_mode = True
+            self._load_dual_file_config()
+        elif config_file_path:
+            # Legacy single-file mode (backward compatibility)
+            self.config_file_path = config_file_path
+            self.main_config_path = None
+            self.servers_config_path = None
+            self.is_dual_file_mode = False
+            self._load_single_file_config()
+        else:
+            # Auto-detect mode: try dual-file first, fallback to single-file
+            if os.path.exists("escmd.yml") or os.path.exists("elastic_servers.yml"):
+                self.main_config_path = "escmd.yml"
+                self.servers_config_path = "elastic_servers.yml"
+                self.config_file_path = None
+                self.is_dual_file_mode = True
+                self._load_dual_file_config()
+            else:
+                # Fallback to single-file mode with default path
+                self.config_file_path = "elastic_servers.yml"
+                self.main_config_path = None
+                self.servers_config_path = None
+                self.is_dual_file_mode = False
+                self._load_single_file_config()
+
         self.box_style = self._get_box_style()
 
-    def _read_yaml_file(self):
+    def _load_dual_file_config(self):
         """
-        Read and parse the YAML configuration file.
+        Load configuration from separate main and servers files.
+        """
+        # Load main configuration (settings, cluster_groups, passwords)
+        self.main_config = self._read_yaml_file(self.main_config_path)
+        self.default_settings = (
+            self.main_config.get("settings", {}) if self.main_config else {}
+        )
+        self.cluster_groups_raw = (
+            self.main_config.get("cluster_groups", {}) if self.main_config else {}
+        )
+        self.cluster_groups = self._normalize_cluster_groups(self.cluster_groups_raw)
+        self.passwords = (
+            self.main_config.get("passwords", {}) if self.main_config else {}
+        )
+
+        # Load servers configuration
+        self.servers_config = self._read_yaml_file(self.servers_config_path)
+        self.servers_settings = (
+            self.servers_config.get(
+                "servers",
+                [
+                    {
+                        "name": "DEFAULT",
+                        "hostname": "localhost",
+                        "port": 9200,
+                        "use_ssl": False,
+                    }
+                ],
+            )
+            if self.servers_config
+            else [
+                {
+                    "name": "DEFAULT",
+                    "hostname": "localhost",
+                    "port": 9200,
+                    "use_ssl": False,
+                }
+            ]
+        )
+        self.servers_dict = self._convert_dict_list_to_dict(self.servers_settings)
+
+        # Combined config for compatibility with existing methods
+        self.config = {**self.main_config, "servers": self.servers_settings}
+
+    def _load_single_file_config(self):
+        """
+        Load configuration from single legacy file (backward compatibility).
+        """
+        self.config = self._read_yaml_file(self.config_file_path)
+        self.default_settings = self.config.get("settings", {}) if self.config else {}
+        self.servers_settings = (
+            self.config.get(
+                "servers",
+                [
+                    {
+                        "name": "DEFAULT",
+                        "hostname": "localhost",
+                        "port": 9200,
+                        "use_ssl": False,
+                    }
+                ],
+            )
+            if self.config
+            else [
+                {
+                    "name": "DEFAULT",
+                    "hostname": "localhost",
+                    "port": 9200,
+                    "use_ssl": False,
+                }
+            ]
+        )
+        self.servers_dict = self._convert_dict_list_to_dict(self.servers_settings)
+        self.cluster_groups_raw = (
+            self.config.get("cluster_groups", {}) if self.config else {}
+        )
+        self.cluster_groups = self._normalize_cluster_groups(self.cluster_groups_raw)
+        self.passwords = self.config.get("passwords", {}) if self.config else {}
+
+    def _read_yaml_file(self, file_path=None):
+        """
+        Read and parse a YAML configuration file.
+
+        Args:
+            file_path (str, optional): Path to the YAML file. If None, uses self.config_file_path
 
         Returns:
             dict: The parsed YAML configuration
         """
-        if os.path.exists(self.config_file_path):
-            with open(self.config_file_path, 'r') as file:
-                return yaml.safe_load(file)
+        path_to_read = file_path if file_path is not None else self.config_file_path
+        if not path_to_read:
+            return {}
+
+        try:
+            if os.path.exists(path_to_read):
+                with open(path_to_read, "r") as file:
+                    return yaml.safe_load(file)
+        except (yaml.YAMLError, PermissionError, OSError) as e:
+            print(f"Warning: Could not read configuration file {path_to_read}: {e}")
+            # Return empty dict on any file reading or YAML parsing errors
+            pass
         return {}
 
-    def _convert_dict_list_to_dict(self, dict_list):
+    def _normalize_cluster_groups(self, raw_cluster_groups):
+        """
+        Convert cluster groups to normalized format for backward compatibility.
+
+        Args:
+            raw_cluster_groups: Raw cluster groups from configuration
+
+        Returns:
+            dict: Normalized cluster groups {group_name: [cluster_list]}
+        """
+        normalized_groups = {}
+        for group_name, group_data in raw_cluster_groups.items():
+            if isinstance(group_data, dict) and "clusters" in group_data:
+                # New format with description and clusters
+                normalized_groups[group_name] = group_data["clusters"]
+            elif isinstance(group_data, list):
+                # Old format - just a list of clusters
+                normalized_groups[group_name] = group_data
+            else:
+                # Handle unexpected format
+                normalized_groups[group_name] = []
+        return normalized_groups
+
+    def _convert_dict_list_to_dict(self, servers_list):
         """
         Convert a list of dictionaries into a single dictionary using the 'name' key.
 
         Args:
-            dict_list (list): List of dictionaries, each containing a 'name' key.
+            servers_list (list): List of dictionaries, each containing a 'name' key.
 
         Returns:
             dict: Dictionary with 'name' values as keys and remaining data as values.
         """
         result_dict = {}
-        for item in dict_list:
-            name = item.pop('name').lower()
+        for item in servers_list:
+            name = item.pop("name").lower()
             result_dict[name] = item
         return result_dict
 
@@ -52,13 +209,13 @@ class ConfigurationManager:
         Returns:
             box: The box style to use for tables
         """
-        box_style_string = self.default_settings.get('box_style', 'SQUARE_DOUBLE_HEAD')
+        box_style_string = self.default_settings.get("box_style", "SQUARE_DOUBLE_HEAD")
         box_styles = {
             "SIMPLE": box.SIMPLE,
             "ASCII": box.ASCII,
             "SQUARE": box.SQUARE,
             "ROUNDED": box.ROUNDED,
-            "SQUARE_DOUBLE_HEAD": box.SQUARE_DOUBLE_HEAD
+            "SQUARE_DOUBLE_HEAD": box.SQUARE_DOUBLE_HEAD,
         }
         return box_styles.get(box_style_string)
 
@@ -69,7 +226,7 @@ class ConfigurationManager:
         Returns:
             bool: True if paging is enabled, False otherwise (defaults to False)
         """
-        return self.default_settings.get('enable_paging', False)
+        return self.default_settings.get("enable_paging", False)
 
     def get_paging_threshold(self):
         """
@@ -78,7 +235,7 @@ class ConfigurationManager:
         Returns:
             int: Number of items that triggers automatic paging
         """
-        return self.default_settings.get('paging_threshold', 50)
+        return self.default_settings.get("paging_threshold", 50)
 
     def get_show_legend_panels(self):
         """
@@ -87,7 +244,7 @@ class ConfigurationManager:
         Returns:
             bool: True if legend panels should be shown, False otherwise (defaults to False)
         """
-        return self.default_settings.get('show_legend_panels', False)
+        return self.default_settings.get("show_legend_panels", False)
 
     def get_ascii_mode(self):
         """
@@ -96,7 +253,35 @@ class ConfigurationManager:
         Returns:
             bool: True if ASCII mode is enabled, False otherwise (defaults to False)
         """
-        return self.default_settings.get('ascii_mode', False)
+        return self.default_settings.get("ascii_mode", False)
+
+    def get_ilm_display_limit(self):
+        """
+        Get the ILM display limit from configuration.
+
+        Returns:
+            int: Number of ILM unmanaged indices to show before truncating (defaults to 10)
+        """
+        return self.default_settings.get("ilm_display_limit", 10)
+
+    def get_display_theme(self):
+        """
+        Get the display theme from state file first, then configuration file.
+
+        Returns:
+            str: Display theme - 'rich' (colorful for dark backgrounds), 'plain' (universal compatibility), or 'auto' (defaults to 'rich')
+        """
+        # Check state file first (for runtime theme switching)
+        try:
+            with open(self.state_file_path, "r") as file:
+                state_data = json.load(file)
+                if "display_theme" in state_data:
+                    return state_data["display_theme"]
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
+            pass
+
+        # Fall back to configuration file
+        return self.default_settings.get("display_theme", "rich")
 
     def get_connection_timeout(self):
         """
@@ -105,7 +290,7 @@ class ConfigurationManager:
         Returns:
             int: Connection timeout in seconds (defaults to 30)
         """
-        return self.default_settings.get('connection_timeout', 30)
+        return self.default_settings.get("connection_timeout", 30)
 
     def get_read_timeout(self):
         """
@@ -114,7 +299,7 @@ class ConfigurationManager:
         Returns:
             int: Read timeout in seconds (defaults to 60)
         """
-        return self.default_settings.get('read_timeout', 60)
+        return self.default_settings.get("read_timeout", 60)
 
     def get_dangling_cleanup_config(self):
         """
@@ -123,72 +308,212 @@ class ConfigurationManager:
         Returns:
             dict: Dictionary containing dangling cleanup configuration options
         """
-        dangling_config = self.default_settings.get('dangling_cleanup', {})
-        
+        dangling_config = self.default_settings.get("dangling_cleanup", {})
+
         return {
-            'max_retries': dangling_config.get('max_retries', 3),
-            'retry_delay': dangling_config.get('retry_delay', 5),
-            'timeout': dangling_config.get('timeout', 60),
-            'default_log_level': dangling_config.get('default_log_level', 'INFO'),
-            'enable_progress_bar': dangling_config.get('enable_progress_bar', True),
-            'confirmation_required': dangling_config.get('confirmation_required', True)
+            "max_retries": dangling_config.get("max_retries", 3),
+            "retry_delay": dangling_config.get("retry_delay", 5),
+            "timeout": dangling_config.get("timeout", 60),
+            "default_log_level": dangling_config.get("default_log_level", "INFO"),
+            "enable_progress_bar": dangling_config.get("enable_progress_bar", True),
+            "confirmation_required": dangling_config.get("confirmation_required", True),
         }
 
     def _resolve_password(self, server_config):
         """
         Resolve password using the new environment-based password scheme.
-        
+
         Priority order:
         1. Direct password reference (elastic_password_ref)
-        2. Environment-based password (use_env_password=True)
-        3. Traditional explicit password (elastic_password)
-        4. Default password from settings
-        
+        2. Encrypted stored password (new secure method)
+        3. Environment-based password (use_env_password=True with config_password field)
+        4. Traditional explicit password (elastic_password)
+        5. Default password from settings
+
         Args:
             server_config (dict): Server configuration dictionary
-            
+
         Returns:
             str: Resolved password or None if not found
         """
         # Option 1: Direct password reference (e.g., "prod.kibana_system")
-        if 'elastic_password_ref' in server_config:
-            password_ref = server_config['elastic_password_ref']
+        if "elastic_password_ref" in server_config:
+            password_ref = server_config["elastic_password_ref"]
             try:
-                env, username = password_ref.split('.', 1)
+                env, username = password_ref.split(".", 1)
                 return self.passwords.get(env, {}).get(username)
             except (ValueError, AttributeError):
                 print(f"Warning: Invalid password reference format: {password_ref}")
-                
-        # Option 2: Environment-based password resolution
-        if server_config.get('use_env_password', False):
-            env = server_config.get('env')
-            username = server_config.get('elastic_username')
+
+        # Option 2: Encrypted stored password (new secure method)
+        try:
+            from security.password_manager import password_manager
+
+            # Strategy for multi-user environment support:
+            # 1. Try environment.username combination (e.g., "prod.kibana_system")
+            # 2. Try environment-only password (e.g., "prod")
+            # 3. Try global.username combination (e.g., "global.devin.acosta")
+            # 4. Try global password (for single-user setups)
+            # 5. Try default password (backward compatibility)
+
+            env = server_config.get("config_password", server_config.get("env"))
+            username = self._resolve_username(server_config)
+
+            # Try environment-specific password with username
+            if env and username:
+                encrypted_password = password_manager.get_password(env, username)
+                if encrypted_password:
+                    return encrypted_password
+
+            # Try environment-only password (no username specified)
+            if env:
+                encrypted_password = password_manager.get_password(env)
+                if encrypted_password:
+                    return encrypted_password
+
+            # Try global password with username (e.g., global.devin.acosta)
+            if username:
+                global_encrypted = password_manager.get_password("global", username)
+                if global_encrypted:
+                    return global_encrypted
+
+            # Try global password (no username - single-user setup)
+            global_encrypted = password_manager.get_password("global")
+            if global_encrypted:
+                return global_encrypted
+
+            # Try default password (backward compatibility)
+            default_encrypted = password_manager.get_password("default")
+            if default_encrypted:
+                return default_encrypted
+
+        except ImportError:
+            # Password manager not available, continue with other methods
+            pass
+        except Exception as e:
+            # Don't let password manager errors break the entire system
+            print(f"Warning: Error accessing encrypted passwords: {e}")
+
+        # Option 3: Environment-based password resolution
+        if server_config.get("use_env_password", False):
+            env = server_config.get("config_password", server_config.get("env"))
+            username = self._resolve_username(server_config)
             if env and username and env in self.passwords:
                 password = self.passwords[env].get(username)
                 if password:
                     return password
                 else:
-                    print(f"Warning: No password found for {username} in environment '{env}'")
-                    
-        # Option 3: Traditional explicit password (backwards compatibility)
-        explicit_password = server_config.get('elastic_password')
+                    print(
+                        f"Warning: No password found for {username} in environment '{env}'"
+                    )
+
+        # Option 3.5: Automatic environment-based password resolution (fallback)
+        # Try to resolve password from environment even without explicit use_env_password flag
+        # This makes the system more user-friendly for auto-generated configurations
+        env = server_config.get("config_password", server_config.get("env"))
+        username = self._resolve_username(server_config)
+        if env and username and env in self.passwords:
+            password = self.passwords[env].get(username)
+            if password:
+                return password
+
+        # Option 4: Traditional explicit password (backwards compatibility)
+        explicit_password = server_config.get("elastic_password")
         if explicit_password:
             return explicit_password
-            
-        # Option 4: Default password from settings
-        return self.default_settings.get('elastic_password', None)
+
+        # Option 5: Default password from settings
+        return self.default_settings.get("elastic_password", None)
+
+    def _resolve_username(self, server_config):
+        """
+        Resolve username using the new priority order.
+
+        Priority order:
+        1. Server-level username (elastic_username in server config)
+        2. Environment-based username (from environment config)
+        3. JSON state file username (elastic_username in escmd.json)
+        4. Default username from settings (elastic_username in escmd.yml)
+
+        Args:
+            server_config (dict): Server configuration dictionary
+
+        Returns:
+            str: Resolved username or None if not found
+        """
+        # Option 1: Server-level username (highest priority)
+        server_username = server_config.get("elastic_username")
+        if server_username:
+            return server_username
+
+        # Option 2: Environment-based username
+        env = server_config.get("config_password", server_config.get("env"))
+        if env and env in self.passwords:
+            # Check if environment has usernames defined
+            env_passwords = self.passwords[env]
+            if isinstance(env_passwords, dict) and len(env_passwords) == 1:
+                # If there's only one user in the environment, use that username
+                username = list(env_passwords.keys())[0]
+                return username
+
+        # Option 3: JSON state file username (new priority level)
+        try:
+            if os.path.exists(self.state_file_path):
+                with open(self.state_file_path, "r") as file:
+                    state_data = json.load(file)
+                    json_username = state_data.get("elastic_username")
+                    if json_username:
+                        return json_username
+        except (json.JSONDecodeError, IOError, KeyError):
+            # Ignore errors reading state file
+            pass
+
+        # Option 4: Default username from settings (lowest priority)
+        return self.default_settings.get("elastic_username", None)
 
     def get_server_config(self, location):
         """
-        Get the server configuration for a specific location.
+        Get the server configuration for a specific location with intelligent fallback.
+
+        This method implements smart location resolution:
+        1. First tries the exact location name (e.g., "aex20")
+        2. If not found, tries with "-c01" suffix (e.g., "aex20-c01")
+        3. If still not found, searches for any cluster name starting with the short name
+        4. If exactly one match is found, returns it (e.g., "aex20-glip" for "aex20")
+        5. If multiple matches exist, returns None (ambiguous)
 
         Args:
             location (str): The location name to get configuration for.
 
         Returns:
-            dict: The server configuration or None if not found.
+            dict: The server configuration or None if not found/ambiguous.
         """
-        return self.servers_dict.get(location.lower())
+        location_lower = location.lower()
+
+        # First, try the exact location name
+        server_config = self.servers_dict.get(location_lower)
+        if server_config:
+            return server_config
+
+        # If not found, try with "-c01" suffix for auto-generated cluster names
+        fallback_location = f"{location_lower}-c01"
+        server_config = self.servers_dict.get(fallback_location)
+        if server_config:
+            return server_config
+
+        # If still not found, search for any cluster names that start with the short name
+        matching_servers = [
+            (name, config)
+            for name, config in self.servers_dict.items()
+            if name.startswith(location_lower + "-") and name != fallback_location
+        ]
+
+        # If exactly one match found, return it
+        if len(matching_servers) == 1:
+            return matching_servers[0][1]
+
+        # If multiple matches or no matches found, return None
+        return None
 
     def get_default_cluster(self):
         """
@@ -198,9 +523,9 @@ class ConfigurationManager:
             str: The name of the default cluster.
         """
         try:
-            with open(self.state_file_path, 'r') as file:
-                return json.load(file)['current_cluster']
-        except FileNotFoundError:
+            with open(self.state_file_path, "r") as file:
+                return json.load(file)["current_cluster"]
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
             return "default"
 
     def set_default_cluster(self, value):
@@ -211,15 +536,86 @@ class ConfigurationManager:
             value (str): The name of the cluster to set as default.
         """
         try:
-            with open(self.state_file_path, 'r') as file:
+            with open(self.state_file_path, "r") as file:
                 settings = json.load(file)
-        except FileNotFoundError:
+        except (FileNotFoundError, json.JSONDecodeError):
             settings = {"current_cluster": "default"}
 
         settings["current_cluster"] = value
-        with open(self.state_file_path, 'w') as file:
+        with open(self.state_file_path, "w") as file:
             json.dump(settings, file, indent=4)
         print(f"Current cluster set to: {value}")
+
+    def set_display_theme(self, theme_name):
+        """
+        Set the display theme in the state file.
+
+        Args:
+            theme_name (str): The name of the theme to set as active.
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            try:
+                with open(self.state_file_path, "r") as file:
+                    settings = json.load(file)
+            except (FileNotFoundError, json.JSONDecodeError):
+                settings = {"current_cluster": "default"}
+
+            settings["display_theme"] = theme_name
+            with open(self.state_file_path, "w") as file:
+                json.dump(settings, file, indent=4)
+            return True
+        except Exception as e:
+            print(f"Error setting theme: {e}")
+            return False
+
+    def set_elastic_username(self, username):
+        """
+        Set the elastic username in the state file.
+
+        Args:
+            username (str): The username to set as default.
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            try:
+                with open(self.state_file_path, "r") as file:
+                    settings = json.load(file)
+            except (FileNotFoundError, json.JSONDecodeError):
+                settings = {"current_cluster": "default"}
+
+            if username:
+                settings["elastic_username"] = username
+            else:
+                # Remove username if None or empty string is provided
+                settings.pop("elastic_username", None)
+
+            with open(self.state_file_path, "w") as file:
+                json.dump(settings, file, indent=4)
+            return True
+        except Exception as e:
+            print(f"Error setting username: {e}")
+            return False
+
+    def get_elastic_username_from_json(self):
+        """
+        Get the elastic username from the JSON state file.
+
+        Returns:
+            str: The username from JSON file, or None if not found
+        """
+        try:
+            if os.path.exists(self.state_file_path):
+                with open(self.state_file_path, "r") as file:
+                    state_data = json.load(file)
+                    return state_data.get("elastic_username")
+        except (json.JSONDecodeError, IOError, KeyError):
+            pass
+        return None
 
     def show_locations(self):
         """
@@ -231,95 +627,115 @@ class ConfigurationManager:
 
         console = Console()
 
+        # Import theme system
+        from esclient import get_theme_styles
+
+        theme_styles = get_theme_styles(self)
+        border_style = theme_styles.get("border_style", "cyan")
+
         # Create title panel
         title_panel = Panel(
-            Text("🗺️  Elasticsearch Cluster Directory", style="bold cyan", justify="center"),
+            Text(
+                "🌍 Elasticsearch Cluster Directory",
+                style="bold cyan",
+                justify="center",
+            ),
             subtitle="Configuration overview and cluster groups",
-            border_style="cyan",
-            padding=(1, 2)
+            border_style=border_style,
+            padding=(1, 2),
         )
 
         # Create clusters table with enhanced styling
-        servers_list = [{'name': name, **config} for name, config in self.servers_dict.items()]
-        sorted_data = sorted(servers_list, key=lambda x: x['name'])
+        servers_list = [
+            {"name": name, **config} for name, config in self.servers_dict.items()
+        ]
+        sorted_data = sorted(servers_list, key=lambda x: x["name"])
 
         # Clusters table with full width
-        clusters_table = Table(show_header=True, header_style="bold white", expand=True)
-        clusters_table.add_column("🏷️  Cluster", style="bold yellow", no_wrap=True, min_width=20)
-        clusters_table.add_column("🖥️  Primary Host", style="cyan", no_wrap=True, min_width=45)
-        clusters_table.add_column("🔄 Backup Host", style="dim cyan", no_wrap=True, min_width=45)
+        clusters_table = Table(
+            show_header=True, header_style="bold white", expand=True, box=self.box_style
+        )
+        clusters_table.add_column(
+            "🔖  Cluster", style="bold yellow", no_wrap=True, min_width=20
+        )
+        clusters_table.add_column(
+            "💻  Primary Host", style="cyan", no_wrap=True, min_width=45
+        )
+        clusters_table.add_column(
+            "🔄 Backup Host", style="dim cyan", no_wrap=True, min_width=45
+        )
         clusters_table.add_column("🔌 Port", style="white", justify="center", width=8)
-        clusters_table.add_column("🛡️  SSL", style="white", justify="center", width=6)
+        clusters_table.add_column("🔐  SSL", style="white", justify="center", width=6)
         clusters_table.add_column("🔑 Auth", style="white", justify="center", width=7)
         clusters_table.add_column("📊 Style", style="white", justify="center", width=10)
 
         # Add rows with enhanced formatting
         for item in sorted_data:
-            ssl_status = "🔒" if item.get('use_ssl') else "🔓"
-            auth_status = "🔐" if item.get('elastic_authentication') else "🚪"
-            health_style = item.get('health_style', 'dashboard')
-            health_icon = "📊" if health_style == 'dashboard' else "📋"
+            ssl_status = "🔒" if item.get("use_ssl") else "🔓"
+            auth_status = "🔐" if item.get("elastic_authentication") else "🚪"
+            health_style = item.get("health_style", "dashboard")
+            health_icon = "📊" if health_style == "dashboard" else "📋"
 
-            backup_host = item.get('hostname2', '')
+            backup_host = item.get("hostname2", "")
             backup_display = backup_host if backup_host else "[dim]none[/dim]"
 
             clusters_table.add_row(
-                item.get('name', ''),
-                item.get('hostname', ''),
+                item.get("name", ""),
+                item.get("hostname", ""),
                 backup_display,
-                str(item.get('port', 9200)),
+                str(item.get("port", 9200)),
                 ssl_status,
                 auth_status,
-                health_style
+                health_style,
             )
 
         clusters_panel = Panel(
             clusters_table,
             title="[bold white]🏢 Configured Clusters[/bold white]",
-            border_style="white",
-            padding=(1, 1)
+            border_style=border_style,
+            padding=(1, 1),
         )
 
         # Create cluster groups panel if groups exist
         if self.cluster_groups:
             groups_table = Table(show_header=True, header_style="bold white", box=None)
-            groups_table.add_column("🏷️  Group Name", style="bold green", no_wrap=True)
+            groups_table.add_column("🔖  Group Name", style="bold green", no_wrap=True)
             groups_table.add_column("📋 Clusters", style="cyan")
             groups_table.add_column("📊 Count", style="white", justify="center")
 
             for group_name, cluster_list in self.cluster_groups.items():
                 clusters_text = ", ".join(cluster_list)
 
-                groups_table.add_row(
-                    group_name,
-                    clusters_text,
-                    str(len(cluster_list))
-                )
+                groups_table.add_row(group_name, clusters_text, str(len(cluster_list)))
 
             groups_panel = Panel(
                 groups_table,
                 title="[bold white]🏗️  Cluster Groups[/bold white]",
-                border_style="green",
-                padding=(1, 1)
+                border_style=border_style,
+                padding=(1, 1),
             )
         else:
             # No groups configured
             no_groups_table = Table.grid(padding=(0, 1))
             no_groups_table.add_column(style="dim white", justify="center")
             no_groups_table.add_row("ℹ️  No cluster groups configured")
-            no_groups_table.add_row("Add 'cluster_groups' section to elastic_servers.yml")
+            no_groups_table.add_row(
+                "Add 'cluster_groups' section to elastic_servers.yml"
+            )
 
             groups_panel = Panel(
                 no_groups_table,
                 title="[bold white]🏗️  Cluster Groups[/bold white]",
-                border_style="dim white",
-                padding=(1, 1)
+                border_style=border_style,
+                padding=(1, 1),
             )
 
         # Summary statistics
         total_clusters = len(sorted_data)
-        ssl_enabled = sum(1 for item in sorted_data if item.get('use_ssl'))
-        auth_enabled = sum(1 for item in sorted_data if item.get('elastic_authentication'))
+        ssl_enabled = sum(1 for item in sorted_data if item.get("use_ssl"))
+        auth_enabled = sum(
+            1 for item in sorted_data if item.get("elastic_authentication")
+        )
 
         summary_table = Table.grid(padding=(0, 2))
         summary_table.add_column(style="bold white", no_wrap=True)
@@ -334,7 +750,7 @@ class ConfigurationManager:
             title="[bold white]📈 Summary[/bold white]",
             border_style="cyan",
             padding=(1, 1),
-            width=30
+            width=30,
         )
 
         # Usage examples
@@ -351,7 +767,7 @@ class ConfigurationManager:
             title="[bold white]🚀 Quick Commands[/bold white]",
             border_style="magenta",
             padding=(1, 1),
-            width=40
+            width=40,
         )
 
         # Display everything
@@ -380,27 +796,60 @@ class ConfigurationManager:
             return None
 
         return {
-            'elastic_host': server_config.get('hostname', self.default_settings.get('hostname', 'localhost')),
-            'elastic_host2': server_config.get('hostname2', self.default_settings.get('hostname2', 'localhost')),
-            'elastic_port': server_config.get('port', self.default_settings.get('port', 9200)),
-            'use_ssl': server_config.get('use_ssl', self.default_settings.get('use_ssl', False)),
-            'verify_certs': server_config.get('verify_certs', self.default_settings.get('verify_certs', False)),
-            'elastic_authentication': server_config.get('elastic_authentication', self.default_settings.get('elastic_authentication', False)),
-            'elastic_username': server_config.get('elastic_username', self.default_settings.get('elastic_username', None)),
-            'elastic_password': self._resolve_password(server_config),
-            'repository': server_config.get('repository', self.default_settings.get('repository', 'default-repo')),
-            'elastic_s3snapshot_repo': server_config.get('elastic_s3snapshot_repo', self.default_settings.get('elastic_s3snapshot_repo', None)),
-            'health_style': server_config.get('health_style', self.default_settings.get('health_style', 'dashboard')),
-            'classic_style': server_config.get('classic_style', self.default_settings.get('classic_style', 'panel')),
-            'ascii_mode': server_config.get('ascii_mode', self.default_settings.get('ascii_mode', False))
+            "elastic_host": server_config.get(
+                "hostname", self.default_settings.get("hostname", "localhost")
+            ),
+            "elastic_host2": server_config.get(
+                "hostname2", self.default_settings.get("hostname2", "localhost")
+            ),
+            "elastic_host3": server_config.get(
+                "hostname3", self.default_settings.get("hostname3")
+            ),
+            "elastic_port": server_config.get(
+                "port", self.default_settings.get("port", 9200)
+            ),
+            "use_ssl": server_config.get(
+                "use_ssl", self.default_settings.get("use_ssl", False)
+            ),
+            "verify_certs": server_config.get(
+                "verify_certs", self.default_settings.get("verify_certs", False)
+            ),
+            "elastic_authentication": server_config.get(
+                "elastic_authentication",
+                self.default_settings.get("elastic_authentication", False),
+            ),
+            "elastic_username": self._resolve_username(server_config),
+            "elastic_password": self._resolve_password(server_config),
+            "repository": server_config.get(
+                "repository", self.default_settings.get("repository", "default-repo")
+            ),
+            "elastic_s3snapshot_repo": server_config.get(
+                "elastic_s3snapshot_repo",
+                self.default_settings.get("elastic_s3snapshot_repo", None),
+            ),
+            "health_style": server_config.get(
+                "health_style", self.default_settings.get("health_style", "dashboard")
+            ),
+            "classic_style": server_config.get(
+                "classic_style", self.default_settings.get("classic_style", "panel")
+            ),
+            "ascii_mode": server_config.get(
+                "ascii_mode", self.default_settings.get("ascii_mode", False)
+            ),
+            "read_timeout": server_config.get(
+                "read_timeout", self.get_read_timeout()
+            ),
+            # Preserve critical fields needed for password resolution
+            "config_password": server_config.get("config_password"),
+            "env": server_config.get("env"),
         }
 
     def get_cluster_groups(self):
         """
-        Get all available cluster groups.
+        Get all available cluster groups in normalized format.
 
         Returns:
-            dict: Dictionary of cluster group names and their members
+            dict: Dictionary of cluster group names and their members (backward compatible)
         """
         return self.cluster_groups
 
@@ -416,6 +865,170 @@ class ConfigurationManager:
         """
         return self.cluster_groups.get(group_name)
 
+    def get_environment_members(self, env_name):
+        """
+        Get the list of clusters in a specific environment.
+
+        Args:
+            env_name (str): The name of the environment
+
+        Returns:
+            list: List of cluster names in the environment, or None if environment doesn't exist
+        """
+        env_members = []
+        for server_name, server_config in self.servers_dict.items():
+            if server_config.get("env", "unknown") == env_name:
+                env_members.append(server_name)
+        return env_members if env_members else None
+
+    def is_environment(self, env_name):
+        """
+        Check if the given name is a valid environment.
+
+        Args:
+            env_name (str): The name to check
+
+        Returns:
+            bool: True if environment exists, False otherwise
+        """
+        for server_config in self.servers_dict.values():
+            if server_config.get("env", "unknown") == env_name:
+                return True
+        return False
+
+    def get_environments(self):
+        """
+        Get all available environments.
+
+        Returns:
+            dict: Dictionary mapping environment names to lists of server names
+        """
+        environments = {}
+        for server_name, server_config in self.servers_dict.items():
+            env = server_config.get("env", "unknown")
+            if env not in environments:
+                environments[env] = []
+            environments[env].append(server_name)
+        return environments
+
+    def get_cluster_groups_with_descriptions(self):
+        """
+        Get all available cluster groups with their descriptions and metadata.
+
+        Returns:
+            dict: Dictionary with group details including descriptions
+                Format: {
+                    'group_name': {
+                        'clusters': ['cluster1', 'cluster2'],
+                        'description': 'Group description',
+                        'cluster_count': 2
+                    }
+                }
+        """
+        enhanced_groups = {}
+        for group_name, group_data in self.cluster_groups_raw.items():
+            if isinstance(group_data, dict) and "clusters" in group_data:
+                # New format with description and clusters
+                clusters = group_data.get("clusters", [])
+                description = group_data.get("description", "No description provided")
+            elif isinstance(group_data, list):
+                # Old format - just a list of clusters
+                clusters = group_data
+                description = "No description provided"
+            else:
+                # Handle unexpected format
+                clusters = []
+                description = "Invalid group configuration"
+
+            enhanced_groups[group_name] = {
+                "clusters": clusters,
+                "description": description,
+                "cluster_count": len(clusters),
+            }
+
+        return enhanced_groups
+
+    def get_configuration_info(self):
+        """
+        Get information about the current configuration mode and file paths.
+
+        Returns:
+            dict: Configuration information including mode, file paths, and statistics
+        """
+        info = {
+            "mode": "dual-file" if self.is_dual_file_mode else "single-file",
+            "total_servers": len(self.servers_dict),
+            "cluster_groups": len(self.cluster_groups),
+            "password_environments": len(self.passwords),
+        }
+
+        if self.is_dual_file_mode:
+            info.update(
+                {
+                    "main_config_file": self.main_config_path,
+                    "servers_config_file": self.servers_config_path,
+                    "main_config_exists": os.path.exists(self.main_config_path)
+                    if self.main_config_path
+                    else False,
+                    "servers_config_exists": os.path.exists(self.servers_config_path)
+                    if self.servers_config_path
+                    else False,
+                }
+            )
+        else:
+            info.update(
+                {
+                    "config_file": self.config_file_path,
+                    "config_exists": os.path.exists(self.config_file_path)
+                    if self.config_file_path
+                    else False,
+                }
+            )
+
+        return info
+
+    def get_metrics_config(self, environment=None):
+        """
+        Get metrics configuration for InfluxDB/VictoriaMetrics integration.
+
+        Args:
+            environment: Optional environment name to get environment-specific config
+
+        Returns:
+            dict: Metrics configuration or None if not configured
+        """
+        metrics_config = None
+
+        # In dual-file mode, check root level of main config first
+        if self.is_dual_file_mode and hasattr(self, "main_config") and self.main_config:
+            metrics_config = self.main_config.get("metrics")
+
+        # Fall back to settings section (for backward compatibility)
+        if not metrics_config and self.default_settings:
+            metrics_config = self.default_settings.get("metrics")
+
+        if not metrics_config:
+            return None
+
+        # If environment is specified, check for environment-specific configuration
+        if environment and isinstance(metrics_config, dict):
+            env_configs = metrics_config.get("environments", {})
+            if environment.lower() in env_configs:
+                env_config = env_configs[environment.lower()]
+                # Merge environment-specific config with base config
+                # Environment-specific settings override base settings
+                merged_config = metrics_config.copy()
+                merged_config.update(env_config)
+                # Remove the environments section from the final config
+                merged_config.pop("environments", None)
+                metrics_config = merged_config
+
+        # Validate that at least endpoint is configured
+        if not metrics_config.get("endpoint"):
+            return None
+
+        return metrics_config
+
     def is_cluster_group(self, name):
         """
         Check if a given name is a cluster group.
@@ -427,3 +1040,34 @@ class ConfigurationManager:
             bool: True if it's a cluster group, False otherwise
         """
         return name in self.cluster_groups
+
+    def get_display_theme(self):
+        """
+        Get the display theme setting, checking escmd.json first, then escmd.yml.
+
+        Returns:
+            str: The theme name, defaults to 'rich' if not found
+        """
+        # First try to get from state file (escmd.json)
+        try:
+            if os.path.exists(self.state_file_path):
+                with open(self.state_file_path, "r") as f:
+                    state_data = json.load(f)
+                    if "display_theme" in state_data:
+                        return state_data["display_theme"]
+        except (json.JSONDecodeError, IOError):
+            # Ignore errors reading state file
+            pass
+
+        # Then try to get from main config file (escmd.yml)
+        if self.is_dual_file_mode and self.main_config:
+            settings = self.main_config.get("settings", {})
+            if "display_theme" in settings:
+                return settings["display_theme"]
+        elif not self.is_dual_file_mode and self.config:
+            settings = self.config.get("settings", {})
+            if "display_theme" in settings:
+                return settings["display_theme"]
+
+        # Default to 'rich' theme
+        return "rich"

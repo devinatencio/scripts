@@ -6,14 +6,14 @@ Comprehensive cluster health monitoring with multiple display styles and compari
 
 ```bash
 # Basic health monitoring
-./escmd.py health                    # Dashboard view (default)
+./escmd.py health                    # Quick status check (default)
+./escmd.py health-detail             # Dashboard view with diagnostics
 ./escmd.py -l production health      # Specific cluster health  
-./escmd.py health --quick            # Fast response mode
 
 # Advanced health features
-./escmd.py health --compare staging  # Compare two clusters
-./escmd.py health --group production # Monitor cluster groups
-./escmd.py health --format json     # JSON output for automation
+./escmd.py health-detail --compare staging  # Compare two clusters
+./escmd.py health-detail --group production # Monitor cluster groups
+./escmd.py health --format json             # JSON output for automation
 ```
 
 ## Health Command Overview
@@ -22,7 +22,7 @@ The health command offers comprehensive cluster monitoring with multiple display
 
 ### Display Styles
 
-#### ⚡ Quick Mode (`-q/--quick`)
+#### ⚡ Quick Mode (`health` command)
 - **Fast Response**: Only performs basic cluster health API call (~1-2 seconds)
 - **Core Metrics Only**: Cluster name, status, nodes, shards, unassigned shards
 - **Skip Diagnostics**: Bypasses recovery status, allocation issues, node details, snapshots
@@ -30,12 +30,12 @@ The health command offers comprehensive cluster monitoring with multiple display
 - **Perfect for Monitoring**: Ideal for scripts, automation, or when you need quick status checks
 
 ```bash
-./escmd.py health --quick
-./escmd.py -l production health -q
-./escmd.py health --format json -q   # Quick mode with JSON output
+./escmd.py health
+./escmd.py -l production health
+./escmd.py health --format json      # Quick mode with JSON output
 ```
 
-#### 📊 Dashboard Style (Default)
+#### 📊 Dashboard Style (`health-detail` command)
 **6-Panel Visual Dashboard**: Comprehensive cluster health overview with additional diagnostics
 - **📋 Cluster Overview**: Cluster name, current master node, total/data nodes, shard health progress
 - **🖥️ Node Information**: Complete node breakdown (total, data, master, client nodes) with data ratio
@@ -45,8 +45,8 @@ The health command offers comprehensive cluster monitoring with multiple display
 - **⚖️ Allocation Issues**: Automatic detection and display of unassigned shards with allocation explanations
 
 ```bash
-./escmd.py health                    # Default dashboard
-./escmd.py -l cluster health         # Specific cluster dashboard
+./escmd.py health-detail             # Detailed dashboard
+./escmd.py -l cluster health-detail  # Specific cluster dashboard
 ```
 
 **Dashboard Features:**
@@ -56,16 +56,16 @@ The health command offers comprehensive cluster monitoring with multiple display
 - **Automatic Diagnostics**: Built-in detection of common issues with actionable information
 
 #### 🔧 Classic Style
-Traditional table-based display with two sub-styles:
+Traditional table-based display with two sub-styles (available in health-detail):
 
 **Panel Style:**
 ```bash
-./escmd.py health --classic          # Classic panel view
+./escmd.py health-detail --style classic          # Classic panel view
 ```
 
 **Table Style:**
 ```bash
-./escmd.py health --classic --table  # Classic table view
+./escmd.py health-detail --style classic --classic-style table  # Classic table view
 ```
 
 ### Advanced Features
@@ -75,10 +75,10 @@ Compare two clusters side-by-side with real-time metrics:
 
 ```bash
 # Compare current cluster with another
-./escmd.py -l production health --compare staging
+./escmd.py -l production health-detail --compare staging
 
 # Compare any two clusters
-./escmd.py -l cluster1 health --compare cluster2
+./escmd.py -l cluster1 health-detail --compare cluster2
 ```
 
 **Comparison Features:**
@@ -93,9 +93,9 @@ Monitor multiple clusters simultaneously in a grid layout:
 
 ```bash
 # Monitor cluster groups
-./escmd.py health --group production    # All 'production' clusters
-./escmd.py health --group staging       # All 'staging' clusters
-./escmd.py health --group att           # All 'att' clusters
+./escmd.py health-detail --group production    # All 'production' clusters
+./escmd.py health-detail --group staging       # All 'staging' clusters
+./escmd.py health-detail --group att           # All 'att' clusters
 ```
 
 **Group Features:**
@@ -108,62 +108,58 @@ Monitor multiple clusters simultaneously in a grid layout:
 
 The health command supports extensive customization options:
 
-| Option | Type | Description | Example |
-|--------|------|-------------|---------|
-| `--format` | choice | Output format (table, json) | `--format json` |
-| `--style` | choice | Display style (dashboard, classic) | `--style classic` |
-| `--classic-style` | choice | Classic format (table, panel) | `--classic-style table` |
-| `--compare` | string | Compare with another cluster | `--compare staging` |
-| `--group` | string | Show group of clusters | `--group production` |
-| `-q`/`--quick` | flag | Quick mode - basic health only | `--quick` |
+| Command | Option | Type | Description | Example |
+|---------|--------|------|-------------|---------|
+| `health` | `--format` | choice | Output format (table, json) | `--format json` |
+| `health-detail` | `--format` | choice | Output format (table, json) | `--format json` |
+| `health-detail` | `--style` | choice | Display style (dashboard, classic) | `--style classic` |
+| `health-detail` | `--classic-style` | choice | Classic format (table, panel) | `--classic-style table` |
+| `health-detail` | `--compare` | string | Compare with another cluster | `--compare staging` |
+| `health-detail` | `--group` | string | Show group of clusters | `--group production` |
 
 ### Advanced Usage Examples
 
 ```bash
-# Style customization
-./escmd.py health --style dashboard      # Force dashboard style
-./escmd.py health --style classic        # Force classic style
-./escmd.py health --classic-style table  # Classic with table format
-./escmd.py health --classic-style panel  # Classic with panel format
+# Basic health monitoring
+./escmd.py health                        # Quick status check (default)
+./escmd.py health --format json          # Quick mode with JSON output
+./escmd.py -l prod1 health               # Quick health for specific cluster
 
-# Output format control
-./escmd.py health --format json          # JSON output for scripts
-./escmd.py health --format table         # Rich table format (default)
+# Detailed health monitoring  
+./escmd.py health-detail                 # Rich dashboard view
+./escmd.py health-detail --style classic # Force classic style
+./escmd.py health-detail --classic-style table  # Classic with table format
+./escmd.py health-detail --classic-style panel  # Classic with panel format
 
-# Cluster operations
-./escmd.py -l prod1 health --compare prod2       # Compare two production clusters
-./escmd.py health --group staging               # All staging clusters
-./escmd.py health --group production --format json  # Group JSON output
-
-# Quick monitoring
-./escmd.py health --quick                # Fast basic health
-./escmd.py health -q --format json       # Quick mode with JSON
-./escmd.py -l slow-cluster health --quick  # Quick mode for slow clusters
+# Cluster operations (detailed mode)
+./escmd.py -l prod1 health-detail --compare prod2       # Compare two production clusters
+./escmd.py health-detail --group staging               # All staging clusters
+./escmd.py health-detail --group production --format json  # Group JSON output
 
 # Combined options
-./escmd.py health --style classic --classic-style table --format json
-./escmd.py health --compare staging --format json
+./escmd.py health-detail --style classic --classic-style table --format json
+./escmd.py health-detail --compare staging --format json
 ```
 
 ### Configuration
 
-#### Global Health Style
-Set default health display style in `elastic_servers.yml`:
+#### Global Health Detail Style
+Set default health-detail display style in `elastic_servers.yml`:
 
 ```yaml
 settings:
-  health_style: dashboard  # Options: dashboard, classic
+  health_style: dashboard  # Options: dashboard, classic (applies to health-detail command)
   classic_style: panel     # Options: panel, table (when health_style is classic)
 ```
 
 #### Per-Cluster Configuration
-Override health style for specific clusters:
+Override health-detail style for specific clusters:
 
 ```yaml
 servers:
   - name: production
     hostname: prod-es-01.company.com
-    health_style: classic  # This cluster uses classic style
+    health_style: classic  # This cluster uses classic style for health-detail
     # ... other settings
 ```
 
@@ -177,8 +173,8 @@ Machine-readable output for automation and monitoring systems:
 
 ```bash
 ./escmd.py health --format json
-./escmd.py health --compare staging --format json
-./escmd.py health --group production --format json
+./escmd.py health-detail --compare staging --format json
+./escmd.py health-detail --group production --format json
 ```
 
 **JSON Structure:**

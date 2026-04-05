@@ -34,7 +34,7 @@ class ClusterHandler(BaseHandler):
                 try:
                     health_data = self.es_client.get_cluster_health()
                     cluster_name = health_data.get('cluster_name', 'Unknown')
-                    cluster_status = health_data.get('cluster_status', 'unknown')
+                    cluster_status = health_data.get('status', 'unknown')  # Changed from 'cluster_status' to 'status'
                     total_nodes = health_data.get('number_of_nodes', 0)
                     data_nodes = health_data.get('number_of_data_nodes', 0)
                 except:
@@ -64,17 +64,20 @@ class ClusterHandler(BaseHandler):
                     self.es_client.pretty_print_json(ping_data)
                     return True
 
+                # Get style system for semantic styling
+                style_system = self.es_client.style_system
+
                 # Create title panel
                 title_panel = Panel(
-                    Text(f"🏓 Elasticsearch Connection Test", style="bold green", justify="center"),
+                    style_system.create_semantic_text("🏓 Elasticsearch Connection Test", "success", justify="center"),
                     subtitle=f"✅ Connection Successful | Cluster: {cluster_name} | Status: {cluster_status.title()}",
-                    border_style="green",
+                    border_style=style_system.get_semantic_style("success"),
                     padding=(1, 2)
                 )
 
                 # Create connection details panel
                 connection_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-                connection_table.add_column("Label", style="bold", no_wrap=True)
+                connection_table.add_column("Label", style=style_system.get_semantic_style("primary"), no_wrap=True)
                 connection_table.add_column("Icon", justify="left", width=3)
                 connection_table.add_column("Value", no_wrap=True)
 
@@ -83,42 +86,45 @@ class ClusterHandler(BaseHandler):
                 connection_table.add_row("SSL Enabled:", "🔒", "Yes" if self.es_client.use_ssl else "No")
                 connection_table.add_row("Verify Certs:", "📜", "Yes" if self.es_client.verify_certs else "No")
 
-                if self.es_client.elastic_username:
+                if self.es_client.elastic_authentication and self.es_client.elastic_username:
                     connection_table.add_row("Username:", "👤", self.es_client.elastic_username)
-                    connection_table.add_row("Password:", "🔐", "***" + self.es_client.elastic_password[-2:] if len(self.es_client.elastic_password) > 2 else "***")
+                    if self.es_client.elastic_password and len(self.es_client.elastic_password) > 2:
+                        connection_table.add_row("Password:", "🔐", "***" + self.es_client.elastic_password[-2:])
+                    else:
+                        connection_table.add_row("Password:", "🔐", "***")
                 else:
                     connection_table.add_row("Authentication:", "🔓", "None")
 
                 connection_panel = Panel(
                     connection_table,
                     title="🔗 Connection Details",
-                    border_style="blue",
+                    border_style=style_system.get_semantic_style("info"),
                     padding=(1, 2)
                 )
 
                 # Create cluster overview panel
                 overview_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-                overview_table.add_column("Label", style="bold", no_wrap=True)
+                overview_table.add_column("Label", style=style_system.get_semantic_style("primary"), no_wrap=True)
                 overview_table.add_column("Icon", justify="left", width=3)
                 overview_table.add_column("Value", no_wrap=True)
 
                 status_icon = "🟢" if cluster_status == 'green' else "🟡" if cluster_status == 'yellow' else "🔴"
                 overview_table.add_row("Cluster Name:", "🏢", cluster_name)
                 overview_table.add_row("Status:", status_icon, cluster_status.title())
-                overview_table.add_row("Total Nodes:", "🖥️", str(total_nodes))
+                overview_table.add_row("Total Nodes:", "💻", str(total_nodes))
                 overview_table.add_row("Data Nodes:", "💾", str(data_nodes))
 
                 overview_panel = Panel(
                     overview_table,
                     title="📊 Cluster Overview",
-                    border_style="cyan",
+                    border_style=style_system.get_semantic_style("secondary"),
                     padding=(1, 2)
                 )
 
                 # Create quick actions panel
                 actions_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-                actions_table.add_column("Action", style="bold magenta", no_wrap=True)
-                actions_table.add_column("Command", style="dim white")
+                actions_table.add_column("Action", style=style_system.get_semantic_style("primary"), no_wrap=True)
+                actions_table.add_column("Command", style=style_system.get_semantic_style("muted"))
 
                 actions_table.add_row("Check health:", "./escmd.py health")
                 actions_table.add_row("View nodes:", "./escmd.py nodes")
@@ -129,7 +135,7 @@ class ClusterHandler(BaseHandler):
                 actions_panel = Panel(
                     actions_table,
                     title="🚀 Next Steps",
-                    border_style="magenta",
+                    border_style=style_system._get_style('table_styles', 'border_style', 'bright_magenta'),
                     padding=(1, 2)
                 )
 
@@ -155,10 +161,13 @@ class ClusterHandler(BaseHandler):
                     self.es_client.pretty_print_json(error_data)
                     return False
 
+                # Get style system for error styling
+                style_system = self.es_client.style_system
+
                 error_panel = Panel(
-                    Text(f"❌ Connection Failed", style="bold red", justify="center"),
+                    style_system.create_semantic_text("❌ Connection Failed", "error", justify="center"),
                     subtitle=f"Unable to connect to {self.es_client.host1}:{self.es_client.port}",
-                    border_style="red",
+                    border_style=style_system.get_semantic_style("error"),
                     padding=(1, 2)
                 )
                 print()
@@ -247,7 +256,7 @@ class ClusterHandler(BaseHandler):
                             'master_node_details': master_node_info,
                             'cluster_overview': {
                                 'cluster_name': health_data.get('cluster_name', 'Unknown'),
-                                'cluster_status': health_data.get('cluster_status', 'unknown'),
+                                'cluster_status': health_data.get('status', 'unknown'),
                                 'total_nodes': health_data.get('number_of_nodes', 0),
                                 'data_nodes': health_data.get('number_of_data_nodes', 0),
                                 'active_primary_shards': health_data.get('active_primary_shards', 0),
@@ -279,7 +288,7 @@ class ClusterHandler(BaseHandler):
                             'master_node_details': fallback_node_info,
                             'cluster_overview': {
                                 'cluster_name': health_data.get('cluster_name', 'Unknown'),
-                                'cluster_status': health_data.get('cluster_status', 'unknown'),
+                                'cluster_status': health_data.get('status', 'unknown'),
                                 'total_nodes': health_data.get('number_of_nodes', 0),
                                 'data_nodes': health_data.get('number_of_data_nodes', 0),
                                 'active_primary_shards': health_data.get('active_primary_shards', 0),
@@ -293,7 +302,7 @@ class ClusterHandler(BaseHandler):
                         'master_node_details': None,
                         'cluster_overview': {
                             'cluster_name': health_data.get('cluster_name', 'Unknown'),
-                            'cluster_status': health_data.get('cluster_status', 'unknown'),
+                            'cluster_status': health_data.get('status', 'unknown'),
                             'total_nodes': health_data.get('number_of_nodes', 0),
                             'data_nodes': health_data.get('number_of_data_nodes', 0),
                             'active_primary_shards': health_data.get('active_primary_shards', 0),
@@ -325,16 +334,26 @@ class ClusterHandler(BaseHandler):
             self.es_client.print_enhanced_nodes_table(nodes)
 
     def handle_masters(self):
-        """Display master node information."""
+        """Display master node information with performance metrics."""
+        # Get node information with performance metrics
         nodes = self.es_client.get_nodes()
         master_nodes = self.es_client.filter_nodes_by_role(nodes, 'master')
+
         if self.args.format == 'json':
             self.es_client.pretty_print_json(master_nodes)
         else:
             self.es_client.print_enhanced_masters_info(master_nodes)
 
     def handle_health(self):
-        """Comprehensive cluster health monitoring with multiple display modes."""
+        """Handle basic cluster health display - quick mode without detailed diagnostics."""
+        # Delegate to HealthHandler for consistency
+        from .health_handler import HealthHandler
+        health_handler = HealthHandler(self.es_client, self.args, self.console,
+                                      self.config_file, self.location_config, self.current_location)
+        health_handler.handle_health()
+
+    def handle_health_detail(self):
+        """Handle detailed cluster health display with comprehensive diagnostics and various modes."""
         # Check if group health is requested
         if hasattr(self.args, 'group') and self.args.group:
             self._handle_health_group()
@@ -343,11 +362,6 @@ class ClusterHandler(BaseHandler):
         # Check if comparison is requested
         if hasattr(self.args, 'compare') and self.args.compare:
             self._handle_health_compare()
-            return
-
-        # Check if quick mode is requested
-        if hasattr(self.args, 'quick') and self.args.quick:
-            self._handle_health_quick()
             return
 
         # For JSON output, gather data quickly without progress
@@ -380,18 +394,11 @@ class ClusterHandler(BaseHandler):
                 print("")
                 if classic_format == 'table':
                     # Original key-value table format
-                    self.es_client.print_table_from_dict('Elastic Health Status', health_data)
+                    self.es_client.print_json_as_table(health_data)
                 else:
                     # New styled panel format (same as comparison)
-                    status_icon = "✅" if health_data.get('cluster_status', '').upper() == 'GREEN' else "⚠️" if health_data.get('cluster_status', '').upper() == 'YELLOW' else "❌"
-                    health_table = self.es_client._create_health_table(
-                        self.current_location,
-                        health_data,
-                        status_icon
-                    )
-                    from rich.console import Console
-                    console = Console()
-                    console.print(health_table)
+                    # New styled panel format (same as comparison)
+                    self.es_client.print_json_as_table(health_data)
             else:
                 # Dashboard mode with detailed progress tracking
                 self._handle_health_dashboard()
@@ -504,7 +511,7 @@ class ClusterHandler(BaseHandler):
                 console = self.console if hasattr(self.console, 'print') else Console()
 
                 # Get cluster status and set colors
-                status = health_data.get('cluster_status', 'unknown').upper()
+                status = health_data.get('status', health_data.get('cluster_status', 'unknown')).upper()
                 if status == 'GREEN':
                     status_color = "bright_green"
                     status_icon = "🟢"
@@ -519,38 +526,54 @@ class ClusterHandler(BaseHandler):
                     status_icon = "⚪"
 
                 # Create quick health table
+                from esclient import get_theme_styles
+                styles = get_theme_styles(self.es_client.configuration_manager)
                 table = Table.grid(padding=(0, 3))
-                table.add_column(style="bold white", no_wrap=True)
-                table.add_column(style="bold cyan")
+                table.add_column(style=styles.get('row_styles', {}).get('normal', 'bold white'), no_wrap=True)
+                table.add_column(style=styles.get('row_styles', {}).get('normal', 'cyan'))
 
                 # Core health metrics only
                 table.add_row("🏢 Cluster:", health_data.get('cluster_name', 'Unknown'))
-                
-                # Add version information if available
+
+                # Add version information if available - properly parse version dict
                 cluster_version = health_data.get('cluster_version', 'Unknown')
                 if cluster_version != 'Unknown':
-                    table.add_row("🔧 ES Version:", f"v{cluster_version}")
-                
+                    if isinstance(cluster_version, dict):
+                        version_text = f"v{cluster_version.get('number', 'Unknown')}"
+                    else:
+                        version_text = f"v{cluster_version}"
+                    table.add_row("🔧 ES Version:", version_text)
+
                 table.add_row(f"{status_icon} Status:", f"[bold {status_color}]{status}[/bold {status_color}]")
-                table.add_row("🖥️  Nodes:", str(health_data.get('number_of_nodes', 0)))
+                table.add_row("💻  Nodes:", str(health_data.get('number_of_nodes', 0)))
                 table.add_row("💾 Data Nodes:", str(health_data.get('number_of_data_nodes', 0)))
                 table.add_row("🟢 Primary Shards:", f"{health_data.get('active_primary_shards', 0):,}")
                 table.add_row("🔵 Total Shards:", f"{health_data.get('active_shards', 0):,}")
 
                 unassigned = health_data.get('unassigned_shards', 0)
                 if unassigned > 0:
-                    table.add_row("🔴 Unassigned:", f"[bold red]{unassigned:,}[/bold red]")
+                    table.add_row("🔴 Unassigned:", f"[{styles.get('panel_styles', {}).get('error', 'bold red')}]{unassigned:,}[/{styles.get('panel_styles', {}).get('error', 'bold red')}]")
                 else:
-                    table.add_row("✅ Assignment:", "[bold green]Complete[/bold green]")
+                    table.add_row("✅ Assignment:", f"[{styles.get('panel_styles', {}).get('success', 'bold green')}]Complete[/{styles.get('panel_styles', {}).get('success', 'bold green')}]")
 
-                active_percent = health_data.get('active_shards_percent', 0)
+                # Calculate shard health percentage
+                active_percent = health_data.get('active_shards_percent')
+                if active_percent is None:
+                    # Calculate from active vs total shards if active_shards_percent not available
+                    active_shards = health_data.get('active_shards', 0)
+                    total_shards = active_shards + health_data.get('unassigned_shards', 0)
+                    if total_shards > 0:
+                        active_percent = (active_shards / total_shards) * 100
+                    else:
+                        active_percent = 0.0
+
                 table.add_row("📊 Shard Health:", f"{active_percent:.1f}%")
 
                 # Create panel
                 panel = Panel(
                     table,
                     title=f"[bold cyan]⚡ Quick Cluster Health[/bold cyan]",
-                    border_style=status_color.replace('bright_', ''),
+                    border_style=styles.get('border_style', 'bright_magenta'),
                     padding=(1, 2)
                 )
 
@@ -562,16 +585,20 @@ class ClusterHandler(BaseHandler):
                 # Fallback to simple text output if rich formatting fails
                 print(f"\n⚡ Quick Cluster Health:")
                 print(f"🏢 Cluster: {health_data.get('cluster_name', 'Unknown')}")
-                
-                # Add version information if available
+
+                # Add version information if available - properly parse version dict
                 cluster_version = health_data.get('cluster_version', 'Unknown')
                 if cluster_version != 'Unknown':
-                    print(f"🔧 ES Version: v{cluster_version}")
-                    
-                status = health_data.get('cluster_status', 'unknown').upper()
+                    if isinstance(cluster_version, dict):
+                        version_text = f"v{cluster_version.get('number', 'Unknown')}"
+                    else:
+                        version_text = f"v{cluster_version}"
+                    print(f"🔧 ES Version: {version_text}")
+
+                status = health_data.get('status', health_data.get('cluster_status', 'unknown')).upper()
                 status_icon = "🟢" if status == 'GREEN' else "🟡" if status == 'YELLOW' else "🔴" if status == 'RED' else "⚪"
                 print(f"{status_icon} Status: {status}")
-                print(f"🖥️  Nodes: {health_data.get('number_of_nodes', 0)}")
+                print(f"💻  Nodes: {health_data.get('number_of_nodes', 0)}")
                 print(f"💾 Data Nodes: {health_data.get('number_of_data_nodes', 0)}")
                 print(f"🟢 Primary Shards: {health_data.get('active_primary_shards', 0):,}")
                 print(f"🔵 Total Shards: {health_data.get('active_shards', 0):,}")
@@ -580,6 +607,17 @@ class ClusterHandler(BaseHandler):
                     print(f"🔴 Unassigned: {unassigned:,}")
                 else:
                     print(f"✅ Assignment: Complete")
-                active_percent = health_data.get('active_shards_percent', 0)
+
+                # Calculate shard health percentage
+                active_percent = health_data.get('active_shards_percent')
+                if active_percent is None:
+                    # Calculate from active vs total shards if active_shards_percent not available
+                    active_shards = health_data.get('active_shards', 0)
+                    total_shards = active_shards + health_data.get('unassigned_shards', 0)
+                    if total_shards > 0:
+                        active_percent = (active_shards / total_shards) * 100
+                    else:
+                        active_percent = 0.0
+
                 print(f"📊 Shard Health: {active_percent:.1f}%")
                 print()

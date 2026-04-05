@@ -12,6 +12,13 @@ Comprehensive ILM support with policy management, phase tracking, error monitori
 # Policy management
 ./escmd.py ilm policy my-policy       # Detailed policy view
 ./escmd.py ilm policy my-policy --show-all  # Include all indices using policy
+./escmd.py ilm create-policy my-policy policy.json  # Create new policy
+./escmd.py ilm delete-policy old-policy  # Delete policy (with confirmation)
+
+# Backup and restore policies
+./escmd.py ilm backup-policies --input-file indices.txt --output-file backup.json  # Backup ILM policies
+./escmd.py ilm restore-policies --input-file backup.json  # Restore ILM policies
+./escmd.py ilm restore-policies --input-file backup.json --dry-run  # Preview restore
 
 # Error detection and analysis
 ./escmd.py ilm errors                 # Find indices with ILM errors
@@ -137,7 +144,119 @@ Get a comprehensive overview of ILM status across the cluster:
 
 ## Policy Management Commands
 
-### 🗑️ Remove ILM Policies
+### 🆕 Create ILM Policies
+
+Create new ILM policies from JSON definitions:
+
+```bash
+# Create policy from JSON file
+./escmd.py -l cluster ilm create-policy my-retention-policy policy.json
+
+# Create policy from JSON file using --file flag
+./escmd.py -l cluster ilm create-policy my-retention-policy --file policy.json
+
+# Create policy with inline JSON
+./escmd.py -l cluster ilm create-policy quick-delete-policy '{
+  "policy": {
+    "phases": {
+      "hot": {
+        "actions": {
+          "rollover": {
+            "max_size": "10gb"
+          }
+        }
+      },
+      "delete": {
+        "min_age": "7d",
+        "actions": {
+          "delete": {}
+        }
+      }
+    }
+  }
+}'
+
+# Get JSON output for automation
+./escmd.py -l cluster ilm create-policy test-policy policy.json --format json
+```
+
+**Output Example**:
+```
+╭─────────────────────────── 🎯 ILM Policy Created ───────────────────────────╮
+│                                                                             │
+│   Policy Name:  my-retention-policy                                         │
+│   Source:       file: policy.json                                           │
+│   Status:       ✓ Created Successfully                                      │
+│   Phases:       hot, warm, cold, delete                                     │
+│                                                                             │
+╰─────────────────────────────────────────────────────────────────────────────╯
+```
+
+**Policy Structure Requirements**:
+- Must be valid JSON with `"policy"` root object
+- Must contain `"phases"` object with at least one phase
+- Supported phases: `hot`, `warm`, `cold`, `frozen`, `delete`
+- Each phase can contain multiple actions (rollover, allocate, delete, etc.)
+
+**Common Use Cases**:
+- **Simple retention**: Hot → Delete after X days
+- **Tiered storage**: Hot → Warm → Cold → Delete
+- **Performance optimization**: Hot with rollover, Warm with forcemerge
+- **Cost optimization**: Reduce replicas in warm/cold phases
+
+For detailed examples and policy templates, see: [ILM Policy Creation Guide](../guides/ilm-policy-creation.md)
+
+### 🗑️ Delete ILM Policies
+
+Delete existing ILM policies permanently:
+
+```bash
+# Delete policy with interactive confirmation
+./escmd.py -l cluster ilm delete-policy old-retention-policy
+
+# Delete policy without confirmation (for automation)
+./escmd.py -l cluster ilm delete-policy temp-policy --yes
+
+# Get JSON output for automation
+./escmd.py -l cluster ilm delete-policy unused-policy --yes --format json
+```
+
+**Output Example**:
+```
+╭─────────────────────── ⚠️  Confirm ILM Policy Deletion ──────────────────────╮
+│                                                                             │
+│   Policy Name:  old-retention-policy                                        │
+│   Phases:       hot, warm, delete                                           │
+│   Action:       DELETE                                                      │
+│                                                                             │
+╰─────────────────────────────────────────────────────────────────────────────╯
+
+Are you sure you want to delete this ILM policy? (yes/no): yes
+
+╭──────────────────────────── 🗑️  ILM Policy Deleted ─────────────────────────╮
+│                                                                             │
+│   Policy Name:  old-retention-policy                                        │
+│   Phases:       hot, warm, delete                                           │
+│   Status:       ✓ Deleted Successfully                                      │
+│                                                                             │
+╰─────────────────────────────────────────────────────────────────────────────╯
+```
+
+**Delete Policy Options:**
+
+| Option | Type | Description | Example |
+|--------|------|-------------|---------|
+| `policy_name` | string | Name of the policy to delete | `old-policy` |
+| `--yes` | flag | Skip confirmation prompts | `--yes` |
+| `--format` | choice | Output format (table, json) | `--format json` |
+
+**Important Notes:**
+- Policy deletion is permanent and cannot be undone
+- Indices currently using the deleted policy will continue with their current phase
+- It's recommended to remove the policy from indices first using `remove-policy`
+- Use `--yes` flag carefully in automated scripts
+
+### 🔄 Remove ILM Policies from Indices
 
 Remove ILM policies from indices using patterns or file lists:
 
@@ -150,8 +269,9 @@ Remove ILM policies from indices using patterns or file lists:
 ./escmd.py ilm remove-policy "test-*" --dry-run     # Preview removal
 ./escmd.py ilm remove-policy "backup-*" --dry-run --format json  # JSON preview
 
-# Remove from file list
-./escmd.py ilm remove-policy --file indices-to-clean.txt  # From file
+# Remove from file list (supports text or JSON format)
+./escmd.py ilm remove-policy --file indices-to-clean.txt  # From text file (one index per line)
+./escmd.py ilm remove-policy --file indices.json  # From JSON file
 
 # Advanced removal options
 ./escmd.py ilm remove-policy "staging-*" --save-json removed-policies.json  # Save for restoration
@@ -170,28 +290,50 @@ Remove ILM policies from indices using patterns or file lists:
 | `--max-concurrent` | integer | Maximum concurrent operations | `--max-concurrent 10` |
 | `--continue-on-error` | flag | Continue if some indices fail | `--continue-on-error` |
 | `--save-json` | string | Save removed indices to JSON file | `--save-json backup.json` |
-| `--file` | string | Read index names from file | `--file indices.txt` |
+| `--file` | string | Read index names from file (text or JSON) | `--file indices.txt` |
 
 ### 📋 Set ILM Policies
 
-Apply ILM policies to indices using patterns or restore from JSON:
+Apply ILM policies to indices using patterns or from file lists:
 
 ```bash
 # Set policies by pattern
-./escmd.py ilm set-policy "logs-*" my-log-policy      # Apply to log indices
-./escmd.py ilm set-policy "app-.*" app-retention      # Apply to app indices
+./escmd.py ilm set-policy my-log-policy "logs-*"      # Apply to log indices
+./escmd.py ilm set-policy app-retention "app-.*"      # Apply to app indices
 
 # Safe application with dry-run
-./escmd.py ilm set-policy "new-*" standard-policy --dry-run  # Preview assignment
-./escmd.py ilm set-policy "temp-*" cleanup-policy --dry-run --format json  # JSON preview
+./escmd.py ilm set-policy standard-policy "new-*" --dry-run  # Preview assignment
+./escmd.py ilm set-policy cleanup-policy "temp-*" --dry-run --format json  # JSON preview
 
-# Restore from saved JSON
-./escmd.py ilm set-policy --from-json removed-policies.json standard-policy  # Restore from file
+# Apply from file list (supports text or JSON format)
+./escmd.py ilm set-policy my-policy --file indices.txt  # From text file (one index per line)
+./escmd.py ilm set-policy my-policy --file indices.json  # From JSON file
 
 # Advanced set options
-./escmd.py ilm set-policy "logs-*" retention-30d --yes --max-concurrent 5  # Skip confirmation
-./escmd.py ilm set-policy "staging-*" test-policy --continue-on-error  # Continue despite failures
+./escmd.py ilm set-policy retention-30d "logs-*" --yes --max-concurrent 5  # Skip confirmation
+./escmd.py ilm set-policy test-policy "staging-*" --continue-on-error  # Continue despite failures
 ```
+
+**Enhanced Confirmation Prompt:**
+
+The `set-policy` command now shows detailed breakdown before execution:
+
+```
+╭──────────────────────────────────────── ⚠️  Confirm ILM Policy Assignment ────────────────────────────────────────╮
+│                                                                                                                    │
+│   Policy Name:    30-day-cleanup                                                                                  │
+│   Source:         pattern: .pro-readonlyrest-audit-xcs-in-.*                                                      │
+│   Indices Found:  30                                                                                              │
+│   • To Update:    3   (indices that will receive the policy)                                                      │
+│   • To Skip:      27  (already have policy)                                                                       │
+│   Action:         SET ILM POLICY                                                                                  │
+│                                                                                                                    │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+Are you sure you want to set ILM policy '30-day-cleanup' on 3 indices (27 will be skipped)? (yes/no):
+```
+
+This enhancement helps users understand exactly how many indices will be affected before proceeding.
 
 **Set Policy Options:**
 
@@ -206,6 +348,130 @@ Apply ILM policies to indices using patterns or restore from JSON:
 | `--continue-on-error` | flag | Continue if some indices fail | `--continue-on-error` |
 | `--from-json` | string | Read indices from JSON file | `--from-json backup.json` |
 
+### 💾 Backup and Restore ILM Policies
+
+**New in this version:** Backup and restore ILM policies for indices to support maintenance workflows.
+
+#### Backup ILM Policies
+
+Save current ILM policies for a list of indices to a JSON file:
+
+```bash
+# Create a text file with indices (one per line)
+cat > my-indices.txt << EOF
+logs-prod-2024.01.01
+logs-prod-2024.01.02
+metrics-prod-2024.01.01
+EOF
+
+# Backup ILM policies for those indices
+./escmd.py ilm backup-policies \
+  --input-file my-indices.txt \
+  --output-file ilm-backup.json
+
+# View backup in JSON format
+./escmd.py ilm backup-policies \
+  --input-file my-indices.txt \
+  --output-file ilm-backup.json \
+  --format json
+```
+
+**Backup Output Format:**
+
+The backup file contains:
+- Timestamp of backup
+- Source file reference
+- For each index:
+  - Index name
+  - Assigned ILM policy (if any)
+  - Management status (managed/unmanaged)
+  - Current phase, action, and step
+
+Example backup JSON:
+```json
+{
+  "operation": "backup_policies",
+  "timestamp": "2024-01-15T10:30:00.123456",
+  "source_file": "my-indices.txt",
+  "indices": [
+    {
+      "index": "logs-prod-2024.01.01",
+      "policy": "30-days-default",
+      "managed": true,
+      "phase": "hot",
+      "action": "complete",
+      "step": "complete"
+    }
+  ]
+}
+```
+
+#### Restore ILM Policies
+
+Restore ILM policies from a backup JSON file:
+
+```bash
+# Preview what will be restored (dry-run)
+./escmd.py ilm restore-policies \
+  --input-file ilm-backup.json \
+  --dry-run
+
+# Actually restore the policies
+./escmd.py ilm restore-policies \
+  --input-file ilm-backup.json
+
+# Restore with JSON output
+./escmd.py ilm restore-policies \
+  --input-file ilm-backup.json \
+  --format json
+```
+
+**Restore Behavior:**
+- Only restores indices that had policies in the backup
+- Skips indices without policies (unmanaged indices)
+- Reports success/skip/error counts
+- Continues processing all indices even if some fail
+
+#### Complete Backup/Restore Workflow
+
+```bash
+# 1. Create list of indices for maintenance
+cat > maintenance-indices.txt << EOF
+logs-prod-2024.01.01
+logs-prod-2024.01.02
+logs-prod-2024.01.03
+EOF
+
+# 2. Backup current ILM policies
+./escmd.py ilm backup-policies \
+  --input-file maintenance-indices.txt \
+  --output-file ilm-backup-$(date +%Y%m%d).json
+
+# 3. Remove ILM policies for maintenance
+./escmd.py ilm remove-policy --file maintenance-indices.txt --yes
+
+# 4. Perform maintenance operations...
+# (your maintenance tasks here)
+
+# 5. Restore ILM policies after maintenance
+./escmd.py ilm restore-policies \
+  --input-file ilm-backup-$(date +%Y%m%d).json
+
+# 6. Verify restoration
+./escmd.py ilm errors
+```
+
+**Backup/Restore Options:**
+
+| Command | Option | Description |
+|---------|--------|-------------|
+| `backup-policies` | `--input-file` | File with indices (one per line or JSON) - Required |
+| `backup-policies` | `--output-file` | Output JSON file for backup - Required |
+| `backup-policies` | `--format` | Console output format (table or json) |
+| `restore-policies` | `--input-file` | Backup JSON file - Required |
+| `restore-policies` | `--dry-run` | Preview changes without executing |
+| `restore-policies` | `--format` | Console output format (table or json) |
+
 ### Policy Management Workflow
 
 ```bash
@@ -216,15 +482,12 @@ Apply ILM policies to indices using patterns or restore from JSON:
 ./escmd.py ilm remove-policy "logs-2023-*" --save-json logs-2023-backup.json
 
 # 3. Apply new policies
-./escmd.py ilm set-policy "logs-2023-*" archive-policy --dry-run
-./escmd.py ilm set-policy "logs-2023-*" archive-policy
+./escmd.py ilm set-policy archive-policy "logs-2023-*" --dry-run
+./escmd.py ilm set-policy archive-policy "logs-2023-*"
 
 # 4. Verify changes
 ./escmd.py ilm errors
 ./escmd.py ilm policy archive-policy --show-all
-
-# 5. Restore if needed (rollback)
-./escmd.py ilm set-policy --from-json logs-2023-backup.json original-policy
 ```
 
 ## ILM Workflow Examples

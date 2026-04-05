@@ -21,7 +21,7 @@ Comprehensive troubleshooting guide for common escmd issues and solutions.
 ./escmd.py show-settings
 
 # 3. Test with minimal configuration
-./escmd.py -l cluster-name health --quick
+./escmd.py -l cluster-name health
 ```
 
 **Common Solutions:**
@@ -389,7 +389,7 @@ ConnectionTimeout caused by - ReadTimeoutError(HTTPSConnectionPool(host='cluster
 
 ```bash
 # 1. Use quick mode for health checks
-./escmd.py health --quick
+./escmd.py health
 
 # 2. Check specific cluster performance
 time ./escmd.py -l slow-cluster health
@@ -441,8 +441,8 @@ servers:
 #### Quick Fixes for Immediate Relief
 ```bash
 # For regular monitoring, use quick mode
-./escmd.py health --quick
-./escmd.py -l cluster health -q
+./escmd.py health
+./escmd.py -l cluster health
 
 # Skip heavy operations temporarily
 ./escmd.py cluster-check --skip-ilm

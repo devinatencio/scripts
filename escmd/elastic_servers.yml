@@ -1,32 +1,6 @@
-settings:
-  box_style: SQUARE_DOUBLE_HEAD
-  health_style: dashboard
-  classic_style: panel
-  enable_paging: false
-  paging_threshold: 50
-  show_legend_panels: false
-  ascii_mode: false
- 
-  # Elasticsearch Timeouts
-  connection_timeout: 30
-  read_timeout: 120
-
-  dangling_cleanup:
-    max_retries: 3
-    retry_delay: 5
-    timeout: 60
-    default_log_level: INFO
-    enable_progress_bar: true
-    confirmation_required: true
-cluster_groups:
-  dev:
-  - default 
-passwords:
-  default:
-    username: password
 servers:
 - name: DEFAULT
-  hostname: 127.0.0.1
+  hostname: 192.168.12.202
   port: 9200
   use_ssl: false
   verify_certs: false

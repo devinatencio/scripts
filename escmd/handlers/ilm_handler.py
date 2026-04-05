@@ -16,7 +16,7 @@ class ILMHandler(BaseHandler):
         # The actual implementation delegates to esclient methods
         if hasattr(self.args, 'ilm_action'):
             action = self.args.ilm_action
-            
+
             if action == 'status':
                 self.es_client.check_ilm_status()
             elif action == 'policies':
@@ -25,7 +25,7 @@ class ILMHandler(BaseHandler):
                     policies = self.es_client.get_ilm_policies()
                     print(json.dumps(policies))
                 else:
-                    self.es_client.print_ilm_policies()
+                    self.es_client.print_enhanced_ilm_policies()
             elif action == 'remove-policy':
                 self._handle_ilm_remove_policy()
             elif action == 'set-policy':
@@ -42,7 +42,7 @@ class ILMHandler(BaseHandler):
         # For now, delegate to esclient
         pattern = getattr(self.args, 'pattern', None)
         dry_run = getattr(self.args, 'dry_run', False)
-        
+
         if pattern:
             self.es_client.remove_ilm_policy_by_pattern(pattern, dry_run)
         else:
@@ -55,7 +55,7 @@ class ILMHandler(BaseHandler):
         pattern = getattr(self.args, 'pattern', None)
         policy = getattr(self.args, 'policy', None)
         dry_run = getattr(self.args, 'dry_run', False)
-        
+
         if pattern and policy:
             self.es_client.set_ilm_policy_by_pattern(pattern, policy, dry_run)
         else:

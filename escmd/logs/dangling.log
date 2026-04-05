@@ -1,0 +1,9 @@
+2026-04-04 13:41:13,934 - escmd_dangling - INFO - [escmd.py:497] - Starting escmd command: dangling
+2026-04-04 13:41:13,979 - escmd_dangling - INFO - [command_handler.py:302] - Executing command: dangling
+2026-04-04 13:41:13,979 - escmd_dangling - INFO - [dangling_handler.py:41] - Starting dangling indices operation
+2026-04-04 13:41:13,979 - escmd_dangling - INFO - [dangling_handler.py:42] - Command arguments: cleanup_all=False, group=None, env=None, metrics=False
+2026-04-04 13:41:13,979 - escmd_dangling - INFO - [dangling_handler.py:137] - Starting dangling indices listing operation
+2026-04-04 13:41:13,979 - escmd_dangling - INFO - [dangling_handler.py:142] - Retrieving dangling indices from cluster
+2026-04-04 13:41:13,988 - escmd_dangling - INFO - [dangling_handler.py:161] - Found 0 dangling indices
+2026-04-04 13:41:13,999 - escmd_dangling - INFO - [dangling_handler.py:171] - Cluster: elasticsearch, Nodes: 1
+2026-04-04 13:41:14,050 - escmd_dangling - INFO - [escmd.py:582] - Command dangling completed successfully

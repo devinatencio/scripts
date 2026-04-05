@@ -1,0 +1,39 @@
+#!/bin/bash
+# esterm - Interactive Elasticsearch Terminal Launcher
+# Place this script in your PATH (e.g., /usr/local/bin/esterm or ~/bin/esterm)
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+
+# Try to find esterm.py in common locations
+ESTERM_LOCATIONS=(
+    "${SCRIPT_DIR}/esterm.py"
+    "${SCRIPT_DIR}/../Documents/Staged/ESCMD/escmd/esterm.py"
+    "/Users/devin.acosta/Documents/Staged/ESCMD/escmd/esterm.py"
+    "./esterm.py"
+)
+
+ESTERM_PATH=""
+for location in "${ESTERM_LOCATIONS[@]}"; do
+    if [[ -f "$location" ]]; then
+        ESTERM_PATH="$location"
+        break
+    fi
+done
+
+if [[ -z "$ESTERM_PATH" ]]; then
+    echo "Error: Could not find esterm.py"
+    echo "Please ensure esterm.py is in one of these locations:"
+    printf '%s\n' "${ESTERM_LOCATIONS[@]}"
+    exit 1
+fi
+
+# Change to the ESCMD directory so imports work correctly
+ESCMD_DIR="$(dirname "$ESTERM_PATH")"
+cd "$ESCMD_DIR" || {
+    echo "Error: Could not change to ESCMD directory: $ESCMD_DIR"
+    exit 1
+}
+
+# Launch esterm
+exec python3 esterm.py "$@"

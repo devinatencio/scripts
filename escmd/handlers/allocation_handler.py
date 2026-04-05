@@ -28,17 +28,7 @@ class AllocationHandler(BaseHandler):
                 self.es_client.print_enhanced_allocation_settings()
             return
 
-        if self.args.allocation_action == "display":
-            format_type = getattr(self.args, 'format', 'table')
-            if format_type == 'json':
-                settings = self.es_client.es.cluster.get_settings(include_defaults=False)
-                import json
-                self.es_client.pretty_print_json(settings)
-            else:
-                self.es_client.print_enhanced_allocation_settings()
-            return
-
-        elif self.args.allocation_action == "enable":
+        if self.args.allocation_action == "enable":
             success = self.es_client.change_shard_allocation('all')
             if success:
                 self.es_client.show_message_box("Success", "✅ Successfully enabled shard allocation (all shards).", message_style="bold white", panel_style="green")
@@ -56,9 +46,9 @@ class AllocationHandler(BaseHandler):
             return
 
         elif self.args.allocation_action == "disable":
-            success = self.es_client.change_shard_allocation('primary')
+            success = self.es_client.change_shard_allocation('primaries')
             if success:
-                self.es_client.show_message_box("Success", "⚠️ Successfully disabled shard allocation (primaries only).\nReplica shards will not be allocated or moved.", message_style="bold white", panel_style="yellow")
+                self.es_client.show_message_box("Success", "🔶 Successfully disabled shard allocation (primaries only).\nReplica shards will not be allocated or moved.", message_style="bold white", panel_style="yellow")
                 # Show updated settings
                 format_type = getattr(self.args, 'format', 'table')
                 if format_type == 'json':
@@ -83,9 +73,25 @@ class AllocationHandler(BaseHandler):
                     self.es_client.show_message_box("Error", "Hostname is required for exclude add operation", message_style="bold white", panel_style="red")
                     return
 
-                success = self.es_client.exclude_node_from_allocation(self.args.hostname)
+                hostname = self.args.hostname
+
+                # Get current exclusions
+                current_exclusions = self._get_current_exclusions()
+
+                # Check if hostname is already excluded
+                if hostname in current_exclusions:
+                    excluded_hosts_list = "\n".join([f"  • {host}" for host in current_exclusions])
+                    self.es_client.show_message_box("Info", f"ℹ️ Host '{hostname}' is already in the exclusion list.\n\nCurrently excluded hosts:\n{excluded_hosts_list}", message_style="bold white", panel_style="blue")
+                    return
+
+                # Add hostname to exclusion list
+                updated_exclusions = current_exclusions + [hostname]
+
+                # Apply updated exclusions
+                success = self._set_exclusions(updated_exclusions)
                 if success:
-                    self.es_client.show_message_box("Success", f"✅ Successfully excluded node '{self.args.hostname}' from allocation.\nShards will be moved away from this node.", message_style="bold white", panel_style="green")
+                    excluded_hosts_list = "\n".join([f"  • {host}" for host in updated_exclusions])
+                    self.es_client.show_message_box("Success", f"✅ Successfully excluded node '{hostname}' from allocation.\nShards will be moved away from this node.\n\nCurrently excluded hosts:\n{excluded_hosts_list}", message_style="bold white", panel_style="green")
                     # Show updated settings
                     format_type = getattr(self.args, 'format', 'table')
                     if format_type == 'json':
@@ -95,7 +101,7 @@ class AllocationHandler(BaseHandler):
                     else:
                         self.es_client.print_enhanced_allocation_settings()
                 else:
-                    self.es_client.show_message_box("Error", "❌ An ERROR occurred trying to exclude node from allocation", message_style="bold white", panel_style="red")
+                    self.es_client.show_message_box("Error", f"❌ Failed to exclude node '{hostname}' from allocation", message_style="bold white", panel_style="red")
                     exit(1)
                 return
 
@@ -109,17 +115,17 @@ class AllocationHandler(BaseHandler):
             elif self.args.exclude_action == "reset":
                 # Get current exclusions to show what will be reset
                 current_exclusions = self._get_current_exclusions()
-                
+
                 if not current_exclusions:
-                    self.es_client.show_message_box("Info", "ℹ️ No hosts are currently excluded from allocation.\nNothing to reset.", message_style="bold white", panel_style="blue")
+                    self.es_client.show_message_box("ℹ️  Info", " No hosts are currently excluded from allocation.\nNothing to reset.", message_style="bold white", panel_style="blue")
                     return
-                
+
                 # Check if confirmation bypass flag is used
                 if not getattr(self.args, 'yes_i_really_mean_it', False):
                     # Show warning and require confirmation
                     excluded_hosts_list = "\n".join([f"  • {host}" for host in current_exclusions])
-                    warning_message = f"""⚠️  WARNING: This will reset ALL node allocation exclusions!
-                    
+                    warning_message = f"""🔶  WARNING: This will reset ALL node allocation exclusions!
+
 Currently excluded hosts:
 {excluded_hosts_list}
 
@@ -131,14 +137,14 @@ This action will:
 This is a cluster-wide operation that cannot be undone easily."""
 
                     self.es_client.show_message_box("WARNING", warning_message, message_style="bold yellow", panel_style="red")
-                    
+
                     # Require confirmation
                     confirmation = input("\nType 'RESET' to confirm this cluster-wide reset: ").strip()
-                    
+
                     if confirmation != 'RESET':
                         self.es_client.show_message_box("Cancelled", "❌ Reset operation cancelled. No changes made.", message_style="bold white", panel_style="yellow")
                         return
-                
+
                 success = self.es_client.reset_node_allocation_exclusion()
                 if success:
                     self.es_client.show_message_box("Success", "✅ Successfully reset node allocation exclusions.\nAll nodes are now available for allocation.", message_style="bold white", panel_style="green")
@@ -188,7 +194,8 @@ This is a cluster-wide operation that cannot be undone easily."""
 
         # Check if hostname is in exclusion list
         if hostname not in current_exclusions:
-            self.es_client.show_message_box("Info", f"ℹ️ Host '{hostname}' is not in the exclusion list.\n\nCurrently excluded hosts:\n• {chr(10).join(['• ' + host for host in current_exclusions])}", message_style="bold white", panel_style="blue")
+            excluded_hosts_list = "\n".join([f"  • {host}" for host in current_exclusions])
+            self.es_client.show_message_box("Info", f"ℹ️ Host '{hostname}' is not in the exclusion list.\n\nCurrently excluded hosts:\n{excluded_hosts_list}", message_style="bold white", panel_style="blue")
             return
 
         # Remove hostname from list
@@ -199,7 +206,8 @@ This is a cluster-wide operation that cannot be undone easily."""
             # Set exclusions with remaining hosts
             success = self._set_exclusions(updated_exclusions)
             if success:
-                self.es_client.show_message_box("Success", f"✅ Successfully removed '{hostname}' from exclusion list.\n\nRemaining excluded hosts:\n• {chr(10).join(['• ' + host for host in updated_exclusions])}", message_style="bold white", panel_style="green")
+                excluded_hosts_list = "\n".join([f"  • {host}" for host in updated_exclusions])
+                self.es_client.show_message_box("Success", f"✅ Successfully removed '{hostname}' from exclusion list.\n\nRemaining excluded hosts:\n{excluded_hosts_list}", message_style="bold white", panel_style="green")
                 # Show updated settings
                 format_type = getattr(self.args, 'format', 'table')
                 if format_type == 'json':
@@ -267,14 +275,26 @@ This is a cluster-wide operation that cannot be undone easily."""
             self.es_client.show_message_box("Error", f"Failed to explain allocation for {self.args.index}: {str(e)}", message_style="bold white", panel_style="red")
 
     def _get_current_exclusions(self):
-        """Get list of currently excluded hosts."""
+        """Get list of currently excluded hosts from both persistent and transient settings."""
         try:
             settings = self.es_client.es.cluster.get_settings()
-            exclusions_setting = settings.get('transient', {}).get('cluster', {}).get('routing', {}).get('allocation', {}).get('exclude', {}).get('_name', '')
 
-            if exclusions_setting:
-                return [host.strip() for host in exclusions_setting.split(',') if host.strip()]
-            return []
+            # Check transient settings
+            transient_exclusions = []
+            transient_setting = settings.get('transient', {}).get('cluster', {}).get('routing', {}).get('allocation', {}).get('exclude', {}).get('_name', '')
+            if transient_setting:
+                transient_exclusions = [host.strip() for host in transient_setting.split(',') if host.strip()]
+
+            # Check persistent settings
+            persistent_exclusions = []
+            persistent_setting = settings.get('persistent', {}).get('cluster', {}).get('routing', {}).get('allocation', {}).get('exclude', {}).get('_name', '')
+            if persistent_setting:
+                persistent_exclusions = [host.strip() for host in persistent_setting.split(',') if host.strip()]
+
+            # Combine and deduplicate
+            all_exclusions = list(set(transient_exclusions + persistent_exclusions))
+            return all_exclusions
+
         except Exception as e:
             print(f"Error getting current exclusions: {str(e)}")
             return []
@@ -295,11 +315,18 @@ This is a cluster-wide operation that cannot be undone easily."""
             return False
 
     def _reset_all_exclusions(self):
-        """Reset all exclusions (same as existing reset functionality)."""
+        """Reset all exclusions in both persistent and transient settings."""
         try:
             settings = {
+                "persistent": {
+                    "cluster.routing.allocation.exclude._name": None,
+                    "cluster.routing.allocation.exclude._ip": None,
+                    "cluster.routing.allocation.exclude._host": None
+                },
                 "transient": {
-                    "cluster.routing.allocation.exclude._name": None
+                    "cluster.routing.allocation.exclude._name": None,
+                    "cluster.routing.allocation.exclude._ip": None,
+                    "cluster.routing.allocation.exclude._host": None
                 }
             }
             self.es_client.es.cluster.put_settings(body=settings)

@@ -23,7 +23,7 @@ from configuration_manager import ConfigurationManager
 def mock_es_client():
     """Mock Elasticsearch client with common methods."""
     client = Mock()
-    
+
     # Health related methods
     client.get_cluster_health.return_value = {
         'cluster_name': 'test-cluster',
@@ -33,32 +33,48 @@ def mock_es_client():
         'active_primary_shards': 10,
         'active_shards': 20
     }
-    
+
+    # Connection methods
+    client.ping.return_value = True
+    client.test_connection.return_value = True
+
     # Index related methods
     client.list_dangling_indices.return_value = []
     client.list_datastreams.return_value = {'data_streams': []}
     client.get_indices_stats.return_value = {}
-    
+
     # Settings
     client.get_settings.return_value = {'persistent': {}, 'transient': {}}
     client.print_enhanced_cluster_settings.return_value = None
-    
+
+    # Style system methods - return renderable strings instead of Mock objects
+    client.style_system = Mock()
+    client.style_system.create_semantic_text.return_value = "Complete"
+    client.style_system.apply_status_style.return_value = "GREEN"
+    client.style_system.create_status_text.return_value = "HEALTHY"
+
     # Other common methods
     client.flush_synced_elasticsearch.return_value = {'_shards': {'failed': 0}}
     client.host1 = 'localhost'
     client.port = 9200
     client.use_ssl = False
+    client.verify_certs = True
+    client.elastic_username = None
     client.elastic_authentication = False
     client.elastic_username = None
     client.elastic_password = None
-    
+
     return client
 
 
 @pytest.fixture
 def mock_console():
     """Mock Rich console."""
-    return Mock(spec=Console)
+    console = Mock()  # Remove spec to allow additional attributes
+    console.get_time.return_value = 0.0  # Add get_time method for Progress compatibility
+    console.__enter__ = Mock(return_value=console)  # Support context manager
+    console.__exit__ = Mock(return_value=None)  # Support context manager
+    return console
 
 
 @pytest.fixture
@@ -75,24 +91,28 @@ def sample_args():
 def temp_config_file():
     """Create a temporary config file for testing."""
     config_data = {
-        'DEFAULT': {
-            'hostname': '127.0.0.1',
-            'port': 9200,
-            'use_ssl': False
-        },
-        'test-cluster': {
-            'hostname': 'test.example.com',
-            'port': 9200,
-            'use_ssl': True,
-            'username': 'test_user',
-            'password': 'test_pass'
-        }
+        'servers': [
+            {
+                'name': 'DEFAULT',
+                'hostname': '127.0.0.1',
+                'port': 9200,
+                'use_ssl': False
+            },
+            {
+                'name': 'test-cluster',
+                'hostname': 'test.example.com',
+                'port': 9200,
+                'use_ssl': True,
+                'elastic_username': 'test_user',
+                'elastic_password': 'test_pass'
+            }
+        ]
     }
-    
+
     with tempfile.NamedTemporaryFile(mode='w', suffix='.yml', delete=False) as f:
         yaml.dump(config_data, f)
         yield f.name
-    
+
     # Cleanup
     os.unlink(f.name)
 
@@ -101,15 +121,15 @@ def temp_config_file():
 def temp_escmd_config():
     """Create a temporary escmd.json config file."""
     config_data = {
-        'default_location': 'test-cluster',
+        'current_cluster': 'test-cluster',
         'box_style': 'rounded',
         'health_style': 'dashboard'
     }
-    
+
     with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
         json.dump(config_data, f)
         yield f.name
-    
+
     # Cleanup
     os.unlink(f.name)
 

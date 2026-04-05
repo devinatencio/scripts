@@ -1,0 +1,45 @@
+# Sanitization configuration
+# Each rule has a type and the relevant fields for that type.
+#
+# Types:
+#   - literal   : exact string replacement
+#   - regex     : regex pattern with a replacement string
+#   - ip_prefix : replace IPs matching a given prefix (e.g. 10.) with a target prefix
+
+rules:
+  # Domain replacements
+  - type: literal
+    find: "ringcentral.com"
+    replace: "example.com"
+
+  - type: literal
+    find: "RingCentral"
+    replace: "Example Corp"
+
+  # IP address replacement: 10.x.x.x → 192.168.0.x (preserves last octet)
+  - type: ip_prefix
+    source_prefix: "10."
+    target_prefix: "192.168.0."
+
+  # Hostname replacement: internal datacenter hostnames → server1, server2, …
+  # Add any site-code prefixes your environment uses under `prefixes`.
+  # The mapping is stable: the same hostname always gets the same label.
+  - type: hostname
+    label_prefix: "server"
+    prefixes:
+      - iad
+      - sjc
+      - aex
+      - ams
+      - dca
+
+# Files to sanitize (relative to the script location)
+files:
+  - docs/environment_metrics.md
+  - docs/releases/RELEASE_3.7.0.md
+  - docs/releases/RELEASE_3.7.1.md
+  - docs/configuration/dual-file-config-guide.md
+  - docs/development/unfreeze-migration-complete.md
+  - docs/features/README_DANGLING_METRICS.md
+  - docs/guides/unfreeze-index-migration.md
+  - docs/reference/changelog.md

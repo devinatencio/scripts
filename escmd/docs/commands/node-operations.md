@@ -20,7 +20,7 @@ Node management, connectivity testing, and basic cluster configuration commands.
 ./escmd.py get-default             # Show current default cluster
 ./escmd.py set-default production  # Set default cluster
 ./escmd.py show-settings           # Show current tool configuration
-./escmd.py settings                # View cluster settings
+./escmd.py cluster-settings        # View cluster settings
 
 # Data operations  
 ./escmd.py storage                 # View disk usage across nodes
@@ -169,8 +169,8 @@ View current tool configuration:
 View and manage Elasticsearch cluster settings:
 
 ```bash
-./escmd.py settings               # Current cluster settings
-./escmd.py settings --format json # JSON output
+./escmd.py cluster-settings               # Current cluster settings
+./escmd.py cluster-settings --format json # JSON output
 ```
 
 **Settings Categories:**

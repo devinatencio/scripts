@@ -1,0 +1,430 @@
+# ESterm Theme Configuration
+# Separate theme system for ESterm interactive terminal
+# This is completely independent from ESCMD's theme system
+
+esterm_themes:
+  # Rich theme - colorful and vibrant
+  rich:
+    banner:
+      title_style: "bold bright_blue"
+      subtitle_style: "dim cyan"
+      version_style: "bright_green"
+      welcome_style: "green"
+      border_style: "blue"
+
+    prompt:
+      connected_cluster_style: "green"
+      disconnected_style: "red"
+      warning_cluster_style: "yellow"
+      prompt_symbol_style: "bold blue"
+      prompt_symbol: "➤"
+
+    status:
+      title_style: "bold cyan"
+      label_style: "bold white"
+      value_style: "cyan"
+      success_style: "green"
+      warning_style: "yellow"
+      error_style: "red"
+      info_style: "blue"
+      border_style: "cyan"
+
+    messages:
+      success_style: "green"
+      error_style: "red"
+      warning_style: "yellow"
+      info_style: "blue"
+      progress_style: "blue"
+
+    panels:
+      title_style: "bold cyan"
+      subtitle_style: "dim white"
+      border_style: "blue"
+      content_style: "white"
+
+    help:
+      title_style: "bold cyan"
+      section_header_style: "bold yellow"
+      command_style: "bold green"
+      description_style: "white"
+      example_style: "cyan"
+      footer_style: "dim white"
+
+  # Plain theme - minimal colors, accessibility focused
+  plain:
+    banner:
+      title_style: "bold white"
+      subtitle_style: "white"
+      version_style: "bold"
+      welcome_style: "white"
+      border_style: "white"
+
+    prompt:
+      connected_cluster_style: "bold"
+      disconnected_style: "bold"
+      warning_cluster_style: "bold"
+      prompt_symbol_style: "bold"
+      prompt_symbol: "➤"
+
+    status:
+      title_style: "bold"
+      label_style: "bold"
+      value_style: "white"
+      success_style: "bold"
+      warning_style: "bold"
+      error_style: "bold"
+      info_style: "bold"
+      border_style: "white"
+
+    messages:
+      success_style: "bold"
+      error_style: "bold"
+      warning_style: "bold"
+      info_style: "bold"
+      progress_style: "bold"
+
+    panels:
+      title_style: "bold"
+      subtitle_style: "white"
+      border_style: "white"
+      content_style: "white"
+
+    help:
+      title_style: "bold"
+      section_header_style: "bold"
+      command_style: "bold"
+      description_style: "white"
+      example_style: "white"
+      footer_style: "white"
+
+  # Cyberpunk theme - neon and electric colors
+  cyberpunk:
+    banner:
+      title_style: "bold bright_magenta"
+      subtitle_style: "bright_cyan"
+      version_style: "bright_green"
+      welcome_style: "bright_cyan"
+      border_style: "bright_magenta"
+
+    prompt:
+      connected_cluster_style: "bright_green"
+      disconnected_style: "bright_red"
+      warning_cluster_style: "bright_yellow"
+      prompt_symbol_style: "bold bright_magenta"
+      enhanced_separator_style: "bright_cyan"
+      time_style: "bright_cyan"
+      node_count_style: "bright_white"
+      status_icon_style: "bright_yellow"
+      prompt_symbol: "➤"
+      #prompt_symbol: "⚡"
+
+    status:
+      title_style: "bold bright_white"
+      label_style: "bold bright_cyan"
+      value_style: "bright_white"
+      success_style: "bright_green"
+      warning_style: "bright_yellow"
+      error_style: "bright_red"
+      info_style: "bright_cyan"
+      border_style: "bright_magenta"
+
+    messages:
+      success_style: "bright_green"
+      error_style: "bright_red"
+      warning_style: "bright_yellow"
+      info_style: "bright_cyan"
+      progress_style: "bright_cyan"
+
+    panels:
+      title_style: "bold bright_white"
+      subtitle_style: "dim bright_cyan"
+      border_style: "bright_magenta"
+      content_style: "bright_white"
+
+    help:
+      title_style: "bold bright_magenta"
+      section_header_style: "bold bright_cyan"
+      command_style: "bright_yellow"
+      description_style: "bright_white"
+      example_style: "bright_cyan"
+      footer_style: "dim bright_white"
+
+  # Ocean theme - blues and sea colors
+  ocean:
+    banner:
+      title_style: "bold deep_sky_blue1"
+      subtitle_style: "cyan"
+      version_style: "sea_green1"
+      welcome_style: "dodger_blue1"
+      border_style: "deep_sky_blue1"
+
+    prompt:
+      connected_cluster_style: "sea_green1"
+      disconnected_style: "salmon1"
+      warning_cluster_style: "gold1"
+      prompt_symbol_style: "bold deep_sky_blue1"
+      prompt_symbol: "➤"
+
+    status:
+      title_style: "bold cyan"
+      label_style: "bold deep_sky_blue1"
+      value_style: "cyan"
+      success_style: "sea_green1"
+      warning_style: "gold1"
+      error_style: "salmon1"
+      info_style: "dodger_blue1"
+      border_style: "deep_sky_blue1"
+
+    messages:
+      success_style: "sea_green1"
+      error_style: "salmon1"
+      warning_style: "gold1"
+      info_style: "dodger_blue1"
+      progress_style: "dodger_blue1"
+
+    panels:
+      title_style: "bold cyan"
+      subtitle_style: "dim blue"
+      border_style: "deep_sky_blue1"
+      content_style: "cyan"
+
+    help:
+      title_style: "bold deep_sky_blue1"
+      section_header_style: "bold cyan"
+      command_style: "gold1"
+      description_style: "cyan"
+      example_style: "dodger_blue1"
+      footer_style: "dim cyan"
+
+  # Fire theme - warm oranges and reds
+  fire:
+    banner:
+      title_style: "bold orange_red1"
+      subtitle_style: "gold1"
+      version_style: "chartreuse1"
+      welcome_style: "orange1"
+      border_style: "orange_red1"
+
+    prompt:
+      connected_cluster_style: "chartreuse1"
+      disconnected_style: "red1"
+      warning_cluster_style: "yellow1"
+      prompt_symbol_style: "bold orange_red1"
+      prompt_symbol: "🔥"
+
+    status:
+      title_style: "bold orange1"
+      label_style: "bold gold1"
+      value_style: "orange3"
+      success_style: "chartreuse1"
+      warning_style: "yellow1"
+      error_style: "red1"
+      info_style: "orange1"
+      border_style: "orange_red1"
+
+    messages:
+      success_style: "chartreuse1"
+      error_style: "red1"
+      warning_style: "yellow1"
+      info_style: "orange1"
+      progress_style: "orange1"
+
+    panels:
+      title_style: "bold orange1"
+      subtitle_style: "dim gold3"
+      border_style: "orange_red1"
+      content_style: "orange3"
+
+    help:
+      title_style: "bold orange_red1"
+      section_header_style: "bold orange1"
+      command_style: "yellow1"
+      description_style: "orange3"
+      example_style: "gold1"
+      footer_style: "dim dark_orange"
+
+  # Matrix theme - green terminal style
+  matrix:
+    banner:
+      title_style: "bold bright_green"
+      subtitle_style: "green"
+      version_style: "bright_green"
+      welcome_style: "bright_green"
+      border_style: "green"
+
+    prompt:
+      connected_cluster_style: "bright_green"
+      disconnected_style: "bright_red"
+      warning_cluster_style: "bright_yellow"
+      prompt_symbol_style: "bold bright_green"
+      prompt_symbol: "▶"
+
+    status:
+      title_style: "bold bright_green"
+      label_style: "bold green"
+      value_style: "green"
+      success_style: "bright_green"
+      warning_style: "bright_yellow"
+      error_style: "bright_red"
+      info_style: "green"
+      border_style: "green"
+
+    messages:
+      success_style: "bright_green"
+      error_style: "bright_red"
+      warning_style: "bright_yellow"
+      info_style: "green"
+      progress_style: "green"
+
+    panels:
+      title_style: "bold bright_green"
+      subtitle_style: "dim green"
+      border_style: "green"
+      content_style: "green"
+
+    help:
+      title_style: "bold bright_green"
+      section_header_style: "bold green"
+      command_style: "bright_yellow"
+      description_style: "green"
+      example_style: "bright_green"
+      footer_style: "dim green"
+
+  # Midnight theme - dark with soft colors
+  midnight:
+    banner:
+      title_style: "bold lavender"
+      subtitle_style: "light_steel_blue1"
+      version_style: "pale_green1"
+      welcome_style: "light_steel_blue1"
+      border_style: "slate_blue1"
+
+    prompt:
+      connected_cluster_style: "pale_green1"
+      disconnected_style: "light_coral"
+      warning_cluster_style: "khaki1"
+      prompt_symbol_style: "bold lavender"
+      prompt_symbol: "➤"
+
+    status:
+      title_style: "bold lavender"
+      label_style: "bold light_steel_blue1"
+      value_style: "silver"
+      success_style: "pale_green1"
+      warning_style: "khaki1"
+      error_style: "light_coral"
+      info_style: "light_steel_blue1"
+      border_style: "slate_blue1"
+
+    messages:
+      success_style: "pale_green1"
+      error_style: "light_coral"
+      warning_style: "khaki1"
+      info_style: "light_steel_blue1"
+      progress_style: "light_steel_blue1"
+
+    panels:
+      title_style: "bold lavender"
+      subtitle_style: "dim light_steel_blue1"
+      border_style: "slate_blue1"
+      content_style: "silver"
+
+    help:
+      title_style: "bold lavender"
+      section_header_style: "bold light_steel_blue1"
+      command_style: "khaki1"
+      description_style: "silver"
+      example_style: "light_steel_blue1"
+      footer_style: "dim grey70"
+
+  # Corporate theme - professional grays and blues
+  corporate:
+    banner:
+      title_style: "bold bright_cyan"
+      subtitle_style: "bright_white"
+      version_style: "bright_green"
+      welcome_style: "bright_blue"
+      border_style: "bright_black"
+
+    prompt:
+      connected_cluster_style: "bright_green"
+      disconnected_style: "bright_red"
+      warning_cluster_style: "bright_yellow"
+      prompt_symbol_style: "bold bright_cyan"
+      prompt_symbol: "➤"
+
+    status:
+      title_style: "bold bright_white"
+      label_style: "bold bright_cyan"
+      value_style: "bright_white"
+      success_style: "bright_green"
+      warning_style: "bright_yellow"
+      error_style: "bright_red"
+      info_style: "bright_blue"
+      border_style: "bright_black"
+
+    messages:
+      success_style: "bright_green"
+      error_style: "bright_red"
+      warning_style: "bright_yellow"
+      info_style: "bright_blue"
+      progress_style: "bright_blue"
+
+    panels:
+      title_style: "bold bright_white"
+      subtitle_style: "dim bright_white"
+      border_style: "bright_black"
+      content_style: "bright_white"
+
+    help:
+      title_style: "bold bright_cyan"
+      section_header_style: "bold bright_white"
+      command_style: "bright_yellow"
+      description_style: "bright_white"
+      example_style: "bright_cyan"
+      footer_style: "dim bright_black"
+
+# Default theme configuration
+default_theme: "rich"
+
+# Theme metadata
+theme_info:
+  rich:
+    name: "Rich Colors"
+    description: "Vibrant colors for modern terminals"
+    best_for: "High-contrast displays"
+
+  plain:
+    name: "Plain Text"
+    description: "Minimal colors, maximum compatibility"
+    best_for: "Accessibility and compatibility"
+
+  cyberpunk:
+    name: "Cyberpunk Neon"
+    description: "Electric bright colors"
+    best_for: "Dark terminals and sci-fi aesthetics"
+
+  ocean:
+    name: "Ocean Blue"
+    description: "Blues and sea-inspired colors"
+    best_for: "Calm, professional environments"
+
+  fire:
+    name: "Fire Orange"
+    description: "Warm oranges and reds"
+    best_for: "High-energy work sessions"
+
+  matrix:
+    name: "Matrix Green"
+    description: "Classic terminal green theme"
+    best_for: "Retro computing aesthetics"
+
+  midnight:
+    name: "Midnight Soft"
+    description: "Soft colors for dark environments"
+    best_for: "Late-night coding sessions"
+
+  corporate:
+    name: "Corporate Professional"
+    description: "Professional grays and blues"
+    best_for: "Business and enterprise environments"

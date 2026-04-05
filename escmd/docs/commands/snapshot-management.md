@@ -13,6 +13,10 @@ Comprehensive snapshot management with repository monitoring, snapshot listing, 
 # Snapshot status
 ./escmd.py snapshots status my-snapshot      # Get snapshot status
 ./escmd.py snapshots status backup-2024-01-01 --format json  # JSON status
+
+# Repository management
+./escmd.py repositories list                 # List all repositories
+./escmd.py repositories verify s3_repo       # Verify repository works from all nodes
 ```
 
 ## Overview
@@ -132,21 +136,85 @@ servers:
 - **GCS Repositories**: Google Cloud Storage
 - **HDFS Repositories**: Hadoop Distributed File System
 
+### 📦 Repository Management
+
+List and verify configured snapshot repositories:
+
+```bash
+# List all repositories
+./escmd.py repositories list                  # Table format
+./escmd.py repositories list --format json   # JSON format
+
+# Verify repository connectivity
+./escmd.py repositories verify s3_repo       # Verify S3 repository
+./escmd.py repositories verify my-fs-repo    # Verify filesystem repository
+./escmd.py repositories verify backup-repo --format json  # JSON verification results
+```
+
+**Repository Verification:**
+
+The `verify` command tests that a snapshot repository is accessible and functional from all nodes in your Elasticsearch cluster. This is crucial for ensuring backups will work properly.
+
+**Command Options:**
+
+| Option | Type | Description | Example |
+|--------|------|-------------|---------|
+| `repository_name` | string | Name of repository to verify | `s3_repo` |
+| `--format` | choice | Output format (table, json) | `--format json` |
+
+**Verification Information Includes:**
+- **Node Coverage**: Shows which nodes can access the repository
+- **Access Status**: Success/failure status for each node
+- **Node Details**: Node names and IDs that were tested
+- **Overall Result**: Summary of verification across all nodes
+
+**Verification Results:**
+- ✅ **Success**: Repository accessible from all nodes
+- ❌ **Failed**: Repository not accessible or configuration issues
+- ⚠️ **Partial**: Some nodes can access, others cannot
+
+**Example Verification Output:**
+```
+✓ Repository Verification Results
+┌─────────────────────┬─────────────────────────────┬────────────┐
+│ Node Name           │ Node ID                     │ Status     │
+├─────────────────────┼─────────────────────────────┼────────────┤
+│ es-data-01          │ DEF456                      │ ✓ Verified │
+│ es-data-02          │ GHI789                      │ ✓ Verified │
+│ es-master-01        │ ABC123                      │ ✓ Verified │
+└─────────────────────┴─────────────────────────────┴────────────┘
+
+Summary: Repository 's3_repo' successfully verified on all 3 nodes
+```
+
+**Note:** Nodes are displayed alphabetically by node name for easier reading.
+
+**When to Use Repository Verification:**
+- After configuring a new repository
+- When troubleshooting backup failures
+- During cluster maintenance or node changes
+- As part of disaster recovery testing
+- Before critical backup operations
+
 ## Snapshot Monitoring Workflows
 
 ### Daily Snapshot Monitoring
 
 ```bash
-# 1. Check recent snapshots
+# 1. Check repository health
+./escmd.py repositories list
+./escmd.py repositories verify s3_repo
+
+# 2. Check recent snapshots
 ./escmd.py snapshots list --pager
 
-# 2. Look for recent failures
+# 3. Look for recent failures
 ./escmd.py snapshots list ".*$(date +%Y-%m).*"  # Current month snapshots
 
-# 3. Check specific failed snapshots
+# 4. Check specific failed snapshots
 ./escmd.py snapshots status failed-snapshot-name
 
-# 4. Export snapshot data for analysis
+# 5. Export snapshot data for analysis
 ./escmd.py snapshots list --format json > daily-snapshot-report-$(date +%Y%m%d).json
 ```
 
@@ -170,17 +238,20 @@ servers:
 ### Backup Validation Workflow
 
 ```bash
-# 1. Check latest snapshot status
+# 1. Verify repository connectivity
+./escmd.py repositories verify s3_repo
+
+# 2. Check latest snapshot status
 LATEST_SNAPSHOT=$(./escmd.py snapshots list --format json | jq -r '.[0].name')
 ./escmd.py snapshots status $LATEST_SNAPSHOT
 
-# 2. Verify snapshot completeness
+# 3. Verify snapshot completeness
 ./escmd.py snapshots status $LATEST_SNAPSHOT --format json | jq '.shards'
 
-# 3. Check for any partial failures
+# 4. Check for any partial failures
 ./escmd.py snapshots status $LATEST_SNAPSHOT --format json | jq '.failures'
 
-# 4. Cross-reference with cluster health
+# 5. Cross-reference with cluster health
 ./escmd.py health
 ./escmd.py cluster-check
 ```
@@ -262,8 +333,21 @@ Snapshot management integrates with escmd's cluster health monitoring:
 CLUSTER="production"
 DATE=$(date +%Y-%m-%d)
 REPORT_FILE="/var/log/snapshot-report-$DATE.json"
+REPO_NAME="s3_repo"
 
 echo "Checking snapshots for cluster: $CLUSTER"
+
+# Verify repository connectivity first
+echo "Verifying repository connectivity..."
+REPO_STATUS=$(./escmd.py -l $CLUSTER repositories verify $REPO_NAME --format json)
+REPO_SUCCESS=$(echo "$REPO_STATUS" | jq -r '.nodes | length > 0')
+
+if [ "$REPO_SUCCESS" != "true" ]; then
+    echo "ALERT: Repository verification failed for $REPO_NAME"
+    # Send alert to monitoring system
+    curl -X POST "http://monitoring-system/alert" \
+         -d "cluster=$CLUSTER&type=repository_failure&repo=$REPO_NAME"
+fi
 
 # Get snapshot list
 ./escmd.py -l $CLUSTER snapshots list --format json > "$REPORT_FILE"
@@ -304,11 +388,12 @@ echo "Latest snapshot: $LATEST_SNAPSHOT"
 
 ### Monitoring Guidelines
 
-1. **Regular Monitoring**: Check snapshot status daily
-2. **Failure Investigation**: Investigate failures immediately
-3. **Trend Analysis**: Monitor backup size and duration trends
-4. **Retention Validation**: Verify snapshots are being retained properly
-5. **Repository Health**: Monitor repository connectivity and capacity
+1. **Repository Verification**: Test repository connectivity regularly
+2. **Regular Monitoring**: Check snapshot status daily
+3. **Failure Investigation**: Investigate failures immediately
+4. **Trend Analysis**: Monitor backup size and duration trends
+5. **Retention Validation**: Verify snapshots are being retained properly
+6. **Repository Health**: Monitor repository connectivity and capacity
 
 ### Performance Optimization
 
@@ -331,9 +416,11 @@ echo "Latest snapshot: $LATEST_SNAPSHOT"
 ### Common Issues
 
 **Repository Connection Issues:**
+- Use `./escmd.py repositories verify <repo_name>` to test connectivity
 - Verify repository configuration in cluster settings
 - Check network connectivity to repository
 - Validate authentication and permissions
+- Ensure all nodes can access the repository location
 
 **Snapshot Failures:**
 - Check cluster health during snapshot operations

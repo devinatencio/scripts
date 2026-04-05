@@ -1,0 +1,54 @@
+advanced:
+  custom_theme_dir: null
+  debug: false
+  fallback_ui: true
+  validate_themes: true
+experimental:
+  enabled: false
+  features:
+  - animated_transitions
+  - gradient_themes
+  - custom_icons
+integration:
+  escmd:
+    inherit_theme: false
+    show_escmd_info: true
+    use_escmd_colors_for_output: true
+interaction:
+  confirmations:
+    clear_screen: false
+    disconnect: true
+    theme_change: false
+  history:
+    file: .esterm_history
+    max_commands: 1000
+performance:
+  cache:
+    clear_on_startup: false
+    enabled: true
+  refresh:
+    show_progress: true
+    status_interval: 0
+theme:
+  auto_detect: true
+  current: cyberpunk 
+  fallback: ocean
+theme_preferences:
+  brightness: 1.0
+  color_overrides: {}
+  prefer_bold: false
+ui:
+  messages:
+    auto_clear_success: 0
+    show_icons: true
+    use_panels: true
+  prompt:
+    enhanced_formats:
+      cyberpunk: true
+      matrix: true
+    format: esterm
+    show_icons: true
+    show_node_count: false
+    show_time: false
+  show_banner: true
+  show_theme_in_banner: true

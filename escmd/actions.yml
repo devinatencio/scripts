@@ -1,0 +1,139 @@
+# Actions configuration file for escmd
+# Define reusable sequences of commands that can be executed together
+
+actions:
+  - name: add-host
+    description: "Add a host to allocation exclusions and update templates to prevent new shard allocation"
+    parameters:
+      - name: host
+        type: string
+        description: "The hostname to add to exclusions (without -* suffix)"
+        required: true
+    steps:
+      - name: Update Index Template
+        action: template-modify manual_template -t component -f "template.settings.index.routing.allocation.exclude._name" -o append -v "{{ host }}-*"
+        description: "Update manual template to exclude {{ host }}-* from new index allocation"
+      - name: Apply Cluster Exclusion
+        action: allocation exclude add "{{ host }}-*"
+        description: "Add {{ host }}-* to cluster-level allocation exclusions"
+
+  - name: remove-host
+    description: "Remove a host from allocation exclusions to allow shard allocation"
+    parameters:
+      - name: host
+        type: string
+        description: "The hostname to remove from exclusions (without -* suffix)"
+        required: true
+    steps:
+      - name: Remove from Index Template
+        action: template-modify manual_template -t component -f "template.settings.index.routing.allocation.exclude._name" -o remove -v "{{ host }}-*"
+        description: "Remove {{ host }}-* from manual template exclusions"
+      - name: Remove Cluster Exclusion
+        action: allocation exclude remove "{{ host }}-*"
+        description: "Remove {{ host }}-* from cluster-level allocation exclusions"
+
+  - name: index-cleanup
+    description: "Clean up old indices based on age and pattern"
+    parameters:
+      - name: pattern
+        type: string
+        description: "Index pattern to match (e.g., 'logs-*')"
+        required: true
+      - name: days
+        type: integer
+        description: "Number of days old to delete"
+        required: true
+        default: 30
+    steps:
+      - name: List Old Indices
+        action: indices --format json {{ pattern }}
+        description: "List indices matching the pattern"
+      - name: Delete Old Indices
+        action: indices --delete {{ pattern }}
+        description: "Delete indices older than {{ days }} days"
+        confirm: true
+
+  - name: health-check
+    description: "Quick health check with JSON output"
+    steps:
+      - name: Check Cluster Health
+        action: health
+        description: "Get cluster health status"
+      - name: List Nodes
+        action: nodes
+        description: "List all nodes in cluster"
+
+  - name: roll-igl
+    description: "Rollover datastream and delete the old index"
+    steps:
+      - name: Rollover Indice
+        action: rollover rehydrated_ams02-c01-logs-igl-main --format json
+        description: "Rollover the datastream and capture the old index name"
+        capture:
+          old_index_name: "$.old_index"
+          new_index_name: "$.new_index"
+          rollover_success: "$.rolled_over"
+      - name: Delete Old Index
+        action: indices --delete {{ old_index_name }}
+        description: "Delete the old index that was rolled over"
+        condition: "{{ rollover_success }}"
+        confirm: true
+
+  - name: roll-igl-safe
+    description: "Rollover datastream with comprehensive safety checks and old index deletion"
+    steps:
+      - name: Pre-rollover Health Check
+        action: health --format json
+        description: "Verify cluster health before rollover"
+        capture:
+          cluster_status: "$.status"
+      - name: Check Datastream Exists
+        action: datastreams --format json
+        description: "Verify target datastream exists"
+      - name: Rollover Datastream
+        action: rollover rehydrated_ams02-c01-logs-igl-main --format json
+        description: "Rollover the datastream and capture index information"
+        condition: "{{ cluster_status == 'green' or cluster_status == 'yellow' }}"
+        capture:
+          old_index_name: "$.old_index"
+          new_index_name: "$.new_index"
+          rollover_success: "$.rolled_over"
+          dry_run: "$.dry_run"
+      - name: Verify Rollover Success
+        action: indices {{ new_index_name }} --format json
+        description: "Confirm new index was created successfully"
+        condition: "{{ rollover_success == 'true' and dry_run != 'true' }}"
+      - name: Delete Old Index
+        action: indices --delete {{ old_index_name }}
+        description: "Delete the old index ({{ old_index_name }})"
+        condition: "{{ rollover_success == 'true' and old_index_name and dry_run != 'true' }}"
+        confirm: true
+      - name: Post-deletion Health Check
+        action: health --format json
+        description: "Verify cluster health after index deletion"
+        condition: "{{ rollover_success == 'true' and dry_run != 'true' }}"
+
+  - name: roll-with-params
+    description: "Parameterized rollover action for any datastream"
+    parameters:
+      - name: datastream
+        type: string
+        description: "Name of the datastream to rollover"
+        required: true
+      - name: delete_old
+        type: string
+        description: "Whether to delete the old index (yes/no)"
+        default: "yes"
+    steps:
+      - name: Rollover Datastream
+        action: rollover {{ datastream }} --format json
+        description: "Rollover datastream {{ datastream }}"
+        capture:
+          old_index_name: "$.old_index"
+          new_index_name: "$.new_index"
+          rollover_success: "$.rolled_over"
+      - name: Delete Old Index
+        action: indices --delete {{ old_index_name }}
+        description: "Delete the old index {{ old_index_name }}"
+        condition: "{{ rollover_success == 'true' and delete_old == 'yes' }}"
+        confirm: true

@@ -448,7 +448,7 @@ servers:
 ./escmd.py -l production ping
 
 # Test authentication
-./escmd.py -l production health --quick
+./escmd.py -l production health
 ```
 
 ### Health Check Validation
@@ -515,7 +515,7 @@ servers:
 **Authentication Failures:**
 ```bash
 # Verify credentials
-./escmd.py -l cluster-name health --quick
+./escmd.py -l cluster-name health
 
 # Check username/password combination
 ./escmd.py show-settings  # Review configuration (passwords hidden)

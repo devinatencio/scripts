@@ -10,6 +10,7 @@ The `escmd.py dangling` command has been enhanced with advanced dangling index c
 - **Automatic cleanup**: Delete all dangling indices in a single operation
 - **Progress tracking**: Real-time progress bars during bulk operations
 - **Batch processing**: Efficient handling of multiple indices
+- **Batch size control**: Process a specific number of indices per batch
 
 ### 2. Safety Features
 - **Dry-run mode**: Preview operations without making changes
@@ -69,6 +70,12 @@ The `escmd.py dangling` command has been enhanced with advanced dangling index c
 
 # Cleanup with logging
 ./escmd.py --locations <cluster> dangling --cleanup-all --log-file /path/to/cleanup.log
+
+# Batch processing - clean only 50 indices at a time
+./escmd.py --locations <cluster> dangling --cleanup-all --batch 50
+
+# Batch with dry-run to see what would be processed
+./escmd.py --locations <cluster> dangling --cleanup-all --batch 100 --dry-run
 ```
 
 ### Advanced Configuration
@@ -88,6 +95,12 @@ The `escmd.py dangling` command has been enhanced with advanced dangling index c
 ./escmd.py --locations <cluster> dangling --cleanup-all \\
   --log-file /var/log/es-cleanup.log \\
   --max-retries 3
+
+# Batch processing with custom settings
+./escmd.py --locations <cluster> dangling --cleanup-all \\
+  --batch 25 \\
+  --max-retries 5 \\
+  --retry-delay 10
 ```
 
 ## Configuration Settings
@@ -117,6 +130,7 @@ settings:
 | `--retry-delay` | 5 | Seconds between retries |
 | `--timeout` | 60 | Operation timeout in seconds |
 | `--log-file` | None | Path to log file |
+| `--batch` | None | Number of indices to process in this batch |
 | `--yes-i-really-mean-it` | false | Skip confirmation prompts |
 | `--format` | table | Output format (table or json) |
 
@@ -250,10 +264,18 @@ ERROR: Error deleting dangling index 'ghi-789' after 3 attempts: Connection time
 - Monitor node resource usage
 - Check for any alerts or warnings
 
-### 5. Document Operations
+### 4. Document Operations
 - Keep logs of all cleanup operations
 - Record reasons for dangling indices
 - Track patterns for prevention
+
+### 5. Use Batch Processing for Large Cleanups
+```bash
+# For clusters with many dangling indices, process in batches
+./escmd.py --locations prod dangling --cleanup-all --batch 50 --dry-run
+# Then process the actual batch
+./escmd.py --locations prod dangling --cleanup-all --batch 50
+```
 
 ## Troubleshooting
 
@@ -297,6 +319,58 @@ If migrating from the standalone `dangling_index_cleanup.py`:
 3. **Logging**: Enhanced with rich output formatting
 4. **Error Handling**: Improved with better recovery
 
+## Batch Processing
+
+### Overview
+The `--batch` parameter allows you to process dangling indices in smaller groups, which is especially useful for clusters with large numbers of dangling indices.
+
+### Use Cases
+
+#### Large Scale Cleanup
+For clusters like `iad51` with 1,014 dangling indices:
+```bash
+# Process 100 indices at a time
+./escmd.py --locations iad51 dangling --cleanup-all --batch 100 --dry-run
+```
+
+#### Gradual Cleanup
+```bash
+# Clean 50 indices, monitor cluster, then continue
+./escmd.py --locations iad51 dangling --cleanup-all --batch 50
+```
+
+#### Resource Management
+```bash
+# Small batches during peak hours to minimize cluster impact
+./escmd.py --locations prod dangling --cleanup-all --batch 25
+```
+
+### Batch Behavior
+- Processes the **first** N indices found (sorted by UUID)
+- Shows progress as "batch X/total"
+- Remaining indices can be processed in subsequent runs
+- Each batch operation is independent
+
+### Example Workflow
+```bash
+# 1. Check total dangling indices
+./escmd.py --locations iad51 dangling
+# Output: Found 1,014 dangling indices
+
+# 2. Process first batch of 100 (dry run)
+./escmd.py --locations iad51 dangling --cleanup-all --batch 100 --dry-run
+
+# 3. Process first batch of 100 (actual)
+./escmd.py --locations iad51 dangling --cleanup-all --batch 100
+
+# 4. Check remaining count
+./escmd.py --locations iad51 dangling
+# Output: Found 914 dangling indices
+
+# 5. Continue with next batch
+./escmd.py --locations iad51 dangling --cleanup-all --batch 100
+```
+
 ## Integration Notes
 
 - **Backward Compatibility**: All existing `dangling` functionality preserved
@@ -304,3 +378,4 @@ If migrating from the standalone `dangling_index_cleanup.py`:
 - **Authentication**: Leverages existing password management
 - **Output**: Enhanced with Rich formatting library
 - **Error Handling**: Comprehensive retry and recovery logic
+- **Batch Processing**: New feature for large-scale operations
