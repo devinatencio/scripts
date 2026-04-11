@@ -769,7 +769,7 @@ class HealthHandler(BaseHandler):
 
         # Add summary with status indicators
         if isinstance(ilm_results, dict) and ilm_results.get('not_supported'):
-            ilm_status = "ℹ️  Not supported on this cluster"
+            ilm_status = "🔵 Not supported on this cluster"
         elif isinstance(ilm_results, dict) and ilm_results.get('skipped'):
             ilm_status = "💤 Skipped"
         else:
@@ -783,7 +783,7 @@ class HealthHandler(BaseHandler):
                 else:
                     ilm_status = "✅ All indices managed"
             elif error_count > 0 and no_policy_count > 0:
-                status_parts = [f"❌ {error_count} errors", f"🔶  {no_policy_count} unmanaged"]
+                status_parts = [f"❌ {error_count} errors", f"🔶 {no_policy_count} unmanaged"]
                 if s3_managed_count > 0:
                     status_parts.append(f"✅ {s3_managed_count} S3-managed")
                 ilm_status = ", ".join(status_parts)
@@ -793,15 +793,15 @@ class HealthHandler(BaseHandler):
                     status_parts.append(f"✅ {s3_managed_count} S3-managed")
                 ilm_status = ", ".join(status_parts)
             elif no_policy_count > 0:
-                status_parts = [f"🔶  {no_policy_count} indices unmanaged"]
+                status_parts = [f"🔶 {no_policy_count} indices unmanaged"]
                 if s3_managed_count > 0:
                     status_parts.append(f"✅ {s3_managed_count} S3-managed")
                 ilm_status = ", ".join(status_parts)
             else:
                 ilm_status = f"✅ {s3_managed_count} S3-managed"
 
-        replica_status = "✅ All have replicas" if len(no_replica_indices) == 0 else f"🔶  {len(no_replica_indices)} without replicas"
-        shard_status = "✅ All within limits" if len(large_shards) == 0 else f"🔶  {len(large_shards)} oversized shards"
+        replica_status = "✅ All have replicas" if len(no_replica_indices) == 0 else f"🔶 {len(no_replica_indices)} without replicas"
+        shard_status = "✅ All within limits" if len(large_shards) == 0 else f"🔶 {len(large_shards)} oversized shards"
 
         summary_table.add_row("🔍 ILM Status:", ilm_status)
         summary_table.add_row("📊 Replica Status:", replica_status)
@@ -834,17 +834,17 @@ class HealthHandler(BaseHandler):
             info_text = f"💤 {ilm_results.get('reason', 'ILM checks were skipped')}\n\nUse the command without --skip-ilm to include ILM checks."
             info_panel = Panel(
                 Text(info_text, style="bright_blue", justify="left"),
-                title="ℹ️  ILM Checks Skipped",
+                title="🔵 ILM Checks Skipped",
                 border_style="blue",
                 padding=(1, 2)
             )
             panels.append(info_panel)
         elif isinstance(ilm_results, dict) and ilm_results.get('not_supported'):
             # Show info panel for unsupported ILM
-            info_text = f"ℹ️  {ilm_results.get('reason', 'ILM is not supported on this cluster')}\n\nThis cluster may be running an older version of Elasticsearch or have ILM disabled."
+            info_text = f"🔵 {ilm_results.get('reason', 'ILM is not supported on this cluster')}\n\nThis cluster may be running an older version of Elasticsearch or have ILM disabled."
             info_panel = Panel(
                 Text(info_text, style="bright_blue", justify="left"),
-                title="ℹ️  ILM Not Available",
+                title="🔵 ILM Not Available",
                 border_style="blue",
                 padding=(1, 2)
             )

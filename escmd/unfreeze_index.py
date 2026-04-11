@@ -792,10 +792,10 @@ def status_bar_update(message, spinner_console=None):
     Print status update message.
     """
     if spinner_console:
-        spinner_console.print(f"[blue]ℹ️  {message}[/blue]")
+        spinner_console.print(f"[blue]🔵  {message}[/blue]")
     else:
         console = Console()
-        console.print(f"[blue]ℹ️  {message}[/blue]")
+        console.print(f"[blue]🔵  {message}[/blue]")
 
 
 def extract_and_format_date(filename):

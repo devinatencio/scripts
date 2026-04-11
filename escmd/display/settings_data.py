@@ -75,7 +75,7 @@ class SettingsDataCollector:
                 'use_ssl': config.get('use_ssl', False),
                 'verify_certs': config.get('verify_certs', False),
                 'has_authentication': config.get('elastic_authentication', False),
-                'username': config.get('elastic_username', ''),
+                'username': configuration_manager._resolve_username(config) or '',
                 'raw_config': config
             }
             clusters.append(cluster_info)
@@ -114,10 +114,27 @@ class SettingsDataCollector:
             cluster_username = config.get('elastic_username')
             env_username = config.get('env', {}).get('elastic_username') if isinstance(config.get('env'), dict) else None
             json_username = configuration_manager.get_elastic_username_from_json()
+            profile_name = config.get('auth_profile')
+            if isinstance(profile_name, str):
+                profile_name = profile_name.strip()
+            profile_username = None
+            if profile_name:
+                prof = configuration_manager.auth_profiles.get(profile_name)
+                if isinstance(prof, dict):
+                    pu = prof.get('elastic_username')
+                    if pu is not None:
+                        profile_username = pu.strip() if isinstance(pu, str) else pu
 
             if cluster_username and resolved_username == cluster_username:
                 username_source = "Cluster Config"
                 username = cluster_username
+            elif (
+                profile_username
+                and resolved_username == profile_username
+                and not cluster_username
+            ):
+                username_source = f"Auth profile ({profile_name})"
+                username = profile_username
             elif env_username and resolved_username == env_username:
                 username_source = "Environment Config"
                 username = env_username

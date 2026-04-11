@@ -105,6 +105,7 @@ def show_custom_help(config_manager=None):
     ops_table.add_column(style=help_styles.get('description', 'white'))
     ops_table.add_row("🔀 allocation", "Manage shard allocation and explain allocation decisions")
     ops_table.add_row("🏥 cluster-check", "Comprehensive cluster health checks (ILM errors, replicas, shard sizes)")
+    ops_table.add_row("📊 es-top", "Live auto-refreshing cluster dashboard (nodes, indices, health)")
     ops_table.add_row("📆 ilm", "Index Lifecycle Management")
     ops_table.add_row("🔄 recovery", "Monitor recovery operations")
     ops_table.add_row("📦 repositories", "List snapshot repositories")
@@ -154,6 +155,8 @@ def show_custom_help(config_manager=None):
     usage_content.append("./escmd.py help indices-watch-collect\n", style=help_styles.get('example', 'cyan'))
     usage_content.append("Topic help (watch report): ", style=help_styles.get('description', 'bold white'))
     usage_content.append("./escmd.py help indices-watch-report\n", style=help_styles.get('example', 'cyan'))
+    usage_content.append("Topic help (es-top):       ", style=help_styles.get('description', 'bold white'))
+    usage_content.append("./escmd.py help es-top\n", style=help_styles.get('example', 'cyan'))
 
     usage_panel = Panel(usage_content,
                        title=f"[{help_styles.get('section_header', 'bold cyan')}]🚀 Quick Start Examples[/{help_styles.get('section_header', 'bold cyan')}]",

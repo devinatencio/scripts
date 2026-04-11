@@ -40,6 +40,11 @@ class HelpRegistry:
             from .indices_watch_report_help import IndicesWatchReportHelpContent
             from .indices_analyze_help import IndicesAnalyzeHelpContent
             from .indices_s3_estimate_help import IndicesS3EstimateHelpContent
+            from .template_backup_help import TemplateBackupHelpContent
+            from .template_modify_help import TemplateModifyHelpContent
+            from .template_restore_help import TemplateRestoreHelpContent
+            from .store_password_help import StorePasswordHelpContent
+            from .estop_help import EsTopHelpContent
 
             # Register core modules
             self.register(IndicesHelpContent)
@@ -62,6 +67,11 @@ class HelpRegistry:
             self.register(IndicesWatchReportHelpContent)
             self.register(IndicesAnalyzeHelpContent)
             self.register(IndicesS3EstimateHelpContent)
+            self.register(TemplateBackupHelpContent)
+            self.register(TemplateModifyHelpContent)
+            self.register(TemplateRestoreHelpContent)
+            self.register(StorePasswordHelpContent)
+            self.register(EsTopHelpContent)
 
         except ImportError as e:
             # If core modules can't be imported, we have a bigger problem

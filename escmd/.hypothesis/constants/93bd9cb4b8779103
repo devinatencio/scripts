@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/commands/allocation_commands.py
+# hypothesis_version: 6.151.12
+
+['UNASSIGNED', '__iter__', 'all', 'allocation', 'b', 'body', 'cluster', 'critical_issues', 'defaults', 'delayed_shards', 'disk.avail', 'disk.percent', 'disk.total', 'disk.used', 'dry_run', 'error', 'explanation', 'failed_allocations', 'get', 'hostname', 'index', 'json', 'new_primaries', 'node', 'none', 'option', 'p', 'persistent', 'primaries', 'primary', 'prirep', 'routing', 'shard', 'shard_analysis_error', 'shards', 'state', 'summary', 'total_issues', 'transient', 'type', 'unassigned_shards', 'warning_issues']

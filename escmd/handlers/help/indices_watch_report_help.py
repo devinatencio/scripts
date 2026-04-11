@@ -24,11 +24,12 @@ class IndicesWatchReportHelpContent(BaseHelpContent):
         overview.add_column(style=help_styles.get("description", "white"))
         overview.add_row(
             "Reads JSON snapshots produced by indices-watch-collect, compares the first and "
-            "last sample, and prints a themed table of indices with non-zero document growth. "
-            "Shows last-sample doc count vs leave-one-out median sibling doc count (docs/med, "
-            "like indices-analyze) plus ingest rate vs peers (rate/med). ⚠ marks indices whose "
-            "doc count is ≥ --docs-peer-ratio times the peer median (default 5). "
-            "This command does not connect to Elasticsearch."
+            "last sample for Δ docs and full-window span docs/s, and (with ≥3 samples, "
+            "default --rate-stats auto) summarizes per-interval docs/s as median, p90, and max "
+            "between adjacent snapshots. Shows last-sample doc count vs leave-one-out median "
+            "sibling doc count (docs/med, like indices-analyze) plus ingest rate vs peers "
+            "(rate/med; still based on span docs/s). ⚠ marks indices whose doc count is ≥ "
+            "--docs-peer-ratio times the peer median (default 5). No Elasticsearch connection."
         )
 
         flags = Table.grid(padding=(0, 3))
@@ -45,7 +46,15 @@ class IndicesWatchReportHelpContent(BaseHelpContent):
             "--docs-peer-ratio R",
             "⚠ when doc count ≥ R × median peer docs (last sample); 0 disables ⚠ (default: 5)",
         )
-        flags.add_row("--top N", "Limit to top N rows by docs/s")
+        flags.add_row(
+            "--top N",
+            "Limit to top N rows by sort key (median interval docs/s or span docs/s)",
+        )
+        flags.add_row(
+            "--rate-stats auto|span|intervals",
+            "auto: interval med/p90/max when ≥3 samples (default); span: full-window only; "
+            "intervals: always interval distribution (+ span column in table)",
+        )
 
         examples = Table.grid(padding=(0, 3))
         examples.add_column(style=help_styles.get("example", "green"), min_width=46)

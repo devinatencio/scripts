@@ -39,6 +39,10 @@ class SecurityHelpContent(BaseHelpContent):
         commands_table.add_row("generate-master-key", "Generate new encryption master key")
         commands_table.add_row("generate-master-key --show-setup", "Show environment variable setup")
         commands_table.add_row("migrate-to-env-key", "Migrate file-based key to environment")
+        commands_table.add_row(
+            "rotate-master-key",
+            "Back up escmd.json, new encryption key, re-encrypt all stored passwords",
+        )
 
         # Basic usage examples
         basic_examples = Table.grid(padding=(0, 3))
@@ -61,6 +65,7 @@ class SecurityHelpContent(BaseHelpContent):
         advanced_examples.add_row("Generate new master key:", "./escmd.py generate-master-key")
         advanced_examples.add_row("Setup environment key:", "./escmd.py generate-master-key --show-setup")
         advanced_examples.add_row("Migrate to env variable:", "./escmd.py migrate-to-env-key")
+        advanced_examples.add_row("Rotate master key (backup + re-encrypt):", "./escmd.py rotate-master-key")
         advanced_examples.add_row("Set session timeout:", "./escmd.py set-session-timeout 120")
 
         # Configuration examples

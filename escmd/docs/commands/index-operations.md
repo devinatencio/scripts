@@ -16,6 +16,7 @@ Comprehensive index management including listing, freezing, dangling index clean
 ./escmd.py help indices-analyze       # Flags and examples
 ./escmd.py indices-watch-collect --interval 60   # Sample _cat stats to JSON (see help topic)
 ./escmd.py indices-watch-report                  # Summarize samples without ES (see help topic)
+./escmd.py indices-watch-report --rate-stats span  # Single full-window docs/s column even with many samples
 ./escmd.py indice my-index-name       # Single index details
 ./escmd.py freeze my-index-name       # Freeze an index
 ./escmd.py unfreeze my-index-name     # Unfreeze an index
@@ -131,7 +132,28 @@ Rough **object-storage cost** from **primary shard size** only (`pri.store.size`
 | `--status` | `green`, `yellow`, or `red` |
 | `--format` | `table` (default) or `json` |
 
-For **short-window ingest rates** and **HOT** markers without relying on a single `_cat` snapshot, use **`indices-watch-collect`** then **`indices-watch-report`** (see **`./escmd.py help`** topics).
+### Time-sampled ingest watch (`indices-watch-collect` / `indices-watch-report`)
+
+For **short-window ingest rates** and **HOT** markers without relying on a single `_cat` snapshot, run **`indices-watch-collect`** (writes JSON under **`~/.escmd/index-watch/<cluster>/<UTC-date>/`**, or **`ESCMD_INDEX_WATCH_DIR`** / **`--output-dir`**) then **`indices-watch-report`** (no Elasticsearch connection for the default path). See **`./escmd.py help indices-watch-collect`** and **`./escmd.py help indices-watch-report`**.
+
+**Collect** samples **`_cat`/indices** on **`--interval`** for **`--duration`** (or until Ctrl+C), optional index regex and **`--status`**, with per-host **`--retries`** / **`--retry-delay`**.
+
+**Report** compares the **first and last** snapshot for **Δ docs** and **span docs/s** (full window). Rows omit indices with **Δ docs = 0**. With **three or more** samples and default **`--rate-stats auto`**, the table adds **med/s**, **p90/s**, and **max/s** from **adjacent-sample** docs/s, plus **span/s** for the overall slope. **`--rate-stats span`** always uses a single **docs/s** column; **`--rate-stats intervals`** always shows interval stats + **span/s** when there are at least two samples. JSON includes the same interval fields whenever there are ≥2 samples (`docs_per_sec_interval_median`, `docs_per_sec_interval_p90`, `docs_per_sec_interval_max`, `interval_rate_count`), plus summary keys **`interval_count`**, **`rate_stats`**, **`rate_stats_primary`**.
+
+**HOT** (🔥) and **rate/med** (when shown) still use **span** docs/s vs the leave-one-out median **span** rate of **sibling** indices in the same rollover series (same name pattern as **`indices-analyze`**). The **rate/med** column is **omitted** when no row has a peer comparison (e.g. undated index names, only one index per series in the capture, or all peers flat over the window). **docs/med** and **⚠** use last-sample doc counts vs peers; **`--docs-peer-ratio 0`** disables the warning threshold only.
+
+| Option | Description |
+|--------|-------------|
+| `--dir` | Sample directory (default: resolved cluster + **`--date`**) |
+| `--cluster` | Cluster slug for default path when **`-l`** is not used |
+| `--date` | UTC date folder **`YYYY-MM-DD`** (default: today UTC) |
+| `--format` | **`table`** or **`json`** |
+| `--min-docs-delta` | Minimum doc increase; **Δ docs = 0** always hidden |
+| `--hot-ratio` | HOT when span docs/s ≥ **R** × median peer span docs/s (default **2**) |
+| `--min-peers` | Minimum siblings for peer stats / HOT / **rate/med** (default **1**) |
+| `--docs-peer-ratio` | **⚠** when doc count ≥ **R** × median peer docs; **0** disables **⚠** |
+| `--top` | Limit rows after sort (by median interval docs/s or span docs/s) |
+| `--rate-stats` | **`auto`** \| **`span`** \| **`intervals`** (default **auto**) |
 
 **Index Information Displayed:**
 - **Index Name**: Full index name with pattern recognition

@@ -39,9 +39,9 @@ Welcome to the escmd documentation. This directory contains comprehensive guides
 ### ⚙️ [configuration/](configuration/)
 **Setup and Configuration**
 - [installation.md](configuration/installation.md) - Installation instructions
-- [cluster-setup.md](configuration/cluster-setup.md) - Cluster configuration
-- [dual-file-config-guide.md](configuration/dual-file-config-guide.md) - Configuration management
-- [password-management.md](configuration/password-management.md) - Password handling
+- [cluster-setup.md](configuration/cluster-setup.md) - Cluster configuration (includes **auth profiles**)
+- [dual-file-config-guide.md](configuration/dual-file-config-guide.md) - Dual-file mode and **auth profiles** (full reference)
+- [password-management.md](configuration/password-management.md) - Password handling and username resolution order
 
 ### 🎯 [features/](features/)
 **Feature-Specific Documentation**
@@ -85,6 +85,7 @@ Welcome to the escmd documentation. This directory contains comprehensive guides
 - [RELEASE_3.7.1.md](releases/RELEASE_3.7.1.md) - v3.7.1 release summary (enhanced repository verification errors)
 - [RELEASE_3.7.2.md](releases/RELEASE_3.7.2.md) - v3.7.2 release notes (ILM policy backup and restore)
 - [HOTFIX_3.7.2.1.md](releases/HOTFIX_3.7.2.1.md) - v3.7.2.1 hotfix (ILM remove-policy fixes for data stream indices)
+- [RELEASE_3.8.5.md](releases/RELEASE_3.8.5.md) - v3.8.5 release notes (auth profiles)
 - [RELEASE_3.8.4.md](releases/RELEASE_3.8.4.md) - v3.8.4 release notes (emoji/terminal table alignment fix)
 - [VERSION_3.7.2_FILES_CHANGED.md](releases/VERSION_3.7.2_FILES_CHANGED.md) - Detailed file change manifest for v3.7.2
 - [VERSION_UPDATE_SUMMARY.md](releases/VERSION_UPDATE_SUMMARY.md) - Consolidated v3.7.2 update summary
@@ -114,7 +115,7 @@ Welcome to the escmd documentation. This directory contains comprehensive guides
 - **[🖥️ ESTERM Interactive Terminal](guides/ESTERM_GUIDE.md)** - Start here for the interactive terminal experience
 - **[📄 Template Management](guides/TEMPLATE_MODIFICATION_GUIDE.md)** - Complete guide to template modifications with list operations
 - **[🆕 ILM Policy Creation](guides/ilm-policy-creation.md)** - Create and manage Index Lifecycle Management policies
-- **[📋 Latest Changes](reference/changelog.md)** - See what's new in v3.8.4
+- **[📋 Latest Changes](reference/changelog.md)** - See what's new (e.g. v3.8.5 auth profiles)
 - **[📦 Release Notes](releases/)** - Full version history and release details
 - **[🎨 Theme System](themes/)** - Complete theming documentation
 - **[⚙️ Installation](configuration/installation.md)** - Get started quickly
@@ -133,6 +134,12 @@ Welcome to the escmd documentation. This directory contains comprehensive guides
 9. **Workflows:** Check [operational workflows](workflows/) for best practices
 
 ## 🆕 Latest Features
+
+### Auth profiles (v3.8.5)
+
+- **Portable server lists**: Shared **`elastic_servers.yml`** can use **`auth_profile`** instead of embedding **`elastic_username`** per person.
+- **Local mappings**: Define **`auth_profiles`** in **`escmd.yml`** (dual-file) or **`ESCMD_MAIN_CONFIG`** so each operator maps profile names to real accounts.
+- **Docs**: [dual-file-config-guide.md](configuration/dual-file-config-guide.md#auth-profiles) — [changelog](reference/changelog.md)
 
 ### Actions System for Workflow Automation
 The escmd utility now includes a powerful actions system for automating complex workflows:

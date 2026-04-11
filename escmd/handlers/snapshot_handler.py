@@ -1776,7 +1776,7 @@ class SnapshotHandler(BaseHandler):
                     # Create styled info message
                     info_text = Text()
                     info_text.append(
-                        "ℹ️  ",
+                        "🔵  ",
                         style=self.es_client.style_system.get_semantic_style("info"),
                     )
                     info_text.append(

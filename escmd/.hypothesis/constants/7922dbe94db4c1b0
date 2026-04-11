@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/display/theme_manager.py
+# hypothesis_version: 6.151.12
+
+['.', 'INITIALIZING', 'RELOCATING', 'STARTED', 'UNASSIGNED', 'black', 'blue', 'blue bold', 'bold', 'bold cyan', 'bold white', 'bold yellow', 'border_style', 'close', 'command', 'config_file_path', 'cyan', 'cyan bold', 'default', 'default_settings', 'description', 'dim', 'dim white', 'error', 'example', 'footer', 'gold1 bold', 'green', 'green bold', 'header_style', 'health_styles', 'help_styles', 'icon', 'info', 'is_dual_file_mode', 'magenta', 'main_config_path', 'open', 'panel_styles', 'plain', 'primary', 'r', 'red', 'red bold', 'replica', 'rich', 'secondary', 'section_header', 'state_styles', 'status_styles', 'subtitle', 'success', 'table_styles', 'text', 'theme_styles', 'themes', 'themes.yml', 'themes_file', 'title', 'type_styles', 'warning', 'white', 'yellow', 'yellow bold']

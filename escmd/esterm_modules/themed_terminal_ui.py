@@ -442,7 +442,7 @@ class ThemedTerminalUI:
         use_panels = self.theme_manager.get_config_value('ui.messages.use_panels', True)
         show_icons = self.theme_manager.get_config_value('ui.messages.show_icons', True)
 
-        icon = "ℹ️  " if show_icons else ""
+        icon = "🔵  " if show_icons else ""
 
         if use_panels:
             info_panel = Panel.fit(

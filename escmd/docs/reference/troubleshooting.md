@@ -118,6 +118,38 @@ servers:
     elastic_username: kibana_system  # Must match key in passwords.prod
 ```
 
+#### Auth profile issues
+
+**Symptoms:** Warning **`Unknown auth_profile '…'`**, or authentication works for others but not for you after pulling a shared **`elastic_servers.yml`**.
+
+**Checks:**
+
+1. In **dual-file** mode, **`auth_profiles`** must be defined in **`escmd.yml`** (or whatever **`ESCMD_MAIN_CONFIG`** points to), **not** only in **`elastic_servers.yml`**.
+2. The server’s **`auth_profile`** value must exactly match a key under **`auth_profiles:`** in that main file.
+3. The profile entry must include **`elastic_username`** if you rely on it for basic auth and for **`passwords.<env>.<username>`** lookup.
+4. Run **`./escmd.py show-settings`** or **`./escmd.py locations`** and confirm the resolved username (sources may show as **Auth profile (...)**).
+
+**Example fix (`escmd.yml`):**
+
+```yaml
+auth_profiles:
+  kibana_service:
+    elastic_username: kibana_system
+```
+
+```yaml
+# elastic_servers.yml
+servers:
+  - name: prod
+    env: prod
+    auth_profile: kibana_service
+    use_env_password: true
+    elastic_authentication: true
+    # ... host, port, ssl, etc.
+```
+
+See **`docs/configuration/dual-file-config-guide.md`** (Auth profiles) for full resolution order.
+
 #### Insufficient Permissions
 ```bash
 # Check required permissions for escmd operations:

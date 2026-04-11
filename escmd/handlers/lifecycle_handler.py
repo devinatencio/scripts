@@ -138,7 +138,7 @@ class LifecycleHandler(BaseHandler):
 
             else:
                 # Rollover was not performed
-                info_text = f"ℹ️ Rollover was not performed for datastream '{self.args.datastream}'\n\n"
+                info_text = f"🔵 Rollover was not performed for datastream '{self.args.datastream}'\n\n"
                 info_text += (
                     "This typically means the rollover conditions were not met.\n"
                 )
@@ -150,7 +150,7 @@ class LifecycleHandler(BaseHandler):
 
                 info_panel = Panel(
                     info_text,
-                    title="ℹ️ Rollover Not Required",
+                    title="🔵 Rollover Not Required",
                     border_style="yellow",
                     padding=(1, 2),
                 )

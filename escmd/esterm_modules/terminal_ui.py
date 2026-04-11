@@ -287,7 +287,7 @@ class TerminalUI:
         """
         info_panel = Panel.fit(
             f"[blue]{message}[/blue]",
-            title=f"ℹ️  {title}",
+            title=f"🔵  {title}",
             border_style="blue",
             padding=(1, 2)
         )

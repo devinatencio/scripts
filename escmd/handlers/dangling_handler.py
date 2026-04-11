@@ -339,7 +339,7 @@ class DanglingHandler(BaseHandler):
 
             info_panel = Panel(
                 info_text,
-                title="ℹ️ Information",
+                title="🔵 Information",
                 border_style=self.es_client.style_system._get_style(
                     "table_styles", "border_style", "white"
                 ),
@@ -1758,7 +1758,7 @@ class DanglingHandler(BaseHandler):
             ]
             info_panel = Panel(
                 Text(
-                    f"ℹ️  Processing {len(clusters_to_process)} of {len(cluster_list)} clusters\n\n"
+                    f"🔵  Processing {len(clusters_to_process)} of {len(cluster_list)} clusters\n\n"
                     f"Clusters with dangling indices: {', '.join(clusters_to_process)}\n"
                     f"Skipped (clean): {', '.join(skipped_clusters)}",
                     style="blue",
@@ -2039,7 +2039,7 @@ class DanglingHandler(BaseHandler):
 
         info_panel = Panel(
             Text(info_text, justify="center"),
-            title="ℹ️ Action Summary",
+            title="🔵 Action Summary",
             border_style=self.es_client.style_system.get_semantic_style(border_style),
             padding=(1, 2),
         )

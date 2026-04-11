@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/commands/settings_commands.py
+# hypothesis_version: 6.151.12
+
+['\n• Use ', '*', 'Setting', 'Tips:', 'Use ', 'Value', 'blue', 'body', 'bold cyan', 'bold red', 'bold white', 'bold yellow', 'cyan', 'dim', 'dim italic', 'error', 'get', 'green', 'index', 'persistent', 'policy', 'red', 'settings', 'template', 'transient', 'white', 'yellow', '⚡', '💡 ', '📌', '🔧 ', '🔧 Cluster Settings']

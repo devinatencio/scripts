@@ -5,6 +5,7 @@ IndexHandler - Handles index-related operationsß
 from .base_handler import BaseHandler
 import json
 import re
+from rich import box
 from rich.panel import Panel
 from rich.text import Text
 from rich.columns import Columns
@@ -1332,6 +1333,7 @@ class IndexHandler(BaseHandler):
 
         from processors.indices_watch import (
             default_run_dir,
+            index_watch_storage_slug,
             list_indices_stats_with_failover,
             save_sample_file,
             utc_today_iso,
@@ -1345,7 +1347,13 @@ class IndexHandler(BaseHandler):
         retries = max(1, int(getattr(self.args, "retries", 3) or 3))
         retry_delay = max(0.0, float(getattr(self.args, "retry_delay", 2.0) or 2.0))
 
-        cluster = self.current_location or "default"
+        raw_loc = self.current_location or "default"
+        cm = getattr(self.es_client, "configuration_manager", None)
+        cluster = (
+            index_watch_storage_slug(raw_loc, cm)
+            if cm is not None
+            else raw_loc
+        )
         collect_out = getattr(self.args, "collect_output_dir", None)
         day_iso = utc_today_iso()
         if collect_out and str(collect_out).strip():
@@ -1868,6 +1876,141 @@ class IndexHandler(BaseHandler):
         if self.args.delete:
             self._handle_indices_deletion(indices)
 
+    def _delete_indices_with_progress(self, indices):
+        """
+        Delete indices via the ES client, showing a Rich spinner on TTY when
+        multiple deletions run (unless --quiet).
+        """
+        if isinstance(indices, list) and indices and isinstance(indices[0], dict):
+            index_names = [
+                indice.get("index") for indice in indices if indice.get("index")
+            ]
+        else:
+            index_names = list(indices) if isinstance(indices, list) else [indices]
+
+        total = len(index_names)
+        use_status = (
+            total > 0
+            and self.console.is_terminal
+            and not getattr(self.console, "is_dumb_terminal", False)
+            and not getattr(self.args, "quiet", False)
+        )
+
+        if not use_status:
+            return self.es_client.delete_indices(indices)
+
+        with self.console.status(
+            f"Deleting indices (0/{total})…",
+            spinner="dots",
+        ) as status:
+
+            def on_progress(n: int, tot: int, name: str):
+                shown = name if len(name) <= 64 else f"{name[:61]}…"
+                status.update(
+                    f"Deleting indices [bold]{n}[/bold]/{tot}: [dim]{shown}[/dim]"
+                )
+
+            return self.es_client.delete_indices(indices, on_progress=on_progress)
+
+    def _render_indices_deletion_results(self, result: dict) -> None:
+        """Rich panels and tables for index deletion outcomes (matches flush-style summaries)."""
+        successful = result.get("successful_deletions", [])
+        failed = result.get("failed_deletions", [])
+        total_requested = result.get(
+            "total_requested", len(successful) + len(failed)
+        )
+        max_rows = 40
+        styles = self.es_client.style_system
+
+        print()
+        summary_table = InnerTable(show_header=False, box=None, padding=(0, 1))
+        summary_table.add_column("Label", style="bold", no_wrap=True)
+        summary_table.add_column("Icon", justify="left", width=3)
+        summary_table.add_column("Value", no_wrap=False)
+        summary_table.add_row("Indices requested:", "📋", f"{total_requested:,}")
+        summary_table.add_row("Removed successfully:", "✅", f"{len(successful):,}")
+        if failed:
+            summary_table.add_row("Failed:", "❌", f"{len(failed):,}")
+
+        if failed and successful:
+            outcome_style = "warning"
+        elif failed:
+            outcome_style = "error"
+        else:
+            outcome_style = "success"
+
+        summary_panel = Panel(
+            summary_table,
+            title="🗑️ Index deletion summary",
+            border_style=styles.get_semantic_style(outcome_style),
+            padding=(1, 2),
+        )
+        self.console.print(summary_panel)
+
+        if successful:
+            idx_table = InnerTable(
+                show_header=True,
+                box=box.ROUNDED,
+                padding=(0, 1),
+                header_style="bold cyan",
+            )
+            idx_table.add_column("#", style="dim", justify="right", width=5)
+            idx_table.add_column("Index", style="white", overflow="fold")
+            shown = successful[:max_rows]
+            for i, name in enumerate(shown, start=1):
+                idx_table.add_row(f"{i:,}", name)
+            omitted = len(successful) - max_rows
+            if omitted > 0:
+                idx_table.add_row(
+                    "",
+                    Text(f"… and {omitted:,} more not shown", style="dim"),
+                )
+
+            removed_panel = Panel(
+                idx_table,
+                title=f"✅ Removed indices ({len(successful):,} total)",
+                border_style=styles.get_semantic_style("success"),
+                padding=(1, 2),
+            )
+            print()
+            self.console.print(removed_panel)
+
+        if failed:
+            fail_table = InnerTable(
+                show_header=True,
+                box=box.ROUNDED,
+                padding=(0, 1),
+                header_style="bold red",
+            )
+            fail_table.add_column("Index", style="white", overflow="fold")
+            fail_table.add_column("Error", style="red", overflow="fold")
+            shown_f = failed[:max_rows]
+            for item in shown_f:
+                if isinstance(item, dict):
+                    err = str(item.get("error", "unknown error"))
+                    if len(err) > 200:
+                        err = err[:197] + "…"
+                    fail_table.add_row(item.get("index", "unknown"), err)
+                else:
+                    fail_table.add_row(str(item), "")
+            omitted_f = len(failed) - max_rows
+            if omitted_f > 0:
+                fail_table.add_row(
+                    Text(f"… and {omitted_f:,} more failures", style="dim"),
+                    "",
+                )
+
+            fail_panel = Panel(
+                fail_table,
+                title=f"❌ Failed deletions ({len(failed):,} total)",
+                border_style=styles.get_semantic_style("error"),
+                padding=(1, 2),
+            )
+            print()
+            self.console.print(fail_panel)
+
+        print()
+
     def _handle_indices_deletion(self, indices):
         """Handle deletion of multiple indices with confirmation."""
         # Extract index names from the indices data
@@ -1889,33 +2032,27 @@ class IndexHandler(BaseHandler):
 
         # Perform deletion
         try:
-            result = self.es_client.delete_indices(indices)
+            result = self._delete_indices_with_progress(indices)
 
             # Show results
             if isinstance(result, dict):
-                successful = result.get("successful_deletions", [])
-                failed = result.get("failed_deletions", [])
-
-                if successful:
-                    self.console.print(
-                        f"[green]✅ Successfully deleted {len(successful)} indices:[/green]"
-                    )
-                    for index in successful:
-                        self.console.print(f"  • {index}")
-
-                if failed:
-                    self.console.print(
-                        f"[red]❌ Failed to delete {len(failed)} indices:[/red]"
-                    )
-                    for failure in failed:
-                        if isinstance(failure, dict):
-                            self.console.print(
-                                f"  • {failure.get('index', 'unknown')}: {failure.get('error', 'unknown error')}"
-                            )
-                        else:
-                            self.console.print(f"  • {failure}")
+                self._render_indices_deletion_results(result)
             else:
-                self.console.print("[green]✅ Deletion completed.[/green]")
+                done = Panel(
+                    self.es_client.style_system.create_semantic_text(
+                        "Deletion completed.",
+                        "success",
+                        justify="center",
+                    ),
+                    title="✅ Done",
+                    border_style=self.es_client.style_system.get_semantic_style(
+                        "success"
+                    ),
+                    padding=(1, 2),
+                )
+                print()
+                self.console.print(done)
+                print()
 
         except Exception as e:
             self.console.print(f"[red]❌ Error during deletion: {e}[/red]")
@@ -1941,7 +2078,7 @@ class IndexHandler(BaseHandler):
 
         # Perform deletion
         try:
-            result = self.es_client.delete_indices(indices)
+            result = self._delete_indices_with_progress(indices)
 
             # Return structured result for JSON output
             if isinstance(result, dict):

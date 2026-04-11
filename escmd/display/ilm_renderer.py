@@ -530,7 +530,7 @@ class ILMRenderer:
         else:
             # No indices using this policy
             summary_panel = Panel(
-                Text("ℹ️  This policy is not currently being used by any indices.\n\nTo apply this policy to an index template or data stream, update your index template configuration.",
+                Text("🔵  This policy is not currently being used by any indices.\n\nTo apply this policy to an index template or data stream, update your index template configuration.",
                      style="dim white", justify="center"),
                 title="📊 Policy Usage",
                 border_style="yellow",
@@ -769,7 +769,7 @@ class ILMRenderer:
         if not patterns:
             self.console.print(Panel(
                 Text(
-                    f"ℹ️  No indices are currently using policy '{policy_name}'.",
+                    f"🔵  No indices are currently using policy '{policy_name}'.",
                     style="bold yellow",
                     justify="center",
                 ),

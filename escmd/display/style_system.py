@@ -86,7 +86,7 @@ class StyleSystem:
         elif status_lower in ["red", "critical", "failed", "error", "disconnected"]:
             return "❌", self.get_semantic_style("error")
         elif status_lower in ["blue", "info", "unknown"]:
-            return "ℹ️", self.get_semantic_style("info")
+            return "🔵", self.get_semantic_style("info")
         else:
             return "⭕", self.get_semantic_style("neutral")
 
@@ -166,7 +166,7 @@ class StyleSystem:
     # STANDARDIZED PANELS
     # ====================================================================
 
-    def create_info_panel(self, content: Any, title: str, icon: str = "ℹ️") -> Panel:
+    def create_info_panel(self, content: Any, title: str, icon: str = "🔵") -> Panel:
         """Create a standardized info panel."""
         return self._create_semantic_panel(content, title, icon, "info")
 

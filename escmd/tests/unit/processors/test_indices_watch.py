@@ -1,5 +1,7 @@
 """Unit tests for indices watch sampling and trend analysis."""
 
+import pytest
+
 from processors.indices_watch import (
     analyze_watch_trends,
     default_run_dir,
@@ -60,6 +62,61 @@ def test_analyze_watch_trends_delta_and_hot():
     assert r_hot["docs_vs_peer_docs_ratio"] is not None
     assert r_hot["docs_vs_peer_docs_ratio"] > 5.0
     assert r_hot["docs_level_elevated"] is True
+    assert r_hot["interval_rate_count"] == 1
+    assert r_hot["docs_per_sec_interval_median"] == pytest.approx(1000.0)
+    assert r_hot["docs_per_sec_interval_p90"] == pytest.approx(1000.0)
+    assert r_hot["docs_per_sec_interval_max"] == pytest.approx(1000.0)
+    assert out["summary"]["rate_stats_primary"] == "span"
+
+
+def test_analyze_watch_trends_three_samples_median_p90_max():
+    """Span docs/s differs from per-interval median when multiple samples exist."""
+    samples = [
+        {
+            "captured_at": "2026-03-30T12:00:00+00:00",
+            "indices": [
+                {
+                    "index": "grow-2026.03.30-000001",
+                    "docs.count": 0,
+                    "store.size": 0,
+                },
+            ],
+        },
+        {
+            "captured_at": "2026-03-30T12:01:00+00:00",
+            "indices": [
+                {
+                    "index": "grow-2026.03.30-000001",
+                    "docs.count": 1000,
+                    "store.size": 100,
+                },
+            ],
+        },
+        {
+            "captured_at": "2026-03-30T12:02:00+00:00",
+            "indices": [
+                {
+                    "index": "grow-2026.03.30-000001",
+                    "docs.count": 6000,
+                    "store.size": 200,
+                },
+            ],
+        },
+    ]
+    out = analyze_watch_trends(samples, min_docs_delta=0, rate_stats="auto")
+    assert out["summary"]["rate_stats_primary"] == "intervals"
+    row = out["rows"][0]
+    assert row["delta_docs"] == 6000
+    assert row["docs_per_sec"] == pytest.approx(50.0)
+    assert row["interval_rate_count"] == 2
+    assert row["docs_per_sec_interval_median"] == pytest.approx(50.0)
+    assert row["docs_per_sec_interval_max"] == pytest.approx(5000.0 / 60.0)
+    assert row["docs_per_sec_interval_p90"] == pytest.approx(
+        (1000.0 / 60.0) * 0.1 + (5000.0 / 60.0) * 0.9
+    )
+
+    span_primary = analyze_watch_trends(samples, min_docs_delta=0, rate_stats="span")
+    assert span_primary["summary"]["rate_stats_primary"] == "span"
 
 
 def test_analyze_watch_trends_insufficient_samples():
@@ -179,3 +236,43 @@ def test_load_samples_skips_run_json(tmp_path):
     )
     s = load_samples(tmp_path)
     assert len(s) == 1
+
+
+def test_index_watch_storage_slug_uses_canonical_key():
+    from unittest.mock import MagicMock
+
+    from processors.indices_watch import index_watch_storage_slug
+
+    cm = MagicMock()
+    cm.canonical_cluster_name_for_location.return_value = "aex20-glip"
+    assert index_watch_storage_slug("aex20", cm) == "aex20-glip"
+
+
+def test_resolve_default_watch_sample_dir_finds_legacy_short_slug_dir(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from processors.indices_watch import resolve_default_watch_sample_dir
+
+    monkeypatch.setenv("ESCMD_INDEX_WATCH_DIR", str(tmp_path))
+
+    cm = MagicMock()
+    cm.get_default_cluster.return_value = "aex20-glip"
+    cm.canonical_cluster_name_for_location.return_value = "aex20-glip"
+    cm.servers_dict = {}
+    cm.get_server_config.return_value = None
+
+    args = SimpleNamespace(locations=None, cluster=None)
+    day = "2026-04-07"
+    legacy = tmp_path / "aex20" / day
+    legacy.mkdir(parents=True)
+    (legacy / "20260407T000000_0001.json").write_text(
+        '{"captured_at":"2026-04-07T00:00:00+00:00","indices":[]}', encoding="utf-8"
+    )
+    (legacy / "20260407T000001_0002.json").write_text(
+        '{"captured_at":"2026-04-07T00:01:00+00:00","indices":[]}', encoding="utf-8"
+    )
+
+    d, samples = resolve_default_watch_sample_dir(args, cm, day)
+    assert d == legacy
+    assert len(samples) == 2

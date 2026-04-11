@@ -464,7 +464,7 @@ class SettingsRenderer:
             validation_table.add_row("", "")
             validation_table.add_row("Info:", "")
             for info in validation_results['info']:
-                validation_table.add_row("", Text(f"ℹ️ {info}", style=panel_styles.get('info', 'blue')))
+                validation_table.add_row("", Text(f"🔵 {info}", style=panel_styles.get('info', 'blue')))
 
         validation_panel = Panel(
             validation_table,

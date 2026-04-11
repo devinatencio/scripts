@@ -116,6 +116,12 @@ touch elastic_servers.yml
 
 ### 2. Basic Configuration
 
+Edit `elastic_servers.yml` with your cluster information.
+
+For **dual-file** setups (**`escmd.yml`** + **`elastic_servers.yml`**), you can use **`auth_profile`** on servers and define **`auth_profiles`** in **`escmd.yml`** so a shared server list does not need per-person usernames. See **`docs/configuration/dual-file-config-guide.md`** (Auth profiles) and **`docs/configuration/cluster-setup.md`**.
+
+### 2a. Example (single-file style)
+
 Edit `elastic_servers.yml` with your cluster information:
 
 ```yaml

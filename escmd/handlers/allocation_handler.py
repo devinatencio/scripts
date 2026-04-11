@@ -81,7 +81,7 @@ class AllocationHandler(BaseHandler):
                 # Check if hostname is already excluded
                 if hostname in current_exclusions:
                     excluded_hosts_list = "\n".join([f"  • {host}" for host in current_exclusions])
-                    self.es_client.show_message_box("Info", f"ℹ️ Host '{hostname}' is already in the exclusion list.\n\nCurrently excluded hosts:\n{excluded_hosts_list}", message_style="bold white", panel_style="blue")
+                    self.es_client.show_message_box("Info", f"🔵 Host '{hostname}' is already in the exclusion list.\n\nCurrently excluded hosts:\n{excluded_hosts_list}", message_style="bold white", panel_style="blue")
                     return
 
                 # Add hostname to exclusion list
@@ -117,7 +117,7 @@ class AllocationHandler(BaseHandler):
                 current_exclusions = self._get_current_exclusions()
 
                 if not current_exclusions:
-                    self.es_client.show_message_box("ℹ️  Info", " No hosts are currently excluded from allocation.\nNothing to reset.", message_style="bold white", panel_style="blue")
+                    self.es_client.show_message_box("🔵  Info", " No hosts are currently excluded from allocation.\nNothing to reset.", message_style="bold white", panel_style="blue")
                     return
 
                 # Check if confirmation bypass flag is used
@@ -189,13 +189,13 @@ This is a cluster-wide operation that cannot be undone easily."""
         current_exclusions = self._get_current_exclusions()
 
         if not current_exclusions:
-            self.es_client.show_message_box("Info", "ℹ️ No hosts are currently excluded from allocation", message_style="bold white", panel_style="blue")
+            self.es_client.show_message_box("Info", "🔵 No hosts are currently excluded from allocation", message_style="bold white", panel_style="blue")
             return
 
         # Check if hostname is in exclusion list
         if hostname not in current_exclusions:
             excluded_hosts_list = "\n".join([f"  • {host}" for host in current_exclusions])
-            self.es_client.show_message_box("Info", f"ℹ️ Host '{hostname}' is not in the exclusion list.\n\nCurrently excluded hosts:\n{excluded_hosts_list}", message_style="bold white", panel_style="blue")
+            self.es_client.show_message_box("Info", f"🔵 Host '{hostname}' is not in the exclusion list.\n\nCurrently excluded hosts:\n{excluded_hosts_list}", message_style="bold white", panel_style="blue")
             return
 
         # Remove hostname from list

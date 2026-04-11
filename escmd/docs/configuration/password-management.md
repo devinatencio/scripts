@@ -11,6 +11,20 @@ The password management system provides:
 - **🆕 Multi-User Support**: Store different passwords for different users within the same environment
 - **Backward Compatibility**: All existing authentication methods continue to work
 
+## Username resolution (before passwords)
+
+ESCMD resolves the **username** first. That value is what **`env` + username** lookups, inline passwords, and display use.
+
+Order:
+
+1. **`elastic_username`** on the server entry
+2. **`elastic_username`** from **`auth_profiles[auth_profile]`** (see **`docs/configuration/dual-file-config-guide.md`** — Auth profiles)
+3. If **`passwords[env]`** contains exactly **one** username key, that username (legacy shortcut)
+4. **`elastic_username`** in **`escmd.json`**
+5. **`settings.elastic_username`** in **`escmd.yml`**
+
+Unknown **`auth_profile`** names emit a warning; resolution continues with the steps below.
+
 ## Password Resolution Priority
 
 When ESCMD needs to authenticate with an Elasticsearch cluster, it tries to find passwords in this order:
@@ -53,9 +67,9 @@ The command will prompt you securely for the password (no echo to terminal).
 3. All commands automatically use your credentials across all clusters
 
 **🆕 Recommended workflow for multi-user environments:**
-1. Configure `env` and `elastic_username` in your elastic_servers.yml
-2. Store passwords for each user: `./escmd.py store-password prod --username kibana_system`
-3. ESCMD automatically matches environment + username for authentication
+1. Configure **`env`** and either **`elastic_username`** or **`auth_profile`** (with **`auth_profiles`** in **`escmd.yml`**) in **`elastic_servers.yml`**
+2. Store passwords for each resolved user: `./escmd.py store-password prod --username kibana_system`
+3. ESCMD automatically matches environment + **effective** username for authentication
 
 ### List Stored Passwords
 ```bash
@@ -228,6 +242,7 @@ Store both global and environment-specific passwords, with multi-user support:
 
 **Password Resolution Example:**
 - Server with `env: prod, elastic_username: kibana_system` → Uses `prod.kibana_system`
+- Server with `env: prod, auth_profile: kibana_service` and profile mapping to `kibana_system` → Same as `prod.kibana_system`
 - Server with `env: lab, elastic_username: unknown_user` → Falls back to `lab` environment password
 - Server with `env: staging, elastic_username: devin.acosta` → Falls back to `global.devin.acosta`
 - Server with `env: new_env, elastic_username: any_user` → Falls back to `global` password
@@ -361,7 +376,7 @@ If you currently have passwords in your YAML configuration files:
 
 **"Wrong username or password"** (Multi-user setups)
 - Verify the username with `./escmd.py list-stored-passwords`
-- Check that `env` and `elastic_username` are set correctly in your server configuration
+- Check that **`env`** is set and the **effective** username matches stored keys (per-server **`elastic_username`**, or **`auth_profile`** + **`auth_profiles`** in the main config — not in **`elastic_servers.yml`** in dual-file mode)
 - Test password resolution priority: `environment.username` → `environment` → `global.username` → `global`
 
 **"Session cache not working"**

@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/indice_add_metadata_help.py
+# hypothesis_version: 6.151.12
+
+['   Add Project:', '   Add Source:', '   Behavior:', '   Benefits:', '   Conditional:', '   Example:', '   Format:', '   Index Check:', '   JSON Validation:', '   Location:', '   Maintenance:', '   Nested Objects:', '   Performance:', '   Permission Check:', '   Pipeline Info:', '   Quality Check:', '   Set Ownership:', '   View Result:', '\'{"key": "value"}\'', 'Backup tracking:', 'Basic Syntax:', 'Basic metadata:', 'Both Supported:', 'Command:', 'Data lineage:', 'Direct Format:', 'Display:', 'Multiple fields:', 'Persistence:', 'Project info:', 'Purpose:', 'Storage:', 'Wrapped Format:', 'bold cyan', 'bold green', 'bold magenta', 'bold yellow', 'command', 'description', 'dim cyan', 'dim white', 'example', 'indice-add-metadata', 'section_header', 'white', '✅ Metadata Merging:', '🎨 Rich Display:']

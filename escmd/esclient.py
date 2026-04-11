@@ -438,7 +438,7 @@ class ElasticsearchClient:
         """Delete a dangling index by its UUID (delegates to IndicesCommands)."""
         return self.indices_commands.delete_dangling_index(uuid)
 
-    def delete_indices(self, indice_data):
+    def delete_indices(self, indice_data, *, on_progress=None):
         """Delete multiple indices (delegates to IndicesCommands)."""
         if (
             isinstance(indice_data, list)
@@ -450,7 +450,9 @@ class ElasticsearchClient:
             ]
         else:
             index_names = indice_data
-        result = self.indices_commands.delete_indices(index_names)
+        result = self.indices_commands.delete_indices(
+            index_names, on_progress=on_progress
+        )
 
         # Refresh indices cache after deletion to prevent stale data
         self.refresh_indices_cache()

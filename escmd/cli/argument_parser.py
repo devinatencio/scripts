@@ -36,6 +36,7 @@ def create_argument_parser():
     _add_utility_commands(subparsers)
     _add_password_commands(subparsers)
     _add_action_commands(subparsers)
+    _add_estop_command(subparsers)
 
     return parser
 
@@ -68,9 +69,13 @@ def _add_help_command(subparsers):
             "unfreeze",
             "indice-add-metadata",
             "templates",
+            "template-backup",
             "template-modify",
+            "template-restore",
+            "store-password",
             "actions",
             "action",
+            "es-top",
         ],
         help="Command to show help for",
     )
@@ -444,7 +449,18 @@ def _add_basic_commands(subparsers):
         type=int,
         default=None,
         metavar="N",
-        help="Show only top N rows by docs/s",
+        help="Show only top N rows by primary sort key (med docs/s or span docs/s)",
+    )
+    indices_watch_report_parser.add_argument(
+        "--rate-stats",
+        choices=["auto", "span", "intervals"],
+        default="auto",
+        dest="watch_rate_stats",
+        help=(
+            "auto: med/p90/max per-interval docs/s when ≥3 samples, else span docs/s only; "
+            "span: one full-window docs/s column; "
+            "intervals: med/p90/max (+ span/s) from adjacent-sample pairs"
+        ),
     )
 
     # Indice command (single index)
@@ -1810,6 +1826,16 @@ def _add_password_commands(subparsers):
         help="Force migration even if environment variable is already set",
     )
 
+    rotate_key_parser = subparsers.add_parser(
+        "rotate-master-key",
+        help="Back up state file, generate a new master key, and re-encrypt stored passwords",
+    )
+    rotate_key_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip confirmation prompt (non-interactive)",
+    )
+
 
 def _add_action_commands(subparsers):
     """Add action sequence management commands."""
@@ -1913,4 +1939,35 @@ def _add_action_commands(subparsers):
         dest="param_days",
         type=int,
         help="Days parameter for actions that require it",
+    )
+
+
+def _add_estop_command(subparsers):
+    """Add es-top live dashboard command."""
+    estop_parser = subparsers.add_parser(
+        "es-top",
+        help="Live Elasticsearch cluster dashboard (like Unix top)",
+    )
+    estop_parser.add_argument(
+        "--interval",
+        type=int,
+        default=30,
+        metavar="SEC",
+        help="Refresh interval in seconds (default: 30, minimum: 10)",
+    )
+    estop_parser.add_argument(
+        "--top-nodes",
+        type=int,
+        default=5,
+        dest="top_nodes",
+        metavar="N",
+        help="Number of top nodes to display by heap usage (default: 5)",
+    )
+    estop_parser.add_argument(
+        "--top-indices",
+        type=int,
+        default=10,
+        dest="top_indices",
+        metavar="N",
+        help="Number of top active indices to display (default: 10)",
     )

@@ -1,3 +1,98 @@
+## [3.10.0] - 2026-04-11
+
+### `es-top` — live Elasticsearch cluster dashboard
+
+- **NEW**: **`./escmd.py es-top`** — full-screen, auto-refreshing terminal dashboard modelled after the Unix `top` command. Uses `rich.live.Live` in alternate-screen mode (clears terminal on start, restores on exit). Exit with **Ctrl+C**.
+- **NEW**: **Cluster Health Header** — cluster name, status (color-coded green/yellow/red), total/data node counts, active/relocating/initializing/unassigned shard counts. Unassigned shards render in red. Last-poll timestamp and refresh interval shown in the footer.
+- **NEW**: **Top Nodes panel** — top N nodes ranked by JVM heap %. Columns: node name, heap %, CPU %, 1-min load average, disk used %, disk free. Heap ≥ 85% → red bold; disk ≥ 85% → yellow, ≥ 90% → red bold.
+- **NEW**: **Index Hot List panel** — top N active indices ranked by docs/sec. Columns: index name, docs/sec, searches/sec, session total docs written, session total searches, total doc count, store size. Only indices with activity since `es-top` started are shown. First-poll cycle shows totals only with a note that rates are available after the next poll.
+- **NEW**: **Session totals** — cumulative docs written and searches executed per index are accumulated across all poll cycles for the lifetime of the `es-top` session, giving a "most written to during this watch" view alongside per-interval rates.
+- **NEW**: **Delta calculation** — docs/sec and searches/sec are computed from wall-clock timestamps between successive poll snapshots, never from the configured interval, so rates are accurate even when polls are slow.
+- **NEW**: **CLI flags**: `--interval SEC` (default 30, min 10), `--top-nodes N` (default 5), `--top-indices N` (default 10).
+- **NEW**: **`escmd.yml` configuration** — `settings.es_top.interval`, `settings.es_top.top_nodes`, `settings.es_top.top_indices`. CLI flags override config values; config values override built-in defaults.
+- **NEW**: **`./escmd.py help es-top`** — dedicated help screen covering all flags, dashboard panels, threshold values, `escmd.yml` config block, and usage examples.
+- **NEW**: `es-top` added to the **Operations** section of `./escmd.py help` and to the quick-start examples list.
+- **Code**: `commands/estop_commands.py` (new — `PollSnapshot`, `SessionTotals`, `IndexDelta`, `NodeStat`, `ProcessedData`, `EsTopPoller`, `DeltaCalculator`, `EsTopRenderer`, `EsTopDashboard`), `handlers/estop_handler.py` (new — `EsTopHandler`), `handlers/help/estop_help.py` (new), `handlers/help/help_registry.py`, `cli/argument_parser.py`, `cli/help_system.py`, `command_handler.py`, `configuration_manager.py` (`get_estop_top_indices`, `get_estop_top_nodes`, `get_estop_interval`).
+
+---
+
+## [3.9.4] - 2026-04-11
+
+### Specialized help screens for `template-backup`, `template-modify`, `template-restore`, `store-password` + help topic sort
+
+- **NEW**: **`./escmd.py help template-backup`** — dedicated help screen covering all flags (`--type`, `--backup-dir`, `--cluster`), usage examples, default backup location, filename pattern, and a before-modify backup workflow.
+- **NEW**: **`./escmd.py help template-modify`** — dedicated help screen covering all four operations (`set` / `append` / `remove` / `delete`), every flag (`--dry-run`, `--no-backup`, `--backup-dir`, `--type`), dot-notation field path reference for composable and legacy templates, and safety feature notes.
+- **NEW**: **`./escmd.py help template-restore`** — dedicated help screen covering the full restore workflow (list-backups → copy path → restore → verify), backup file format, and cross-cluster portability notes.
+- **NEW**: **`./escmd.py help store-password`** — dedicated help screen covering single-cluster and multi-environment setup, the full password resolution priority order, encryption details (AES-128 Fernet), session caching, and troubleshooting steps. Links to `./escmd.py help security` for the full deep-dive.
+- **NEW**: All four topics added to the `help` subcommand `choices` list in **`cli/argument_parser.py`** so they are valid CLI arguments.
+- **UX**: **`./escmd.py help`** (general help listing) now displays all registered topics in **alphabetical order** instead of a manually maintained ordered list. New topics automatically sort into the correct position.
+- **Fix**: Replaced `⚙️` (U+2699 + VS16, narrow base codepoint) with `🔩` (U+1F529, wide base) in **`handlers/help/template_modify_help.py`** panel title, consistent with the VS16 emoji alignment fix introduced in 3.8.4.
+- **Code**: **`handlers/help/template_backup_help.py`** (new), **`handlers/help/template_modify_help.py`** (new), **`handlers/help/template_restore_help.py`** (new), **`handlers/help/store_password_help.py`** (new), **`handlers/help/help_registry.py`** (register four new modules), **`handlers/help_handler.py`** (alphabetical sort), **`cli/argument_parser.py`** (extended choices).
+
+---
+
+## [3.9.3] - 2026-04-09
+
+### `indices --delete`: progress and result presentation
+
+- **NEW**: **Live progress** while deleting multiple indices — on an interactive TTY (and when not using **`--quiet`**), a **Rich status** spinner shows **current index / total** and a truncated index name for each deletion. Non-TTY (e.g. piped output) behavior is unchanged.
+- **NEW**: **Structured result output** after deletion — **summary panel** (requested / removed / failed counts with semantic border: success, warning, or error), a **rounded table** listing removed indices (numbered; **40-row cap** with “… and N more not shown”), and a **failures table** when any delete errors occur.
+- **Code**: **`handlers/index_handler.py`** (**`_delete_indices_with_progress`**, **`_render_indices_deletion_results`**), **`commands/indices_commands.py`** (optional **`on_progress`** callback on **`delete_indices`**), **`esclient.py`** (pass-through **`on_progress`**).
+- **Tests**: Existing **`tests/unit/test_json_deletion.py`** still passes.
+
+---
+
+## [3.9.2] - 2026-04-08
+
+### `indices-watch-report`: interval rate stats and table layout
+
+- **NEW**: **Per-interval docs/s** between adjacent samples — **median**, **p90**, and **max** — exposed in JSON (`docs_per_sec_interval_median`, `docs_per_sec_interval_p90`, `docs_per_sec_interval_max`, `interval_rate_count`) and in the table when **`--rate-stats auto`** (default) and there are **≥3** samples (**med/s**, **p90/s**, **max/s**, plus **span/s** for the full first→last window). With only two samples, the table stays a single **docs/s** column (one interval equals the span).
+- **NEW**: **`--rate-stats`**: **`auto`** (interval columns when ≥3 samples), **`span`** (always one full-window **docs/s** column), **`intervals`** (always interval stats + **span/s** when ≥2 samples). **`--top`** sorts by median interval docs/s when interval mode is active, otherwise by span docs/s.
+- **Behavior**: **HOT** and peer **rate/med** logic still use **span** docs/s (first→last), not interval medians. JSON **`docs_per_sec`** remains the span rate for compatibility.
+- **UX**: The **rate/med** column is **hidden** when no row has a defined ratio (e.g. index names not in a parsed rollover series, no sibling in both snapshots, or all peer span rates are zero). **`rate_vs_peer_median`** is still present in JSON whenever computed.
+- **Summary JSON**: Adds **`interval_count`**, **`rate_stats`**, **`rate_stats_primary`** (`span` or `intervals`).
+- **DOCS**: **`docs/commands/index-operations.md`**, **`escmd_docs/04-command-usage.md`**; topic help **`handlers/help/indices_watch_report_help.py`**.
+- **Code**: **`processors/indices_watch.py`**, **`cli/argument_parser.py`**.
+- **Tests**: **`tests/unit/processors/test_indices_watch.py`**.
+
+---
+
+## [3.9.1] - 2026-04-07
+
+### Master key rotation and password state file alignment
+
+- **NEW**: **`rotate-master-key`** — Backs up the state file to **`<state-file>.old`** (e.g. **`escmd.json.old`**), generates a new Fernet **`security.master_key`**, decrypts all entries under **`security.encrypted_passwords`** with the current key, re-encrypts them with the new key, and writes the state file atomically (temp file + replace). Supports **`--yes`** to skip the confirmation prompt. If **`ESCMD_MASTER_KEY`** is set, it is used for decryption during rotation; after rotation, update that variable to the new key or unset it so the file key is used (documented in command output).
+- **Behavior**: Password-related special commands (**`store-password`**, **`list-stored-passwords`**, etc.) now use **`ConfigurationManager.state_file_path`** ( **`ESCMD_STATE`** / **`ESCMD_CONFIG`** when set, otherwise **`escmd.json`** beside **`escmd.py`** ) when constructing **`PasswordManager`**, so they target the same state file as the rest of the CLI.
+- **Code**: **`security/password_manager.py`** (**`rotate_master_key`**, helpers), **`handlers/password_handler.py`**, **`escmd.py`**, **`command_handler.py`**, **`cli/argument_parser.py`**, **`cli/special_commands.py`**, **`handlers/help/security_help.py`**, **`interactive_help.py`**.
+- **Tests**: **`tests/unit/test_password_manager_rotation.py`**.
+
+### Index watch: canonical cluster directory (collect vs report)
+
+- **Fix**: **`indices-watch-collect`** wrote samples under the raw **`-l`** label (e.g. **`aex20`**), while **`set-default`** stores the resolved **`servers_dict`** key (e.g. **`aex20-glip`**). **`indices-watch-report`** without **`-l`** then looked under the default key and missed samples. Collect now uses the same **canonical cluster name** as **`set-default`** (via **`get_server_config`** resolution) for the **`~/.escmd/index-watch/<cluster>/<date>/`** path and for **`cluster`** in JSON snapshots and **`run.json`**.
+- **Behavior**: **`indices-watch-report`** (when **`--dir`** is not set) tries, in order: that canonical slug, the sanitized CLI/default string, the hyphen prefix of the canonical name (so legacy **`aex20`** dirs still match when the default is **`aex20-glip`**), and other **`servers_dict`** keys that share the same server entry—first directory with samples wins.
+- **Code**: **`configuration_manager.py`** (**`canonical_cluster_name_for_location`**), **`processors/indices_watch.py`** (**`index_watch_storage_slug`**, **`resolve_default_watch_sample_dir`**, **`_index_watch_sample_dir_candidates`**), **`handlers/index_handler.py`** (**`handle_indices_watch_collect`**).
+- **Tests**: **`tests/unit/test_configuration.py`**, **`tests/unit/processors/test_indices_watch.py`**.
+
+---
+
+## [3.9.0] - 2026-04-07
+ - Jumping version to 3.9.0 to include new features of: indices-watch-collect, indices-watch-report, indices-analyze, indices-s3-estimate, and Auth Profiles
+ - As we added quite a bit, i felt a version increment was needed. 
+
+## [3.8.5] - 2026-04-07
+
+### Auth profiles (portable per-cluster authentication presets)
+
+- **NEW**: Top-level **`auth_profiles`** in **`escmd.yml`** (dual-file mode) or in the same YAML file as **`servers:`** (single-file mode). Each profile is a mapping (currently supports **`elastic_username`**; reserved for future fields).
+- **NEW**: Per-server **`auth_profile`** — references a named profile when the server entry does not set **`elastic_username`**. Lets teams share a single **`elastic_servers.yml`** while each operator maps profile names to real account names in their own main config (or via **`ESCMD_MAIN_CONFIG`**).
+- **Behavior**: Effective username resolution order: per-server **`elastic_username`** → **`auth_profiles[auth_profile].elastic_username`** → special case: **`passwords[env]`** with exactly one username key → **`elastic_username`** in **`escmd.json`** → **`settings.elastic_username`**. An unknown **`auth_profile`** prints a warning and resolution continues with the remaining steps.
+- **Dual-file rule**: **`auth_profiles`** are loaded only from the **main** configuration file (**`escmd.yml`** or **`ESCMD_MAIN_CONFIG`**), not from **`elastic_servers.yml`**.
+- **UI**: **`locations`**, **`show-settings`**, and related views label usernames sourced from a profile (e.g. **`Auth profile (name)`**).
+- **DOCS**: **`docs/configuration/dual-file-config-guide.md`**, **`docs/configuration/cluster-setup.md`**, **`docs/configuration/password-management.md`**, **`docs/configuration/installation.md`**, **`docs/reference/troubleshooting.md`**, **`docs/commands/snapshot-management.md`**, **`docs/README.md`**; user-facing summary in **`escmd_docs/03-configuration.md`**.
+- **Code**: **`configuration_manager.py`**, **`display/locations_data.py`**, **`display/settings_data.py`**; tests in **`tests/unit/test_configuration.py`**.
+
+---
+
 ## [3.8.4] - 2026-04-04
 
 ### Terminal emoji alignment fix — replace narrow-width VS16 emoji throughout

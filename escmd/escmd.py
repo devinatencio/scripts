@@ -83,6 +83,7 @@ NO_CONNECTION_COMMANDS = {
     "set-session-timeout",
     "generate-master-key",
     "migrate-to-env-key",
+    "rotate-master-key",
     "indices-watch-report",
 }
 
@@ -362,9 +363,13 @@ def handle_special_commands(args, config_manager, console):
         "set-session-timeout",
         "generate-master-key",
         "migrate-to-env-key",
+        "rotate-master-key",
     ):
         # Create password handler without ES client
-        password_handler = PasswordCommands(None, args, console, None, None, None)
+        state_file_path = getattr(config_manager, "state_file_path", None)
+        password_handler = PasswordCommands(
+            None, args, console, None, None, None, None, state_file_path=state_file_path
+        )
 
         if command == "store-password":
             password_handler.handle_store_password(args)
@@ -382,6 +387,8 @@ def handle_special_commands(args, config_manager, console):
             password_handler.handle_generate_master_key(args)
         elif command == "migrate-to-env-key":
             password_handler.handle_migrate_to_env_key(args)
+        elif command == "rotate-master-key":
+            password_handler.handle_rotate_master_key(args)
 
         return True
 

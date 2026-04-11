@@ -58,22 +58,9 @@ class HelpHandler(BaseHandler):
         available_topics = self.help_registry.get_available_topics()
 
         # Add topics in a specific order for consistency
-        ordered_topics = [
-            'allocation', 'dangling', 'exclude', 'freeze', 'health', 'ilm',
-            'indice-add-metadata', 'indices', 'indices-analyze', 'indices-s3-estimate',
-            'indices-watch-collect', 'indices-watch-report', 'nodes', 'shards',
-            'snapshots', 'security', 'templates', 'unfreeze'
-        ]
-
-        # Add ordered topics first
-        for topic in ordered_topics:
-            if topic in available_topics:
-                topics_table.add_row(topic, available_topics[topic])
-
-        # Add any additional topics that weren't in the ordered list
-        for topic, description in available_topics.items():
-            if topic not in ordered_topics:
-                topics_table.add_row(topic, description)
+        # Display all topics sorted alphabetically
+        for topic, description in sorted(available_topics.items()):
+            topics_table.add_row(topic, description)
 
         # Create main help panel
         if Panel is None:

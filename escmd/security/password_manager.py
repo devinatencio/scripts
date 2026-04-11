@@ -8,7 +8,8 @@ import json
 import time
 import base64
 import getpass
-from typing import Optional, Dict, Any
+import shutil
+from typing import Optional, Dict, Any, Tuple
 from pathlib import Path
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
@@ -88,10 +89,12 @@ class PasswordManager:
 
             if existing_passwords:
                 self.console.print("🔶  [red]WARNING: Existing encrypted passwords will be INVALID with this new key![/red]")
-                self.console.print(f"� [yellow]Found {len(existing_passwords)} encrypted passwords that need to be re-stored[/yellow]")
+                self.console.print(
+                    f"[yellow]Found {len(existing_passwords)} encrypted passwords that need to be re-stored[/yellow]"
+                )
                 self.console.print("🔄 [yellow]You will need to re-store your passwords with: ./escmd.py store-password[/yellow]")
 
-            self.console.print("�💡 [cyan]For better security, run: ./escmd.py generate-master-key --show-setup[/cyan]")
+            self.console.print("💡 [cyan]For better security, run: ./escmd.py generate-master-key --show-setup[/cyan]")
             self.console.print("   [dim]This will help you set up ESCMD_MASTER_KEY environment variable[/dim]")
 
         return key_str
@@ -368,6 +371,165 @@ class PasswordManager:
             "remaining_time": remaining_time,
             "timeout": self._session_timeout
         }
+
+    def _fernet_for_master_key_string(self, master_key: str) -> Fernet:
+        """Build a Fernet instance from a master key string (env/file format or passphrase)."""
+        if len(master_key) == 44 and master_key.endswith("="):
+            key = master_key.encode("utf-8")
+        else:
+            key = self._derive_key_from_password(master_key)
+        return Fernet(key)
+
+    def _resolve_current_master_key_for_decrypt(self, config: Dict[str, Any]) -> Optional[str]:
+        """Key used to decrypt stored passwords (ESCMD_MASTER_KEY overrides file)."""
+        env_key = os.environ.get("ESCMD_MASTER_KEY")
+        if env_key:
+            return env_key
+        return config.get("security", {}).get("master_key")
+
+    def get_rotate_master_key_preview(self) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+        """
+        Load state and validate rotation is possible without mutating files.
+
+        Returns:
+            (error_message, None) on failure, or (None, preview_dict) on success.
+        """
+        config_path = Path(self.config_file)
+        if not config_path.is_file():
+            return f"State file not found: {self.config_file}", None
+
+        try:
+            with open(self.config_file, "r", encoding="utf-8") as f:
+                config = json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            return f"Failed to read state file: {e}", None
+
+        security = config.get("security") or {}
+        encrypted_passwords = dict(security.get("encrypted_passwords") or {})
+        old_key = self._resolve_current_master_key_for_decrypt(config)
+
+        if encrypted_passwords and not old_key:
+            return (
+                "Cannot decrypt stored passwords: set ESCMD_MASTER_KEY or add security.master_key to the state file.",
+                None,
+            )
+
+        if encrypted_passwords:
+            try:
+                self._fernet_for_master_key_string(old_key)
+            except Exception as e:
+                return f"Invalid current master key: {e}", None
+
+        if os.environ.get("ESCMD_MASTER_KEY"):
+            decrypt_source = "ESCMD_MASTER_KEY (environment)"
+        elif old_key:
+            decrypt_source = "security.master_key (state file)"
+        else:
+            decrypt_source = "N/A (no stored passwords; a new key will be written)"
+
+        backup_path = f"{self.config_file}.old"
+        preview = {
+            "state_path": str(config_path.resolve()),
+            "backup_path": backup_path,
+            "entry_count": len(encrypted_passwords),
+            "storage_keys": sorted(encrypted_passwords.keys()),
+            "decrypt_key_source": decrypt_source,
+        }
+        return None, preview
+
+    def rotate_master_key(self) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+        """
+        Backup state file, generate a new Fernet key, re-encrypt all stored passwords, and save.
+
+        The previous file is copied to ``<config_file>.old``. Caller should confirm with the user
+        before invoking.
+
+        Returns:
+            (success, message, details). ``details`` is set on success for UI; None on failure.
+        """
+        config_path = Path(self.config_file)
+        if not config_path.is_file():
+            return False, f"State file not found: {self.config_file}", None
+
+        try:
+            with open(self.config_file, "r", encoding="utf-8") as f:
+                config = json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            return False, f"Failed to read state file: {e}", None
+
+        security = config.setdefault("security", {})
+        encrypted_passwords = dict(security.get("encrypted_passwords") or {})
+        old_key = self._resolve_current_master_key_for_decrypt(config)
+
+        if encrypted_passwords and not old_key:
+            return (
+                False,
+                "Cannot decrypt stored passwords: set ESCMD_MASTER_KEY or add security.master_key to the state file.",
+                None,
+            )
+
+        old_fernet = None
+        if encrypted_passwords:
+            try:
+                old_fernet = self._fernet_for_master_key_string(old_key)
+            except Exception as e:
+                return False, f"Invalid current master key: {e}", None
+
+        plaintext_by_storage_key: Dict[str, str] = {}
+        for storage_key, encrypted_b64 in encrypted_passwords.items():
+            try:
+                raw = base64.urlsafe_b64decode(encrypted_b64.encode("utf-8"))
+                plaintext_by_storage_key[storage_key] = old_fernet.decrypt(raw).decode("utf-8")
+            except Exception as e:
+                return False, f"Failed to decrypt entry '{storage_key}': {e}", None
+
+        backup_path = f"{self.config_file}.old"
+        try:
+            shutil.copy2(self.config_file, backup_path)
+        except OSError as e:
+            return False, f"Failed to write backup {backup_path}: {e}", None
+
+        new_key_str = Fernet.generate_key().decode("utf-8")
+        new_fernet = Fernet(new_key_str.encode("utf-8"))
+        new_encrypted: Dict[str, str] = {}
+        for storage_key, plaintext in plaintext_by_storage_key.items():
+            enc = new_fernet.encrypt(plaintext.encode("utf-8"))
+            new_encrypted[storage_key] = base64.urlsafe_b64encode(enc).decode("utf-8")
+
+        security["master_key"] = new_key_str
+        security["encrypted_passwords"] = new_encrypted
+
+        tmp_path = f"{self.config_file}.tmp"
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=4)
+                f.write("\n")
+            os.replace(tmp_path, self.config_file)
+        except OSError as e:
+            if os.path.isfile(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+            return False, f"Failed to write updated state file: {e}", None
+
+        self._fernet = None
+        self._master_key = None
+        self._clear_session_cache()
+
+        env_set = bool(os.environ.get("ESCMD_MASTER_KEY"))
+        msg = (
+            f"Rotated master key; backup: {backup_path}. "
+            f"Re-encrypted {len(new_encrypted)} password(s)."
+        )
+        details: Dict[str, Any] = {
+            "state_path": str(config_path.resolve()),
+            "backup_path": backup_path,
+            "reencrypted_count": len(new_encrypted),
+            "storage_keys": sorted(new_encrypted.keys()),
+            "escmd_master_key_was_set": env_set,
+        }
+        return True, msg, details
 
 
 # Global instance for easy access

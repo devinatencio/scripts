@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help_handler.py
+# hypothesis_version: 6.151.12
+
+['action', 'actions', 'bold blue', 'bold cyan', 'bold green', 'bold magenta', 'bold red', 'border_style', 'command', 'config_manager', 'description', 'example', 'green', 'header', 'help_styles', 'subheader', 'success', 'table_styles', 'theme_manager', 'topic', 'usage', 'warning', 'white', 'yellow']

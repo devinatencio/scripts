@@ -13,6 +13,8 @@ from security.password_manager import PasswordManager
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
+from rich.prompt import Confirm
+from rich.markup import escape
 
 
 class PasswordCommands(BaseHandler):
@@ -27,6 +29,7 @@ class PasswordCommands(BaseHandler):
         location_config,
         current_location,
         logger=None,
+        state_file_path=None,
     ):
         """Initialize password handler with password manager."""
         super().__init__(
@@ -38,7 +41,8 @@ class PasswordCommands(BaseHandler):
             current_location,
             logger,
         )
-        self.password_manager = PasswordManager()
+        pm_path = state_file_path if state_file_path is not None else "escmd.json"
+        self.password_manager = PasswordManager(pm_path)
 
     def handle_store_password(self, args):
         """Handle store-password command"""
@@ -259,6 +263,167 @@ class PasswordCommands(BaseHandler):
         )
         self.console.print("\n")
         self.console.print(security_panel)
+
+    def handle_rotate_master_key(self, args):
+        """Handle rotate-master-key: backup state file, new Fernet key, re-encrypt passwords."""
+        assume_yes = bool(getattr(args, "yes", False))
+
+        err, preview = self.password_manager.get_rotate_master_key_preview()
+        if err:
+            self._show_rotate_master_key_error(err)
+            return
+
+        if not assume_yes:
+            self._show_rotate_master_key_confirmation(preview)
+            if not Confirm.ask(
+                "\n[yellow]Proceed with master key rotation?[/yellow]",
+                default=False,
+            ):
+                self._show_rotate_master_key_cancelled()
+                return
+
+        ok, msg, details = self.password_manager.rotate_master_key()
+        if not ok:
+            self._show_rotate_master_key_error(msg)
+            return
+
+        self._show_rotate_master_key_success(details)
+
+    def _show_rotate_master_key_error(self, message: str) -> None:
+        panel = Panel(
+            escape(message),
+            title="[bold red]🔐 Rotate master key — failed[/bold red]",
+            border_style="red",
+            padding=(1, 2),
+        )
+        self.console.print(panel)
+
+    def _show_rotate_master_key_cancelled(self) -> None:
+        panel = Panel(
+            "[yellow]No changes were made.[/yellow]",
+            title="[bold yellow]Rotate master key — cancelled[/bold yellow]",
+            border_style="yellow",
+            padding=(1, 2),
+        )
+        self.console.print(panel)
+
+    def _show_rotate_master_key_confirmation(self, preview: dict) -> None:
+        summary = Table(
+            show_header=True,
+            header_style="bold white on blue",
+            border_style="blue",
+            title="[bold cyan]Planned rotation[/bold cyan]",
+        )
+        summary.add_column("Item", style="bold yellow", min_width=22)
+        summary.add_column("Value", style="white")
+
+        summary.add_row("State file", preview["state_path"])
+        summary.add_row("Backup path", preview["backup_path"])
+        summary.add_row(
+            "Stored password entries",
+            str(preview["entry_count"]),
+        )
+        summary.add_row("Decrypt using", preview["decrypt_key_source"])
+
+        self.console.print()
+        intro = Panel(
+            "[dim]A new Fernet master key will be written to your state file. "
+            "All stored passwords will be decrypted with the current key and "
+            "re-encrypted with the new key.[/dim]",
+            title="[bold cyan]🔐 Rotate master key[/bold cyan]",
+            border_style="cyan",
+            padding=(1, 2),
+        )
+        self.console.print(intro)
+        self.console.print(summary)
+
+        keys = preview.get("storage_keys") or []
+        if keys:
+            keys_table = Table(
+                show_header=True,
+                header_style="bold white on blue",
+                border_style="bright_blue",
+                title=f"[bold cyan]Entries to re-encrypt ({len(keys)})[/bold cyan]",
+            )
+            keys_table.add_column("Storage key", style="green")
+            max_rows = 25
+            for k in keys[:max_rows]:
+                keys_table.add_row(k)
+            if len(keys) > max_rows:
+                keys_table.add_row(
+                    f"[dim]… and {len(keys) - max_rows} more[/dim]",
+                )
+            self.console.print()
+            self.console.print(keys_table)
+
+    def _show_rotate_master_key_success(self, details: dict) -> None:
+        result = Table(
+            show_header=True,
+            header_style="bold white on green",
+            border_style="green",
+            title="[bold green]Rotation complete[/bold green]",
+        )
+        result.add_column("Item", style="bold yellow", min_width=24)
+        result.add_column("Value", style="white")
+
+        result.add_row("Status", "[green]Success[/green]")
+        result.add_row("State file", details["state_path"])
+        result.add_row("Backup saved", details["backup_path"])
+        result.add_row(
+            "Entries re-encrypted",
+            str(details["reencrypted_count"]),
+        )
+        result.add_row(
+            "New master key",
+            "[dim]Written to[/dim] [cyan]security.master_key[/cyan] [dim]in the state file[/dim]",
+        )
+        result.add_row("Session password cache", "[cyan]Cleared[/cyan]")
+
+        self.console.print()
+        success_panel = Panel(
+            result,
+            title="[bold green]🔐 Master key rotated[/bold green]",
+            border_style="green",
+            padding=(1, 2),
+        )
+        self.console.print(success_panel)
+
+        if details.get("escmd_master_key_was_set"):
+            warn = Table.grid(padding=(0, 1))
+            warn.add_column(style="yellow")
+            warn.add_row(
+                "[bold]ESCMD_MASTER_KEY[/bold] is set in your environment. "
+                "It still holds the [bold]old[/bold] key until you update it."
+            )
+            warn.add_row(
+                "Either set it to the new value from [cyan]security.master_key[/cyan] in the state file, "
+                "or [bold]unset[/bold] ESCMD_MASTER_KEY so the file key is used."
+            )
+            env_panel = Panel(
+                warn,
+                title="[bold yellow]🔶  Environment variable[/bold yellow]",
+                border_style="yellow",
+                padding=(1, 2),
+            )
+            self.console.print()
+            self.console.print(env_panel)
+
+        keys = details.get("storage_keys") or []
+        if keys:
+            kt = Table(
+                show_header=True,
+                header_style="bold white on green",
+                border_style="green",
+                title="[bold green]Re-encrypted storage keys[/bold green]",
+            )
+            kt.add_column("Storage key", style="green")
+            max_rows = 25
+            for k in keys[:max_rows]:
+                kt.add_row(k)
+            if len(keys) > max_rows:
+                kt.add_row(f"[dim]… and {len(keys) - max_rows} more[/dim]")
+            self.console.print()
+            self.console.print(kt)
 
     def handle_migrate_to_env_key(self, args):
         """Handle migrate-to-env-key command"""

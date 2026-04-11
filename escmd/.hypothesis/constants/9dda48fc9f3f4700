@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/estop_help.py
+# hypothesis_version: 6.151.12
+
+['    interval: 30', '    top_indices: 20', '    top_nodes: 5', '  es_top:', '--interval SEC', '--top-indices N', '--top-nodes N', './escmd.py es-top', '15s refresh', 'Cluster Header', 'Combined flags', 'Index Hot List', 'Show top 10 nodes', 'Show top 20 indices', 'Specific cluster', 'Top Nodes', 'bold cyan', 'command', 'description', 'dim white', 'es-top', 'es_top.interval', 'es_top.top_indices', 'es_top.top_nodes', 'example', 'green', 'settings:', 'white']

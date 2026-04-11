@@ -549,8 +549,21 @@ class UtilityCommands(BaseCommand):
                         "message": "No cluster groups configured"
                     }
                 else:
-                    console.print("[yellow]ℹ️  No cluster groups configured[/yellow]")
-                    console.print("[dim]Add 'cluster_groups' section to escmd.yml to create logical cluster groupings[/dim]")
+                    from rich.text import Text
+                    styles = get_theme_styles(configuration_manager)
+                    border_style = styles.get('panel_styles', {}).get('border', 'blue')
+                    from rich.align import Align
+                    no_groups_text = Text.assemble(
+                        ("No cluster groups configured\n", "white"),
+                        ("Add 'cluster_groups' section to escmd.yml to create logical cluster groupings", "white"),
+                        justify="center",
+                    )
+                    console.print(Panel(
+                        Align.center(no_groups_text),
+                        title="[bold white] Cluster Groups[/bold white]",
+                        border_style=border_style,
+                        padding=(1, 2),
+                    ))
                     return {
                         "cluster_groups": {},
                         "total_groups": 0,

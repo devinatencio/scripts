@@ -115,6 +115,35 @@ class TestConfigurationManager:
         finally:
             os.unlink(invalid_yaml_file)
 
+    def test_canonical_cluster_name_resolves_short_prefix(self):
+        """Short location names map to the same canonical key as set-default."""
+        config_data = {
+            "servers": [
+                {
+                    "name": "aex20-glip",
+                    "hostname": "es.example",
+                    "port": 9200,
+                }
+            ]
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
+            yaml.dump(config_data, f)
+            config_file = f.name
+        try:
+            config_manager = ConfigurationManager(
+                config_file_path=config_file, state_file_path="/tmp/test_state.json"
+            )
+            assert (
+                config_manager.canonical_cluster_name_for_location("aex20")
+                == "aex20-glip"
+            )
+            assert (
+                config_manager.canonical_cluster_name_for_location("aex20-glip")
+                == "aex20-glip"
+            )
+        finally:
+            os.unlink(config_file)
+
     def test_config_with_credentials(self):
         """Test configuration handling with credentials."""
         config_data = {
@@ -183,3 +212,139 @@ class TestConfigurationManager:
         finally:
             # Restore permissions for cleanup
             os.chmod(temp_config_file, 0o644)
+
+    def test_auth_profile_resolves_username_dual_file(self):
+        """auth_profile maps to elastic_username via auth_profiles in main config."""
+        main = {
+            "settings": {"elastic_username": "global_default"},
+            "auth_profiles": {
+                "svc": {"elastic_username": "service_acct"},
+            },
+        }
+        servers = {
+            "servers": [
+                {
+                    "name": "with-profile",
+                    "hostname": "h1",
+                    "port": 9200,
+                    "auth_profile": "svc",
+                },
+                {"name": "no-profile", "hostname": "h2", "port": 9200},
+            ]
+        }
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yml", delete=False
+        ) as mf, tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as sf:
+            yaml.dump(main, mf)
+            yaml.dump(servers, sf)
+            main_path = mf.name
+            srv_path = sf.name
+        try:
+            cm = ConfigurationManager(
+                state_file_path="/tmp/escmd_test_state_auth_profiles.json",
+                main_config_path=main_path,
+                servers_config_path=srv_path,
+            )
+            assert cm._resolve_username(cm.servers_dict["with-profile"]) == "service_acct"
+            assert cm._resolve_username(cm.servers_dict["no-profile"]) == "global_default"
+        finally:
+            os.unlink(main_path)
+            os.unlink(srv_path)
+
+    def test_elastic_username_overrides_auth_profile(self):
+        """Per-server elastic_username wins over auth_profile."""
+        main = {
+            "settings": {"elastic_username": "global_default"},
+            "auth_profiles": {"svc": {"elastic_username": "service_acct"}},
+        }
+        servers = {
+            "servers": [
+                {
+                    "name": "c1",
+                    "hostname": "h1",
+                    "port": 9200,
+                    "auth_profile": "svc",
+                    "elastic_username": "explicit_user",
+                }
+            ]
+        }
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yml", delete=False
+        ) as mf, tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as sf:
+            yaml.dump(main, mf)
+            yaml.dump(servers, sf)
+            main_path = mf.name
+            srv_path = sf.name
+        try:
+            cm = ConfigurationManager(
+                state_file_path="/tmp/escmd_test_state_auth_profiles.json",
+                main_config_path=main_path,
+                servers_config_path=srv_path,
+            )
+            assert cm._resolve_username(cm.servers_dict["c1"]) == "explicit_user"
+        finally:
+            os.unlink(main_path)
+            os.unlink(srv_path)
+
+    def test_auth_profile_single_file_config(self):
+        """auth_profiles works in legacy single-file YAML."""
+        config_data = {
+            "settings": {"elastic_username": "fallback"},
+            "auth_profiles": {"p1": {"elastic_username": "from_profile"}},
+            "servers": [
+                {
+                    "name": "s1",
+                    "hostname": "h",
+                    "port": 9200,
+                    "auth_profile": "p1",
+                }
+            ],
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
+            yaml.dump(config_data, f)
+            path = f.name
+        try:
+            cm = ConfigurationManager(
+                config_file_path=path,
+                state_file_path="/tmp/escmd_test_state_auth_profiles.json",
+            )
+            assert cm._resolve_username(cm.servers_dict["s1"]) == "from_profile"
+        finally:
+            os.unlink(path)
+
+    def test_unknown_auth_profile_falls_back_to_global(self, capsys):
+        """Missing profile name triggers a warning and resolution continues."""
+        main = {
+            "settings": {"elastic_username": "global_fallback"},
+            "auth_profiles": {},
+        }
+        servers = {
+            "servers": [
+                {
+                    "name": "bad-profile",
+                    "hostname": "h",
+                    "port": 9200,
+                    "auth_profile": "does_not_exist",
+                }
+            ]
+        }
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yml", delete=False
+        ) as mf, tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as sf:
+            yaml.dump(main, mf)
+            yaml.dump(servers, sf)
+            main_path = mf.name
+            srv_path = sf.name
+        try:
+            cm = ConfigurationManager(
+                state_file_path="/tmp/escmd_test_state_auth_profiles.json",
+                main_config_path=main_path,
+                servers_config_path=srv_path,
+            )
+            u = cm._resolve_username(cm.servers_dict["bad-profile"])
+            assert u == "global_fallback"
+            err = capsys.readouterr().out
+            assert "Unknown auth_profile" in err
+        finally:
+            os.unlink(main_path)
+            os.unlink(srv_path)

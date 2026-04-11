@@ -125,6 +125,7 @@ servers:
     verify_certs: true
     elastic_authentication: true
     elastic_username: kibana_system
+    # Or: auth_profile: kibana_service  (define auth_profiles in escmd.yml in dual-file mode)
     elastic_password: password
     elastic_s3snapshot_repo: "production-snapshots"  # Default repository
 ```

@@ -94,12 +94,13 @@ Each server entry defines an Elasticsearch cluster:
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
 | `elastic_authentication` | boolean | ✅ | Enable authentication |
-| `elastic_username` | string | * | Username for authentication |
+| `elastic_username` | string | * | Username for authentication (explicit per server) |
+| `auth_profile` | string | ❌ | Name of a profile under **`auth_profiles`** in **`escmd.yml`** (dual-file) or single-file YAML; used when **`elastic_username`** is not set on this server |
 | `elastic_password` | string | * | Password for authentication |
 | `use_env_password` | boolean | ❌ | Use environment-based passwords |
 | `env` | string | ❌ | Environment key for password lookup |
 
-*Required when `elastic_authentication` is `true`
+**Note:** When **`elastic_authentication`** is **`true`**, you need a **resolved username** (from **`elastic_username`**, **`auth_profile`**, or defaults in **`escmd.json`** / **`settings`**) and a password via **`elastic_password`**, environment lookup, **`elastic_password_ref`**, or encrypted storage. Table cells marked **`*`** are conditionally required depending on which method you use.
 
 #### Optional Features
 
@@ -113,6 +114,50 @@ Each server entry defines an Elasticsearch cluster:
 | `read_timeout` | integer | Override global read timeout for this cluster |
 
 ## Authentication Methods
+
+### Auth profiles (shared inventory, local usernames)
+
+Use **`auth_profile`** when the same **`elastic_servers.yml`** is shared across people or environments but clusters need different *classes* of account (for example service user vs human operator). Profile **names** live in the shared server list; profile **definitions** (actual **`elastic_username`** values) live in **`escmd.yml`** (dual-file) or in the same file as **`servers:`** (single-file).
+
+**Dual-file:** define **`auth_profiles`** only in **`escmd.yml`** (or **`ESCMD_MAIN_CONFIG`**), not in **`elastic_servers.yml`**.
+
+```yaml
+# escmd.yml
+settings:
+  elastic_username: kibana_system
+
+auth_profiles:
+  kibana_service:
+    elastic_username: kibana_system
+  oncall_user:
+    elastic_username: jane.doe
+```
+
+```yaml
+# elastic_servers.yml
+servers:
+  - name: prod-observability
+    env: prod
+    hostname: es-prod.example.com
+    port: 9200
+    use_ssl: true
+    verify_certs: true
+    elastic_authentication: true
+    auth_profile: kibana_service
+    use_env_password: true
+
+  - name: prod-adhoc
+    env: prod
+    hostname: es-prod.example.com
+    port: 9200
+    use_ssl: true
+    verify_certs: true
+    elastic_authentication: true
+    auth_profile: oncall_user
+    use_env_password: true
+```
+
+**Resolution:** per-server **`elastic_username`** overrides **`auth_profile`**. Otherwise the effective username is taken from **`auth_profiles`**, then (if applicable) the single-user **`passwords[env]`** shortcut, then **`escmd.json`**, then **`settings.elastic_username`**. See **`docs/configuration/dual-file-config-guide.md`** (Auth profiles) for the full order and troubleshooting.
 
 ### Method 1: Direct Password Configuration
 

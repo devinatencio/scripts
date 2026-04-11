@@ -647,7 +647,7 @@ class TemplateRenderer:
 
         return self._create_themed_panel(
             info_text,
-            "ℹ️  Basic Information",
+            "🔵  Basic Information",
             "info"
         )
 
@@ -896,12 +896,12 @@ class TemplateRenderer:
         if self.style_system:
             panel = self.style_system.create_info_panel(
                 no_templates_text,
-                "ℹ️  Templates"
+                "🔵  Templates"
             )
         else:
             panel = self._create_themed_panel(
                 no_templates_text,
-                "ℹ️  Templates",
+                "🔵  Templates",
                 "info"
             )
         self.console.print(panel)

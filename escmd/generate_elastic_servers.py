@@ -326,7 +326,7 @@ class ElasticsearchServerGenerator:
                 self.existing_config = None
         else:
             self.console.print(
-                f"ℹ️  No existing configuration found at {self.output_file}",
+                f"🔵  No existing configuration found at {self.output_file}",
                 style="cyan",
             )
 

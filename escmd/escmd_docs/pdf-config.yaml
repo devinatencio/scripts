@@ -1,0 +1,32 @@
+# PDF bundle for escmd_docs/ (user manual chapters in order).
+# Build from repository root:
+#   pip install -r requirements-docs-pdf.txt
+#   python3 scripts/generate_docs_pdf.py -c escmd_docs/pdf-config.yaml
+
+document_title: escmd User Manual
+document_subtitle: Introduction, installation, configuration, and command usage
+
+output_path: escmd_docs/build/escmd-user-manual.pdf
+
+docs_directory: escmd_docs
+
+include_globs:
+  - README.md
+  - 01-introduction.md
+  - 02-installation.md
+  - 03-configuration.md
+  - 04-command-usage.md
+  - 05-esterm-and-output.md
+  - 06-workflows-reference.md
+
+exclude_globs: []
+
+markdown_extensions:
+  - fenced_code
+  - tables
+  - nl2br
+  - sane_lists
+
+strip_emoji: true
+
+fonts: {}

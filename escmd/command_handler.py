@@ -22,6 +22,7 @@ from handlers.themes_handler import ThemesHandler
 from handlers.password_handler import PasswordCommands
 from handlers.template_handler import TemplateHandler
 from handlers.action_handler import ActionHandler
+from handlers.estop_handler import EsTopHandler
 import os
 
 from configuration_manager import ConfigurationManager
@@ -185,6 +186,15 @@ class CommandHandler:
             current_location,
             logger,
         )
+        self.estop_handler = EsTopHandler(
+            es_client,
+            args,
+            console,
+            config_file,
+            location_config,
+            current_location,
+            logger,
+        )
 
         # Create handlers dictionary for tests compatibility
         # Map to the actual handlers that execute() uses for each command type
@@ -281,6 +291,9 @@ class CommandHandler:
             "migrate-to-env-key": lambda: self.password_handler.handle_migrate_to_env_key(
                 self.args
             ),
+            "rotate-master-key": lambda: self.password_handler.handle_rotate_master_key(
+                self.args
+            ),
             # Template management commands
             "templates": self.template_handler.handle_templates,  # Using handler
             "template": self.template_handler.handle_template,  # Using handler
@@ -294,6 +307,7 @@ class CommandHandler:
             # Action sequence commands
             "action": self.action_handler.handle_action,
             "repositories": self.snapshot_handler.handle_repositories,
+            "es-top": self.estop_handler.handle_es_top,
         }
 
         handler = command_handlers.get(self.args.command)

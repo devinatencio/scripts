@@ -48,14 +48,84 @@ def default_run_dir(cluster_slug: str, day_iso: str) -> Path:
     return default_watch_base_dir() / sanitize_cluster_slug(cluster_slug) / day_iso
 
 
-def resolve_cluster_slug(args: Any, config_manager: Any) -> str:
+def _raw_index_watch_location_slug(args: Any, config_manager: Any) -> str:
     loc = getattr(args, "locations", None)
     if loc and str(loc).strip():
         return str(loc).strip()
     cluster = getattr(args, "cluster", None)
     if cluster and str(cluster).strip():
         return str(cluster).strip()
-    return config_manager.get_default_cluster()
+    dc = config_manager.get_default_cluster()
+    if dc and str(dc).strip():
+        return str(dc).strip()
+    return "default"
+
+
+def index_watch_storage_slug(raw_slug: str, config_manager: Any) -> str:
+    """Canonical servers_dict key when resolvable; else a filesystem-safe raw slug."""
+    if not raw_slug or not str(raw_slug).strip():
+        return "unknown"
+    raw = str(raw_slug).strip()
+    canonical = config_manager.canonical_cluster_name_for_location(raw)
+    if canonical:
+        return canonical
+    return sanitize_cluster_slug(raw)
+
+
+def resolve_cluster_slug(args: Any, config_manager: Any) -> str:
+    """Slug used for index-watch paths; normalized to config key when possible."""
+    return index_watch_storage_slug(
+        _raw_index_watch_location_slug(args, config_manager), config_manager
+    )
+
+
+def _index_watch_sample_dir_candidates(raw: str, config_manager: Any) -> List[str]:
+    """Ordered directory slugs to try under index-watch (canonical, legacy short name, aliases)."""
+    primary = index_watch_storage_slug(raw, config_manager)
+    ordered: List[str] = []
+
+    def add(s: Optional[str]) -> None:
+        if s and str(s).strip() and s not in ordered:
+            ordered.append(s)
+
+    add(primary)
+    add(sanitize_cluster_slug(raw))
+    if "-" in primary:
+        add(primary.rsplit("-", 1)[0])
+    server_config = config_manager.get_server_config(raw)
+    if not server_config:
+        server_config = config_manager.get_server_config(primary)
+    if server_config:
+        for name, cfg in config_manager.servers_dict.items():
+            if cfg == server_config:
+                add(name)
+    return ordered
+
+
+def resolve_default_watch_sample_dir(
+    args: Any, config_manager: Any, day_iso: str
+) -> Tuple[Path, List[Dict[str, Any]]]:
+    """
+    Default sample directory when --dir is not set.
+
+    Prefer the canonical config key directory, then legacy paths (short -l slug,
+    hyphen prefix of the canonical name, or other servers_dict keys for the same
+    host config) so reports still find samples from older escmd versions.
+    """
+    raw = _raw_index_watch_location_slug(args, config_manager)
+    slug_order = _index_watch_sample_dir_candidates(raw, config_manager)
+    chosen: Optional[Path] = None
+    samples: List[Dict[str, Any]] = []
+    for slug in slug_order:
+        d = default_run_dir(slug, day_iso)
+        samples = load_samples(d)
+        if samples:
+            chosen = d
+            break
+    if chosen is None:
+        chosen = default_run_dir(slug_order[0], day_iso)
+        samples = load_samples(chosen)
+    return chosen, samples
 
 
 def write_run_metadata(
@@ -157,6 +227,59 @@ def _parse_ts(iso_s: str) -> Optional[datetime]:
         return None
 
 
+def _linear_quantile(sorted_vals: List[float], q: float) -> float:
+    """Linear interpolation quantile; q in [0, 1]."""
+    if not sorted_vals:
+        return 0.0
+    n = len(sorted_vals)
+    if n == 1:
+        return float(sorted_vals[0])
+    q = max(0.0, min(1.0, float(q)))
+    pos = (n - 1) * q
+    lo = int(pos)
+    hi = min(lo + 1, n - 1)
+    w = pos - lo
+    return sorted_vals[lo] * (1.0 - w) + sorted_vals[hi] * w
+
+
+def _interval_docs_rates_per_index(samples: List[Dict[str, Any]]) -> Dict[str, List[float]]:
+    """For each adjacent sample pair, docs/s for indices present in both."""
+    by_index: Dict[str, List[float]] = {}
+    for i in range(len(samples) - 1):
+        a = samples[i]
+        b = samples[i + 1]
+        t0 = _parse_ts(str(a.get("captured_at", "")))
+        t1 = _parse_ts(str(b.get("captured_at", "")))
+        if not t0 or not t1:
+            continue
+        elapsed = (t1 - t0).total_seconds()
+        if elapsed <= 0:
+            elapsed = 1.0
+        m0 = _index_map(a.get("indices") or [])
+        m1 = _index_map(b.get("indices") or [])
+        for name in sorted(set(m0.keys()) & set(m1.keys())):
+            rate = float(_row_docs(m1[name]) - _row_docs(m0[name])) / elapsed
+            by_index.setdefault(str(name), []).append(rate)
+    return by_index
+
+
+def _interval_rate_summary(rates: List[float]) -> Dict[str, Any]:
+    if not rates:
+        return {
+            "docs_per_sec_interval_median": None,
+            "docs_per_sec_interval_p90": None,
+            "docs_per_sec_interval_max": None,
+            "interval_rate_count": 0,
+        }
+    s = sorted(rates)
+    return {
+        "docs_per_sec_interval_median": round(_linear_quantile(s, 0.5), 6),
+        "docs_per_sec_interval_p90": round(_linear_quantile(s, 0.9), 6),
+        "docs_per_sec_interval_max": round(float(s[-1]), 6),
+        "interval_rate_count": len(rates),
+    }
+
+
 def _row_docs(entry: Dict[str, Any]) -> int:
     raw = entry.get("docs.count", 0)
     try:
@@ -196,6 +319,7 @@ def analyze_watch_trends(
     hot_ratio: float = 2.0,
     min_peers: int = 1,
     docs_peer_ratio: float = 5.0,
+    rate_stats: str = "auto",
 ) -> Dict[str, Any]:
     """
     Compare last sample to first; compute deltas and optional HOT vs rollover-group median rate.
@@ -206,6 +330,11 @@ def analyze_watch_trends(
 
     Also compares last-sample doc count to leave-one-out median doc count among siblings
     (same idea as indices-analyze) via peer_median_docs_count and docs_vs_peer_docs_ratio.
+
+    Per-interval docs/s (adjacent samples) yields median / p90 / max when multiple
+    intervals exist. rate_stats: \"auto\" uses interval-primary display when len(samples)>=3,
+    \"span\" keeps a single full-window docs/s column, \"intervals\" always uses med/p90/max.
+    HOT and rate/med still use full-span docs/s.
     """
     if len(samples) < 2:
         return {
@@ -229,6 +358,13 @@ def analyze_watch_trends(
     elapsed = (t1 - t0).total_seconds()
     if elapsed <= 0:
         elapsed = 1.0
+
+    rs = str(rate_stats or "auto").strip().lower()
+    if rs not in ("auto", "span", "intervals"):
+        rs = "auto"
+    use_interval_primary = rs == "intervals" or (rs == "auto" and len(samples) >= 3)
+
+    interval_rates_by_index = _interval_docs_rates_per_index(samples)
 
     m0 = _index_map(first.get("indices") or [])
     m1 = _index_map(last.get("indices") or [])
@@ -329,19 +465,34 @@ def analyze_watch_trends(
         row["hot_reason"] = None
         row["rate_vs_peer_median"] = round(ratio, 3)
 
-    raw_rows.sort(key=lambda r: r["docs_per_sec"], reverse=True)
+    for row in raw_rows:
+        name = str(row["index"])
+        ir = _interval_rate_summary(interval_rates_by_index.get(name, []))
+        row.update(ir)
+
+    def _sort_key(r: Dict[str, Any]) -> float:
+        if use_interval_primary:
+            med = r.get("docs_per_sec_interval_median")
+            if med is not None:
+                return float(med)
+        return float(r.get("docs_per_sec", 0.0))
+
+    raw_rows.sort(key=_sort_key, reverse=True)
 
     summary = {
         "sample_count": len(samples),
         "first_captured_at": first.get("captured_at"),
         "last_captured_at": last.get("captured_at"),
         "elapsed_seconds": round(elapsed, 3),
+        "interval_count": max(0, len(samples) - 1),
         "indices_compared": len(common),
         "rows_shown": len(raw_rows),
         "min_docs_delta": min_docs_delta,
         "hot_ratio": hot_ratio,
         "min_peers": min_peers,
         "docs_peer_ratio": docs_peer_ratio,
+        "rate_stats": rs,
+        "rate_stats_primary": "intervals" if use_interval_primary else "span",
     }
 
     return {"summary": summary, "rows": raw_rows}
@@ -409,14 +560,14 @@ def run_indices_watch_report(args: Any, console: Any, config_manager: Any) -> No
 
     out_dir_arg = getattr(args, "report_sample_dir", None)
     day_iso = getattr(args, "date", None) or utc_today_iso()
-    cluster_slug = resolve_cluster_slug(args, config_manager)
 
     if out_dir_arg and str(out_dir_arg).strip():
         sample_dir = Path(str(out_dir_arg).strip()).expanduser()
+        samples = load_samples(sample_dir)
     else:
-        sample_dir = default_run_dir(cluster_slug, day_iso)
-
-    samples = load_samples(sample_dir)
+        sample_dir, samples = resolve_default_watch_sample_dir(
+            args, config_manager, day_iso
+        )
     min_docs_delta = int(getattr(args, "min_docs_delta", 0) or 0)
     hot_ratio = float(getattr(args, "hot_ratio", 2.0) or 2.0)
     min_peers = int(getattr(args, "min_peers", 1) or 1)
@@ -424,12 +575,15 @@ def run_indices_watch_report(args: Any, console: Any, config_manager: Any) -> No
     top_n = getattr(args, "top", None)
     fmt = getattr(args, "format", "table") or "table"
 
+    rate_stats_arg = getattr(args, "watch_rate_stats", None) or "auto"
+
     result = analyze_watch_trends(
         samples,
         min_docs_delta=min_docs_delta,
         hot_ratio=hot_ratio,
         min_peers=min_peers,
         docs_peer_ratio=docs_peer_ratio,
+        rate_stats=rate_stats_arg,
     )
 
     if fmt == "json":
@@ -462,12 +616,17 @@ def run_indices_watch_report(args: Any, console: Any, config_manager: Any) -> No
     if top_n is not None and int(top_n) > 0:
         rows = rows[: int(top_n)]
 
+    show_rate_med = any(r.get("rate_vs_peer_median") is not None for r in rows)
+
     border_style = theme_manager.get_themed_style(
         "table_styles", "border_style", "bright_magenta"
     )
+    primary = summary.get("rate_stats_primary", "span")
     sub = (
         f"{sample_dir} | samples={summary.get('sample_count')} | "
-        f"elapsed≈{summary.get('elapsed_seconds')}s | rows={len(rows)}"
+        f"intervals={summary.get('interval_count', 0)} | "
+        f"elapsed≈{summary.get('elapsed_seconds')}s | "
+        f"rates={primary} | rows={len(rows)}"
     )
     title_panel = Panel(
         Text("Index ingest watch report", style="bold", justify="center"),
@@ -488,19 +647,28 @@ def run_indices_watch_report(args: Any, console: Any, config_manager: Any) -> No
         console.print()
         return
 
+    interval_primary = summary.get("rate_stats_primary") == "intervals"
+    sort_hint = "med docs/s" if interval_primary else "span docs/s"
     table = style_system.create_standard_table(
-        title="Non-zero doc Δ only (sorted by docs/s)",
+        title=f"Non-zero doc Δ only (sorted by {sort_hint})",
         style_variant="dashboard",
     )
     style_system.add_themed_column(table, "Hot", "status", justify="center", width=6)
     style_system.add_themed_column(table, "Index", "name", overflow="fold", min_width=32)
     style_system.add_themed_column(table, "Δ docs", "count", justify="right", width=14)
-    style_system.add_themed_column(table, "docs/s", "count", justify="right", width=12)
+    if interval_primary:
+        style_system.add_themed_column(table, "med/s", "count", justify="right", width=10)
+        style_system.add_themed_column(table, "p90/s", "count", justify="right", width=10)
+        style_system.add_themed_column(table, "max/s", "count", justify="right", width=10)
+        style_system.add_themed_column(table, "span/s", "count", justify="right", width=10)
+    else:
+        style_system.add_themed_column(table, "docs/s", "count", justify="right", width=12)
     style_system.add_themed_column(table, "Δ store", "size", justify="right", width=12)
     style_system.add_themed_column(table, "docs", "count", justify="right", width=11)
     style_system.add_themed_column(table, "med peer", "count", justify="right", width=11)
     style_system.add_themed_column(table, "docs/med", "percentage", justify="right", width=9)
-    style_system.add_themed_column(table, "rate/med", "percentage", justify="right", width=9)
+    if show_rate_med:
+        style_system.add_themed_column(table, "rate/med", "percentage", justify="right", width=9)
 
     hot_ratio_arg = float(getattr(args, "hot_ratio", 2.0) or 2.0)
     docs_peer_ratio_arg = float(getattr(args, "docs_peer_ratio", 5.0) or 5.0)
@@ -513,6 +681,7 @@ def run_indices_watch_report(args: Any, console: Any, config_manager: Any) -> No
         hot_mark = "".join(marks)
         rate_vs = r.get("rate_vs_peer_median")
         rate_s = f"{rate_vs}x" if rate_vs is not None else "—"
+        rate_cells: Tuple[str, ...] = (rate_s,) if show_rate_med else ()
         doc_vs = r.get("docs_vs_peer_docs_ratio")
         doc_vs_s = f"{doc_vs}x" if doc_vs is not None else "—"
         row_style = None
@@ -529,28 +698,62 @@ def run_indices_watch_report(args: Any, console: Any, config_manager: Any) -> No
         ):
             row_style = "cyan"
 
-        table.add_row(
-            hot_mark,
-            r.get("index", ""),
-            f"{r.get('delta_docs', 0):,}",
-            f"{r.get('docs_per_sec', 0):.2f}",
-            table_renderer.format_bytes(int(r.get("delta_store_bytes", 0))),
-            format_doc_count_compact(int(r.get("docs_end", 0))),
-            format_doc_count_compact(r.get("peer_median_docs_count")),
-            doc_vs_s,
-            rate_s,
-            style=row_style,
-        )
+        def _fmt_rate(v: Any) -> str:
+            if v is None:
+                return "—"
+            return f"{float(v):.2f}"
+
+        if interval_primary:
+            table.add_row(
+                hot_mark,
+                r.get("index", ""),
+                f"{r.get('delta_docs', 0):,}",
+                _fmt_rate(r.get("docs_per_sec_interval_median")),
+                _fmt_rate(r.get("docs_per_sec_interval_p90")),
+                _fmt_rate(r.get("docs_per_sec_interval_max")),
+                f"{r.get('docs_per_sec', 0):.2f}",
+                table_renderer.format_bytes(int(r.get("delta_store_bytes", 0))),
+                format_doc_count_compact(int(r.get("docs_end", 0))),
+                format_doc_count_compact(r.get("peer_median_docs_count")),
+                doc_vs_s,
+                *rate_cells,
+                style=row_style,
+            )
+        else:
+            table.add_row(
+                hot_mark,
+                r.get("index", ""),
+                f"{r.get('delta_docs', 0):,}",
+                f"{r.get('docs_per_sec', 0):.2f}",
+                table_renderer.format_bytes(int(r.get("delta_store_bytes", 0))),
+                format_doc_count_compact(int(r.get("docs_end", 0))),
+                format_doc_count_compact(r.get("peer_median_docs_count")),
+                doc_vs_s,
+                *rate_cells,
+                style=row_style,
+            )
 
     console.print()
     console.print(title_panel)
     console.print()
     console.print(table)
     console.print()
-    console.print(
-        "[dim]docs / med peer = last-sample doc count vs leave-one-out median doc count among "
+    foot = (
+        "docs / med peer = last-sample doc count vs leave-one-out median doc count among "
         "other backing indices in the same rollover series (like indices-analyze). docs/med is "
-        "that ratio; ⚠ when ≥ --docs-peer-ratio (default 5). rate/med is docs/s vs median peer "
-        "docs/s; 🔥 when ≥ --hot-ratio. Negative Δ store is normal (merges/compaction).[/dim]"
+        "that ratio; ⚠ when ≥ --docs-peer-ratio (default 5). Negative Δ store is normal "
+        "(merges/compaction)."
     )
+    if show_rate_med:
+        foot += (
+            " rate/med = your span docs/s ÷ median peer span docs/s in that series; "
+            "🔥 when ≥ --hot-ratio."
+        )
+    if interval_primary:
+        foot += (
+            " med/s, p90/s, max/s = distribution of per-interval docs/s between adjacent samples; "
+            "span/s = first-to-last window. With ≥3 samples, --rate-stats auto shows interval stats "
+            "(override: span | intervals)."
+        )
+    console.print(f"[dim]{foot}[/dim]")
     console.print()

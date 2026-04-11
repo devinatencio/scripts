@@ -640,6 +640,7 @@ class InteractiveHelpSystem:
         setup_text.append("  store-password cluster-name  # Store encrypted password\n", style="cyan")
         setup_text.append("  list-stored-passwords        # List stored passwords\n", style="cyan")
         setup_text.append("  generate-master-key          # Generate encryption key\n", style="cyan")
+        setup_text.append("  rotate-master-key            # New key + re-encrypt (backs up .old)\n", style="cyan")
 
         panel = Panel(setup_text, title="🔩 Setup & Configuration",
                      border_style="blue", padding=(1, 2))

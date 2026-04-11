@@ -61,10 +61,27 @@ class LocationsDataCollector:
                 resolved_username = configuration_manager._resolve_username(config)
                 server_username = config.get('elastic_username', '')
                 json_username = configuration_manager.get_elastic_username_from_json()
-                
+                profile_name = config.get('auth_profile')
+                if isinstance(profile_name, str):
+                    profile_name = profile_name.strip()
+                profile_username = None
+                if profile_name:
+                    prof = configuration_manager.auth_profiles.get(profile_name)
+                    if isinstance(prof, dict):
+                        pu = prof.get('elastic_username')
+                        if pu is not None:
+                            profile_username = pu.strip() if isinstance(pu, str) else pu
+
                 if server_username and resolved_username == server_username:
                     username_display = f"{server_username} (server)"
                     username = server_username
+                elif (
+                    profile_username
+                    and resolved_username == profile_username
+                    and not server_username
+                ):
+                    username_display = f"{resolved_username} (profile: {profile_name})"
+                    username = resolved_username
                 elif json_username and resolved_username == json_username:
                     username_display = f"{json_username} (JSON)"
                     username = json_username
@@ -125,6 +142,7 @@ class LocationsDataCollector:
                 'error': f'Location "{location_name}" not found'
             }
 
+        resolved_u = configuration_manager._resolve_username(server_config)
         return {
             'found': True,
             'location_name': location_name,
@@ -134,7 +152,7 @@ class LocationsDataCollector:
             'environment': server_config.get('env', 'Unknown'),
             'use_ssl': server_config.get('use_ssl', False),
             'verify_certs': server_config.get('verify_certs', False),
-            'username': server_config.get('elastic_username', configuration_manager.default_settings.get('elastic_username', '')),
+            'username': resolved_u or '',
             'is_default': location_name == configuration_manager.get_default_cluster(),
             'raw_config': server_config
         }
@@ -280,7 +298,9 @@ class LocationsDataCollector:
         if location_config.get('use_ssl', False) and not location_config.get('verify_certs', False):
             warnings.append('SSL enabled but certificate verification disabled')
 
-        if not location_config.get('elastic_username'):
+        ap = location_config.get('auth_profile')
+        has_auth_profile = isinstance(ap, str) and ap.strip()
+        if not location_config.get('elastic_username') and not has_auth_profile:
             warnings.append('No username configured - may require authentication')
 
         return {

@@ -8,7 +8,7 @@ This module handles index-related operations including:
 - Index lifecycle management
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Any, Callable, Dict, List, Optional
 from .base_command import BaseCommand
 
 
@@ -95,12 +95,19 @@ class IndicesCommands(BaseCommand):
         """
         return self.list_indices_stats(pattern, status)
 
-    def delete_indices(self, indice_data: List[str]) -> Dict[str, Any]:
+    def delete_indices(
+        self,
+        indice_data: List[str],
+        *,
+        on_progress: Optional[Callable[[int, int, str], None]] = None,
+    ) -> Dict[str, Any]:
         """
         Delete multiple indices.
 
         Args:
             indice_data: List of index names to delete
+            on_progress: Optional callback invoked as (1-based index, total, name)
+                before each deletion.
 
         Returns:
             dict: Deletion results
@@ -111,7 +118,10 @@ class IndicesCommands(BaseCommand):
             'total_requested': len(indice_data)
         }
 
-        for index_name in indice_data:
+        total = len(indice_data)
+        for i, index_name in enumerate(indice_data, start=1):
+            if on_progress is not None:
+                on_progress(i, total, index_name)
             try:
                 self.es_client.es.indices.delete(index=index_name)
                 results['successful_deletions'].append(index_name)
@@ -459,7 +469,7 @@ class IndicesCommands(BaseCommand):
             no_data_panel = style_system.create_info_panel(
                 "No indices found in this cluster.\n\nThis could mean:\n• The cluster has no indices\n• Connection issues\n• Insufficient permissions",
                 "Index Information",
-                "ℹ️"
+                "🔵"
             )
             console.print(no_data_panel)
             return
@@ -752,10 +762,15 @@ def list_indices_stats(es_client, pattern: Optional[str] = None, status: Optiona
     indices_cmd = IndicesCommands(es_client)
     return indices_cmd.list_indices_stats(pattern, status)
 
-def delete_indices(es_client, indice_data: List[str]) -> Dict[str, Any]:
+def delete_indices(
+    es_client,
+    indice_data: List[str],
+    *,
+    on_progress: Optional[Callable[[int, int, str], None]] = None,
+) -> Dict[str, Any]:
     """Backward compatibility function for existing code."""
     indices_cmd = IndicesCommands(es_client)
-    return indices_cmd.delete_indices(indice_data)
+    return indices_cmd.delete_indices(indice_data, on_progress=on_progress)
 
 def get_all_index_settings(es_client) -> Dict[str, Any]:
     """Backward compatibility function for existing code."""

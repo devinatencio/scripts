@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/display/../processors/statistics_processor.py
+# hypothesis_version: 6.151.12
+
+[0.0, 1024.0, 100, 1024, '0', '0B', 'B', 'G', 'GB', 'K', 'KB', 'M', 'MB', 'P', 'PB', 'T', 'TB', '^([\\d.]+)([A-Z]*)$', 'average', 'average_formatted', 'count', 'max', 'max_formatted', 'mean', 'median', 'min', 'min_formatted', 'sum', 'total', 'total_formatted', 'unknown']

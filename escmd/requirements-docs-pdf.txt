@@ -1,0 +1,5 @@
+# Optional: PDF bundle of docs/ (scripts/generate_docs_pdf.py)
+fpdf2>=2.8.0
+markdown>=3.5
+PyYAML>=6.0.1
+beautifulsoup4>=4.12.0

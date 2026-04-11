@@ -74,6 +74,9 @@ class ConfigurationManager:
         self.passwords = (
             self.main_config.get("passwords", {}) if self.main_config else {}
         )
+        self.auth_profiles = self._normalize_auth_profiles(
+            (self.main_config or {}).get("auth_profiles")
+        )
 
         # Load servers configuration
         self.servers_config = self._read_yaml_file(self.servers_config_path)
@@ -138,6 +141,28 @@ class ConfigurationManager:
         )
         self.cluster_groups = self._normalize_cluster_groups(self.cluster_groups_raw)
         self.passwords = self.config.get("passwords", {}) if self.config else {}
+        self.auth_profiles = self._normalize_auth_profiles(
+            (self.config or {}).get("auth_profiles")
+        )
+
+    def _normalize_auth_profiles(self, raw):
+        """
+        Normalize auth_profiles from YAML to a dict of profile_name -> settings dict.
+
+        Invalid or non-dict entries are skipped.
+        """
+        if not raw or not isinstance(raw, dict):
+            return {}
+        out = {}
+        for name, body in raw.items():
+            if not name or not isinstance(name, str):
+                continue
+            key = name.strip()
+            if not key:
+                continue
+            if isinstance(body, dict):
+                out[key] = body
+        return out
 
     def _read_yaml_file(self, file_path=None):
         """
@@ -263,6 +288,36 @@ class ConfigurationManager:
             int: Number of ILM unmanaged indices to show before truncating (defaults to 10)
         """
         return self.default_settings.get("ilm_display_limit", 10)
+
+    def get_estop_top_indices(self):
+        """
+        Get the es-top index hot list display limit from configuration.
+
+        Returns:
+            int: Number of top active indices to show in es-top (defaults to 10)
+        """
+        estop_config = (self.main_config or {}).get("es_top", {})
+        return estop_config.get("top_indices", 10)
+
+    def get_estop_top_nodes(self):
+        """
+        Get the es-top node panel display limit from configuration.
+
+        Returns:
+            int: Number of top nodes to show in es-top (defaults to 5)
+        """
+        estop_config = (self.main_config or {}).get("es_top", {})
+        return estop_config.get("top_nodes", 5)
+
+    def get_estop_interval(self):
+        """
+        Get the es-top default refresh interval from configuration.
+
+        Returns:
+            int: Refresh interval in seconds (defaults to 30, minimum 10)
+        """
+        estop_config = (self.main_config or {}).get("es_top", {})
+        return max(10, estop_config.get("interval", 30))
 
     def get_display_theme(self):
         """
@@ -431,9 +486,10 @@ class ConfigurationManager:
 
         Priority order:
         1. Server-level username (elastic_username in server config)
-        2. Environment-based username (from environment config)
-        3. JSON state file username (elastic_username in escmd.json)
-        4. Default username from settings (elastic_username in escmd.yml)
+        2. Auth profile username (auth_profile on server -> auth_profiles in config)
+        3. Environment-based username (from environment config)
+        4. JSON state file username (elastic_username in escmd.json)
+        5. Default username from settings (elastic_username in escmd.yml)
 
         Args:
             server_config (dict): Server configuration dictionary
@@ -446,7 +502,24 @@ class ConfigurationManager:
         if server_username:
             return server_username
 
-        # Option 2: Environment-based username
+        # Option 2: Auth profile (portable cluster label -> username map in escmd.yml)
+        profile_key = server_config.get("auth_profile")
+        if isinstance(profile_key, str):
+            profile_key = profile_key.strip()
+        if profile_key:
+            prof = self.auth_profiles.get(profile_key)
+            if prof is None:
+                print(
+                    f"Warning: Unknown auth_profile '{profile_key}' (not defined under auth_profiles:)."
+                )
+            elif isinstance(prof, dict):
+                u = prof.get("elastic_username")
+                if u is not None:
+                    u = u.strip() if isinstance(u, str) else u
+                    if u:
+                        return u
+
+        # Option 3: Environment-based username
         env = server_config.get("config_password", server_config.get("env"))
         if env and env in self.passwords:
             # Check if environment has usernames defined
@@ -456,7 +529,7 @@ class ConfigurationManager:
                 username = list(env_passwords.keys())[0]
                 return username
 
-        # Option 3: JSON state file username (new priority level)
+        # Option 4: JSON state file username
         try:
             if os.path.exists(self.state_file_path):
                 with open(self.state_file_path, "r") as file:
@@ -468,7 +541,7 @@ class ConfigurationManager:
             # Ignore errors reading state file
             pass
 
-        # Option 4: Default username from settings (lowest priority)
+        # Option 5: Default username from settings (lowest priority)
         return self.default_settings.get("elastic_username", None)
 
     def get_server_config(self, location):
@@ -513,6 +586,28 @@ class ConfigurationManager:
             return matching_servers[0][1]
 
         # If multiple matches or no matches found, return None
+        return None
+
+    def canonical_cluster_name_for_location(self, location):
+        """
+        Return the servers_dict key for a location after alias / short-name resolution.
+
+        This matches how set-default stores the default: the first key in servers_dict
+        whose server entry equals get_server_config(location). Use for stable paths
+        (e.g. index-watch) regardless of whether the user passed a short name or the
+        full cluster key.
+        """
+        if location is None:
+            return None
+        loc = str(location).strip()
+        if not loc:
+            return None
+        server_config = self.get_server_config(loc)
+        if not server_config:
+            return None
+        for name, config in self.servers_dict.items():
+            if config == server_config:
+                return name
         return None
 
     def get_default_cluster(self):
@@ -718,7 +813,7 @@ class ConfigurationManager:
             # No groups configured
             no_groups_table = Table.grid(padding=(0, 1))
             no_groups_table.add_column(style="dim white", justify="center")
-            no_groups_table.add_row("ℹ️  No cluster groups configured")
+            no_groups_table.add_row("🔵  No cluster groups configured")
             no_groups_table.add_row(
                 "Add 'cluster_groups' section to elastic_servers.yml"
             )

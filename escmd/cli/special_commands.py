@@ -262,6 +262,7 @@ def _get_static_command_descriptions():
         "locations": "Display All Configured Locations",
         "masters": "List ES Master nodes",
         "migrate-to-env-key": "Migrate from file-based master key to environment variable",
+        "rotate-master-key": "Back up state file, new master key, re-encrypt stored passwords",
         "nodes": "List Elasticsearch nodes",
         "ping": "Check ES Connection",
         "recovery": "List Recovery Jobs",

@@ -33,7 +33,7 @@ settings:
     confirmation_required: true
   # Elasticsearch Creds
   elastic_username: kibana_system
-
+  
 # Logical groupings of clusters for easier management
   test:
     description: "Development and Testing"
@@ -73,6 +73,12 @@ metrics:
     us:
       endpoint: http://influxdb.us.example.com:8086
       database: elk-stats
+
+# es-top live dashboard defaults
+es_top:
+  interval: 30       # refresh interval in seconds (minimum 10)
+  top_nodes: 5       # number of nodes to show in node panel
+  top_indices: 10    # number of indices to show in hot list
 
 # Centralized password management by environment
 # Format: passwords.<env>.<username>: <password>

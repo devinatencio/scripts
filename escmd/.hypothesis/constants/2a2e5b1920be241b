@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/allocation_handler.py
+# hypothesis_version: 6.151.12
+
+['*', ',', 'Cancelled', 'ERROR', 'Error', 'Info', 'RESET', 'SUCCESS', 'Success', 'WARNING', '_name', 'add', 'all', 'allocation', 'allocation_action', 'blue', 'bold white', 'bold yellow', 'cluster', 'disable', 'enable', 'exclude', 'exclude_action', 'explain', 'format', 'green', 'hostname', 'index', 'json', 'p', 'persistent', 'primaries', 'primary', 'prirep', 'red', 'remove', 'reset', 'routing', 'shard', 'table', 'transient', 'white', 'yellow', 'yes_i_really_mean_it', '🔵  Info']

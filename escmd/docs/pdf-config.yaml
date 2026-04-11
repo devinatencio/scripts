@@ -1,0 +1,54 @@
+# Configuration for scripts/generate_docs_pdf.py
+#
+# What is included: end-user documentation (configuration, commands, guides,
+# features, reference, workflows, themes, release notes). Raw JSON under
+# reference/ is omitted (policy samples belong beside the ILM guides, not as
+# standalone PDF pages). Internal change logs under development/ and
+# improvements/ are omitted (implementation notes and duplicate narrative vs
+# changelog/releases). VERSION_* release manifests are omitted (file lists,
+# not readable documentation).
+
+document_title: escmd documentation
+document_subtitle: Consolidated Markdown from docs/ (user-facing material)
+
+# Written relative to the repository root (directory containing escmd.py).
+output_path: docs/build/escmd-documentation.pdf
+
+# Root folder that holds Markdown sources (relative to repository root).
+docs_directory: docs
+
+# Glob patterns are relative to docs_directory. Order controls merge order;
+# later patterns append files not already included.
+include_globs:
+  - README.md
+  - environment_metrics.md
+  - configuration/*.md
+  - commands/*.md
+  - guides/*.md
+  - features/*.md
+  - reference/*.md
+  - reference/dangling/*.md
+  - workflows/*.md
+  - themes/*.md
+  - releases/*.md
+
+# Paths relative to docs_directory. Uses pathlib match rules (** supported).
+exclude_globs:
+  - development/**
+  - improvements/**
+  - reference/*.json
+  - releases/VERSION*.md
+
+# Passed to the Python markdown package.
+markdown_extensions:
+  - fenced_code
+  - tables
+  - nl2br
+  - sane_lists
+
+# Replace common emoji with ASCII so PDF fonts do not warn about missing glyphs.
+strip_emoji: true
+
+# Optional TTF overrides (repository-relative or absolute paths). When unset,
+# the script tries common OS locations (Arial Unicode, DejaVu Sans).
+fonts: {}

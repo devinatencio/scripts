@@ -140,6 +140,9 @@ servers:
 - **[Troubleshooting Guide](docs/reference/troubleshooting.md)** - Common issues and solutions
 - **[Changelog](docs/reference/changelog.md)** - Version history and updates
 
+### 📄 PDF user manual
+- **[escmd_docs/](escmd_docs/README.md)** - Linear manual (intro, install, config, commands); build with `python3 scripts/generate_docs_pdf.py -c escmd_docs/pdf-config.yaml`
+
 ## 💡 Common Use Cases
 
 ### Daily Operations
