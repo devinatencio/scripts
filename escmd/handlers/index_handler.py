@@ -1327,6 +1327,7 @@ class IndexHandler(BaseHandler):
     def handle_indices_watch_collect(self):
         """Periodically snapshot index stats to JSON files (multi-host retry)."""
         import signal
+        import sys
         import time
         from datetime import datetime, timezone
         from pathlib import Path
@@ -1335,6 +1336,7 @@ class IndexHandler(BaseHandler):
             default_run_dir,
             index_watch_storage_slug,
             list_indices_stats_with_failover,
+            pick_or_create_session_dir,
             save_sample_file,
             utc_today_iso,
             write_run_metadata,
@@ -1356,20 +1358,43 @@ class IndexHandler(BaseHandler):
         )
         collect_out = getattr(self.args, "collect_output_dir", None)
         day_iso = utc_today_iso()
+        new_session = getattr(self.args, "new_session", False) or False
+        join_latest = getattr(self.args, "join_latest", False) or False
+        label = getattr(self.args, "label", None)
+
         if collect_out and str(collect_out).strip():
             out_dir = Path(str(collect_out).strip()).expanduser()
+            out_dir.mkdir(parents=True, exist_ok=True)
+            write_run_metadata(
+                out_dir,
+                cluster=cluster,
+                interval_seconds=interval,
+                duration_seconds=duration,
+                pattern=pattern,
+                status=status,
+            )
         else:
-            out_dir = default_run_dir(cluster, day_iso)
-
-        out_dir.mkdir(parents=True, exist_ok=True)
-        write_run_metadata(
-            out_dir,
-            cluster=cluster,
-            interval_seconds=interval,
-            duration_seconds=duration,
-            pattern=pattern,
-            status=status,
-        )
+            out_dir, is_new = pick_or_create_session_dir(
+                cluster,
+                day_iso,
+                new_session=new_session,
+                join_latest=join_latest,
+                label=label,
+                console=self.console,
+                is_tty=sys.stdin.isatty(),
+            )
+            out_dir.mkdir(parents=True, exist_ok=True)
+            if is_new:
+                write_run_metadata(
+                    out_dir,
+                    cluster=cluster,
+                    interval_seconds=interval,
+                    duration_seconds=duration,
+                    pattern=pattern,
+                    status=status,
+                    session_id=out_dir.name,
+                    label=label,
+                )
 
         stop_flag = {"stop": False}
 
@@ -1386,7 +1411,9 @@ class IndexHandler(BaseHandler):
         else:
             self.console.print("Run until Ctrl+C")
 
-        seq = 0
+        # When joining an existing session, pick up the sequence counter where it left off
+        from processors.indices_watch import _is_sample_file
+        seq = sum(1 for p in out_dir.iterdir() if p.is_file() and _is_sample_file(p)) if out_dir.is_dir() else 0
         start = time.time()
         while not stop_flag["stop"]:
             if duration is not None and (time.time() - start) >= duration:

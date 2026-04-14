@@ -308,6 +308,7 @@ class CommandHandler:
             "action": self.action_handler.handle_action,
             "repositories": self.snapshot_handler.handle_repositories,
             "es-top": self.estop_handler.handle_es_top,
+            "top": self.estop_handler.handle_es_top,
         }
 
         handler = command_handlers.get(self.args.command)

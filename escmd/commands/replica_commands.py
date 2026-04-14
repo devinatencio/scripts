@@ -8,7 +8,6 @@ including validation, orchestration, and integration with processors and rendere
 from typing import List, Optional, Dict, Any
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
-from rich.prompt import Confirm
 
 from .base_command import BaseCommand
 from processors.replica_processor import ReplicaProcessor
@@ -250,11 +249,11 @@ class ReplicaCommands(BaseCommand):
         # Execute if not dry run and there are updates
         if not dry_run and plan_result['indices_to_update']:
             if not force:
-                if not Confirm.ask(
-                    f"\n🔶  This will update {len(plan_result['indices_to_update'])} indices. Continue?"
-                ):
-                    self.console.print("[yellow]Operation cancelled.[/yellow]")
-                    return {'success': False, 'cancelled': True}
+                    self.console.print(f"\n🔶  This will update {len(plan_result['indices_to_update'])} indices. Continue? [bold](yes/no)[/bold] ", end="")
+                    answer = input().strip().lower()
+                    if answer not in ('y', 'yes'):
+                        self.console.print("[yellow]Operation cancelled.[/yellow]")
+                        return {'success': False, 'cancelled': True}
 
             # Execute the updates with progress
             result = self._execute_updates_with_progress(plan_result, target_count)

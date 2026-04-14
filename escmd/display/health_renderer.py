@@ -104,7 +104,7 @@ class HealthRenderer:
             status_header = Text()
             status_header.append(f"{status_icon} ", style=style_system.get_semantic_style(status_style))
             status_header.append(f"Cluster: ", style=style_system.get_semantic_style("primary"))
-            status_header.append(f"{cluster_name}", style=style_system._get_style('table_styles', 'border_style', 'bright_magenta'))
+            status_header.append(f"{cluster_name}", style=style_system.get_semantic_style("primary"))
 
             # Add version information if available
             if version_display != 'Unknown':
@@ -131,12 +131,21 @@ class HealthRenderer:
             status_header.append(f" • Status: ", style="bold white")
             status_header.append(f"{status.upper()}", style=f"bold {status_color}")
 
-        # Create main panels (will need to be updated to use style_system)
-        theme_color = styles.get('border_style', 'white')  # Fallback for now
-        cluster_panel = self._create_cluster_overview_panel(health_data, theme_color)
-        nodes_panel = self._create_nodes_panel(health_data, theme_color)
-        shards_panel = self._create_shards_panel(health_data, theme_color)
-        performance_panel = self._create_performance_panel(health_data, theme_color, recovery_status)
+        # Determine panel border color based on cluster health status
+        theme_color = styles.get('border_style', 'white')  # Fallback for unknown/error
+        if status == 'green':
+            panel_color = 'green'
+        elif status == 'yellow':
+            panel_color = 'yellow'
+        elif status == 'red':
+            panel_color = 'red'
+        else:
+            panel_color = theme_color  # Default to theme color if status unknown
+
+        cluster_panel = self._create_cluster_overview_panel(health_data, panel_color)
+        nodes_panel = self._create_nodes_panel(health_data, panel_color)
+        shards_panel = self._create_shards_panel(health_data, panel_color)
+        performance_panel = self._create_performance_panel(health_data, panel_color, recovery_status)
 
         # Create snapshot panel if configured and include_snapshots is True
         if include_snapshots:
@@ -144,7 +153,7 @@ class HealthRenderer:
             snapshots_data = health_data.get('_snapshots', [])
             if not snapshot_repo and self.es_client:
                 snapshot_repo = getattr(self.es_client, 'snapshot_repo', None)
-            snapshots_panel = self._create_snapshots_panel(theme_color, snapshot_repo, snapshots_data)
+            snapshots_panel = self._create_snapshots_panel(panel_color, snapshot_repo, snapshots_data)
         else:
             snapshots_panel = None
 

@@ -76,6 +76,7 @@ def _add_help_command(subparsers):
             "actions",
             "action",
             "es-top",
+            "top",
         ],
         help="Command to show help for",
     )
@@ -374,6 +375,28 @@ def _add_basic_commands(subparsers):
         help="Delay between retries (default: 2)",
     )
 
+    indices_watch_collect_parser.add_argument(
+        "--new-session",
+        action="store_true",
+        default=False,
+        dest="new_session",
+        help="Skip session picker; always create a fresh session directory",
+    )
+    indices_watch_collect_parser.add_argument(
+        "--join-latest",
+        action="store_true",
+        default=False,
+        dest="join_latest",
+        help="Skip session picker; join the most recently started session (or create new if none exist)",
+    )
+    indices_watch_collect_parser.add_argument(
+        "--label",
+        default=None,
+        dest="label",
+        metavar="LABEL",
+        help="Human-readable label appended to the session ID (e.g. 'load-test')",
+    )
+
     indices_watch_report_parser = subparsers.add_parser(
         "indices-watch-report",
         help="Summarize collected samples (no ES connection); defaults to today's UTC date for -l / default cluster",
@@ -461,6 +484,20 @@ def _add_basic_commands(subparsers):
             "span: one full-window docs/s column; "
             "intervals: med/p90/max (+ span/s) from adjacent-sample pairs"
         ),
+    )
+    indices_watch_report_parser.add_argument(
+        "--session",
+        default=None,
+        dest="session_id",
+        metavar="SESSION_ID",
+        help="Load from the named session under the resolved date directory",
+    )
+    indices_watch_report_parser.add_argument(
+        "--list-sessions",
+        action="store_true",
+        default=False,
+        dest="list_sessions",
+        help="Print available sessions for the resolved cluster and date, then exit",
     )
 
     # Indice command (single index)
@@ -1943,31 +1980,74 @@ def _add_action_commands(subparsers):
 
 
 def _add_estop_command(subparsers):
-    """Add es-top live dashboard command."""
-    estop_parser = subparsers.add_parser(
-        "es-top",
-        help="Live Elasticsearch cluster dashboard (like Unix top)",
-    )
-    estop_parser.add_argument(
-        "--interval",
-        type=int,
-        default=30,
-        metavar="SEC",
-        help="Refresh interval in seconds (default: 30, minimum: 10)",
-    )
-    estop_parser.add_argument(
-        "--top-nodes",
-        type=int,
-        default=5,
-        dest="top_nodes",
-        metavar="N",
-        help="Number of top nodes to display by heap usage (default: 5)",
-    )
-    estop_parser.add_argument(
-        "--top-indices",
-        type=int,
-        default=10,
-        dest="top_indices",
-        metavar="N",
-        help="Number of top active indices to display (default: 10)",
-    )
+    """Add es-top live dashboard command (and 'top' alias)."""
+    for name in ("es-top", "top"):
+        estop_parser = subparsers.add_parser(
+            name,
+            help="Live Elasticsearch cluster dashboard (like Unix top)"
+            + (" [alias for es-top]" if name == "top" else ""),
+        )
+        estop_parser.add_argument(
+            "--interval",
+            type=int,
+            default=None,
+            metavar="SEC",
+            help="Refresh interval in seconds (default: 30, minimum: 10)",
+        )
+        estop_parser.add_argument(
+            "--top-nodes",
+            type=int,
+            default=None,
+            dest="top_nodes",
+            metavar="N",
+            help="Number of top nodes to display by heap usage (default: 5)",
+        )
+        estop_parser.add_argument(
+            "--top-indices",
+            type=int,
+            default=None,
+            dest="top_indices",
+            metavar="N",
+            help="Number of top active indices to display (default: 10)",
+        )
+        estop_parser.add_argument(
+            "--collect",
+            action="store_true",
+            default=False,
+            dest="collect",
+            help=(
+                "Write index stats snapshots to disk each poll cycle (same format as "
+                "indices-watch-collect). Use indices-watch-report to analyze afterward."
+            ),
+        )
+        estop_parser.add_argument(
+            "--collect-dir",
+            default=None,
+            dest="collect_dir",
+            metavar="PATH",
+            help=(
+                "Directory to write snapshots when --collect is set "
+                "(default: ~/.escmd/index-watch/<cluster>/<UTC-date>/)"
+            ),
+        )
+        estop_parser.add_argument(
+            "--new-session",
+            action="store_true",
+            default=False,
+            dest="new_session",
+            help="Skip session picker; always create a fresh session directory (no effect without --collect)",
+        )
+        estop_parser.add_argument(
+            "--join-latest",
+            action="store_true",
+            default=False,
+            dest="join_latest",
+            help="Skip session picker; join the most recently started session (no effect without --collect)",
+        )
+        estop_parser.add_argument(
+            "--label",
+            default=None,
+            dest="label",
+            metavar="LABEL",
+            help="Human-readable label for the session ID (no effect without --collect)",
+        )

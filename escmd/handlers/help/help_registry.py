@@ -72,6 +72,8 @@ class HelpRegistry:
             self.register(TemplateRestoreHelpContent)
             self.register(StorePasswordHelpContent)
             self.register(EsTopHelpContent)
+            # Register "top" as an alias that resolves to the same help content
+            self._help_modules["top"] = EsTopHelpContent
 
         except ImportError as e:
             # If core modules can't be imported, we have a bigger problem

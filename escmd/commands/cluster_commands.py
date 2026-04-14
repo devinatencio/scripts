@@ -92,6 +92,15 @@ class ClusterCommands(BaseCommand):
                     # If we can't get version info, continue without it
                     pass
 
+            # Fetch index count from cluster stats (single aggregated number, no per-index payload)
+            try:
+                stats = self.es_client.es.cluster.stats()
+                if hasattr(stats, 'body'):
+                    stats = stats.body
+                health_data['number_of_indices'] = stats.get('indices', {}).get('count', None)
+            except Exception:
+                pass
+
             return health_data
 
         except Exception as e:

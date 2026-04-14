@@ -87,7 +87,6 @@ self.estop_handler = EsTopHandler(es_client, args, console, config_file, locatio
 # in execute() command_handlers dict:
 "es-top": self.estop_handler.handle_es_top,
 ```
-
 ---
 
 ### EsTopDashboard
@@ -225,6 +224,13 @@ class EsTopRenderer:
 
     def _disk_style(self, pct: float) -> str:
         """Return 'red bold' if pct >= 90, 'yellow' if pct >= 85, else default."""
+
+    def _hot_prefix(self, rank: int, mode: str) -> str:
+        """
+        Return the emoji prefix for a ranked item given the hot_indicator mode.
+        rank=0 → '🔥 ', rank=1 → '🌡️ ', rank>=2 → ''.
+        Returns '' when mode is 'color' or 'none'.
+        """
 ```
 
 ---
@@ -329,6 +335,9 @@ class ProcessedData:
     cluster_health_error: Optional[str]
     nodes_stats_error: Optional[str]
     cat_indices_error: Optional[str]
+
+    # Hot indicator display mode: 'emoji' | 'color' | 'both' | 'none' (from config)
+    hot_indicator: str = "emoji"
 ```
 
 ---
@@ -430,6 +439,14 @@ class ProcessedData:
 *For any* sequence of N calls to `DeltaCalculator.process()`, the `poll_count` in the returned `ProcessedData` SHALL equal N (1-based, incrementing by exactly 1 per call). After `reset()`, the counter restarts at 0 and the next `process()` call returns `poll_count = 1`.
 
 **Validates: Requirements 1.8**
+
+---
+
+### Property 13: Hot indicator prefix correctness
+
+*For any* `hot_indicator` mode and a list of indices sorted by `docs_per_sec` descending, `_hot_prefix(rank, mode)` SHALL return `'🔥 '` for rank 0 when mode is `emoji` or `both`; `'🌡️ '` for rank 1 when mode is `emoji` or `both` and at least 2 indices exist; `''` for all other ranks or when mode is `color` or `none`. When mode is `color` or `both`, `_index_activity_style` SHALL return `'bold white'` for the top-ranked index and `'dim white'` for zero-rate indices. When mode is `emoji` or `none`, `_index_activity_style` SHALL return the default style for all rows regardless of rate.
+
+**Validates: Requirements 9.3, 9.4, 9.5, 9.6, 9.7, 9.8**
 
 ---
 

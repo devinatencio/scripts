@@ -31,70 +31,169 @@ class HealthHandler(BaseHandler):
         if self.args.format == 'json':
             print(json.dumps(health_data))
         else:
-            # Simple, fast display of core health metrics
             try:
-                from rich.table import Table
                 from rich.panel import Panel
-                from rich.console import Console
+                from rich.table import Table
                 from rich.text import Text
+                from rich.console import Console
 
                 console = self.console if hasattr(self.console, 'print') else Console()
+                tm = self.es_client.theme_manager
+                ss = self.es_client.style_system
+                styles = tm.get_theme_styles()
 
-                # Get cluster status and set colors
-                status = health_data.get('status', 'unknown').upper()
-                if status == 'GREEN':
-                    status_color = "bright_green"
-                    status_icon = "🟢"
-                elif status == 'YELLOW':
-                    status_color = "bright_yellow"
-                    status_icon = "🟡"
-                elif status == 'RED':
-                    status_color = "bright_red"
-                    status_icon = "🔴"
+                # Resolve styles
+                primary     = ss.get_semantic_style("primary")
+                success     = ss.get_semantic_style("success")
+                warning     = ss.get_semantic_style("warning")
+                error       = ss.get_semantic_style("error")
+                info        = ss.get_semantic_style("info")
+                muted       = ss.get_semantic_style("muted")
+                border      = styles.get('border_style', 'white')
+                label_style = "bold white"
+                health_styles = styles.get('health_styles', {})
+                type_styles   = styles.get('type_styles', {})
+                row_styles    = styles.get('row_styles', {})
+                normal        = row_styles.get('normal', 'bright_white')
+                primary_shard = type_styles.get('primary', {}).get('text', 'bright_cyan')
+                replica_shard = type_styles.get('replica', {}).get('text', 'bright_blue')
+
+                # Data
+                status       = health_data.get('status', 'unknown')
+                cluster_name = health_data.get('cluster_name', 'Unknown')
+                version      = health_data.get('cluster_version', {})
+                version_str  = version.get('number', '') if isinstance(version, dict) else str(version or '')
+                total_nodes  = health_data.get('number_of_nodes', 0)
+                data_nodes   = health_data.get('number_of_data_nodes', 0)
+                primary_s    = health_data.get('active_primary_shards', 0)
+                total_shards = health_data.get('active_shards', 0)
+                replicas     = total_shards - primary_s
+                unassigned   = health_data.get('unassigned_shards', 0)
+                relocating   = health_data.get('relocating_shards', 0)
+                initializing = health_data.get('initializing_shards', 0)
+                index_count  = health_data.get('number_of_indices')
+                timed_out    = health_data.get('timed_out', False)
+
+                if status == 'green':
+                    status_icon  = "🟢"
+                    status_style = health_styles.get('green', {}).get('text', success)
+                elif status == 'yellow':
+                    status_icon  = "🟡"
+                    status_style = health_styles.get('yellow', {}).get('text', warning)
+                elif status == 'red':
+                    status_icon  = "🔴"
+                    status_style = health_styles.get('red', {}).get('text', error)
                 else:
-                    status_color = "dim"
-                    status_icon = "⚪"
+                    status_icon  = "⚪"
+                    status_style = muted
 
-                # Create quick health table
-                table = Table.grid(padding=(0, 1))
-                table.add_column(style=self.es_client.style_system.get_semantic_style("primary"), no_wrap=True)
-                table.add_column(style=self.es_client.style_system.get_semantic_style("secondary"))
+                from rich.rule import Rule
 
-                # Core health metrics only
-                table.add_row("🏢 Cluster:", health_data.get('cluster_name', 'Unknown'))
-                table.add_row(f"{status_icon} Status:", f"[bold {status_color}]{status}[/bold {status_color}]")
-                table.add_row("💻  Nodes:", str(health_data.get('number_of_nodes', 0)))
-                table.add_row("💾 Data Nodes:", str(health_data.get('number_of_data_nodes', 0)))
-                table.add_row("🟢 Primary Shards:", f"{health_data.get('active_primary_shards', 0):,}")
-                table.add_row("🔵 Total Shards:", f"{health_data.get('active_shards', 0):,}")
+                def make_section():
+                    t = Table.grid(padding=(0, 2))
+                    t.add_column(justify="left", no_wrap=True, width=4)   # icon
+                    t.add_column(justify="left", no_wrap=True, width=16)  # label
+                    t.add_column(justify="left")                           # value
+                    return t
 
-                unassigned = health_data.get('unassigned_shards', 0)
+                def add_row(t, icon, label, value_text):
+                    t.add_row(icon, Text(label, style=label_style), value_text)
+
+                # Single-column outer table — Rule rows span full width here
+                outer = Table.grid(padding=(0, 0))
+                outer.add_column(ratio=1)
+
+                # ── Cluster + Nodes ──────────────────────────────────────
+                s1 = make_section()
+                cluster_val = Text()
+                cluster_val.append(cluster_name, style=primary)
+                if version_str:
+                    cluster_val.append(f"  v{version_str}", style=muted)
+                add_row(s1, "🏢", "Cluster", cluster_val)
+
+                status_val = Text()
+                status_val.append(f"{status_icon} {status.upper()}", style=status_style)
+                add_row(s1, "📊", "Status", status_val)
+
+                nodes_val = Text()
+                nodes_val.append(str(total_nodes), style=normal)
+                nodes_val.append("  data: ", style=muted)
+                nodes_val.append(str(data_nodes), style=success)
+                other = total_nodes - data_nodes
+                if other > 0:
+                    nodes_val.append("  master: ", style=muted)
+                    nodes_val.append(str(other), style=warning)
+                add_row(s1, "💻", "Nodes", nodes_val)
+                outer.add_row(s1)
+
+                # ── Indices + Shards ──────────────────────────────────────
+                outer.add_row(Rule(style=muted))
+                s2 = make_section()
+                if index_count is not None:
+                    add_row(s2, "📂", "Indices", Text(f"{index_count:,}", style=normal))
+
+                shards_val = Text()
+                shards_val.append(str(total_shards), style=normal)
+                shards_val.append("  primary: ", style=muted)
+                shards_val.append(str(primary_s), style=primary_shard)
+                shards_val.append("  replicas: ", style=muted)
+                shards_val.append(str(replicas), style=replica_shard)
+                add_row(s2, "🔵", "Shards", shards_val)
+
+                if relocating > 0:
+                    add_row(s2, "🔀", "Relocating", Text(f"{relocating:,}", style=warning))
+                if initializing > 0:
+                    add_row(s2, "⏳", "Initializing", Text(f"{initializing:,}", style=info))
+
                 if unassigned > 0:
-                    table.add_row("🔴 Unassigned:", self.es_client.style_system.create_semantic_text(f"{unassigned:,}", "error"))
+                    unassigned_val = Text()
+                    unassigned_val.append(str(unassigned), style=error)
+                    unassigned_val.append("  ⚠ not assigned", style=warning)
+                    add_row(s2, "🔴", "Unassigned", unassigned_val)
+                    try:
+                        reasons = self.es_client.health_commands.get_unassigned_shard_reasons()
+                        if reasons:
+                            reason_str = ", ".join(
+                                f"{r}: {c}" for r, c in sorted(reasons.items(), key=lambda x: -x[1])
+                            )
+                            add_row(s2, "  ", "", Text(f"└─ {reason_str}", style=warning))
+                    except Exception:
+                        pass
                 else:
-                    table.add_row("✅ Assignment:", self.es_client.style_system.create_semantic_text("Complete", "success"))
+                    add_row(s2, "✅", "Unassigned", Text("0  all assigned", style=success))
+                outer.add_row(s2)
 
-                # Create panel and display
+                if timed_out:
+                    outer.add_row(Rule(style=error))
+                    s3 = make_section()
+                    add_row(s3, "⚠️ ", "Timed Out", Text("health check incomplete", style=error))
+                    outer.add_row(s3)
+
+                title_style = styles.get('panel_styles', {}).get('title', 'bold white')
+                if status == 'green':
+                    panel_border = 'green'
+                elif status == 'yellow':
+                    panel_border = 'yellow'
+                elif status == 'red':
+                    panel_border = 'red'
+                else:
+                    panel_border = border
                 panel = Panel(
-                    table,
-                    title=f"⚡ Quick Health Check",
-                    subtitle=f"Cluster: {health_data.get('cluster_name', 'Unknown')}",
-                    border_style=self.es_client.style_system.get_semantic_style("primary"),
-                    padding=(1, 2)
+                    outer,
+                    title=f"[{title_style}]⚡ Cluster Health[/{title_style}]",
+                    border_style=panel_border,
+                    padding=(1, 3),
                 )
 
                 print()
                 console.print(panel)
                 print()
 
-            except ImportError as e:
-                # Fallback to basic output if rich components aren't available
+            except ImportError:
                 print(f"Cluster: {health_data.get('cluster_name', 'Unknown')}")
-                print(f"Status: {health_data.get('cluster_status', 'unknown').upper()}")
+                print(f"Status: {health_data.get('status', 'unknown').upper()}")
                 print(f"Nodes: {health_data.get('number_of_nodes', 0)}")
-                print(f"Data Nodes: {health_data.get('number_of_data_nodes', 0)}")
                 print(f"Primary Shards: {health_data.get('active_primary_shards', 0):,}")
-                print(f"Total Shards: {health_data.get('active_shards', 0):,}")
                 print(f"Unassigned Shards: {health_data.get('unassigned_shards', 0):,}")
 
     def handle_health_detail(self):

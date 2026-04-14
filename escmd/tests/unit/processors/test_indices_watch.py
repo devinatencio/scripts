@@ -276,3 +276,202 @@ def test_resolve_default_watch_sample_dir_finds_legacy_short_slug_dir(tmp_path, 
     d, samples = resolve_default_watch_sample_dir(args, cm, day)
     assert d == legacy
     assert len(samples) == 2
+
+
+# ---------------------------------------------------------------------------
+# Session-related unit tests (Task 12)
+# ---------------------------------------------------------------------------
+
+import json as _json
+from datetime import timezone
+
+from processors.indices_watch import (
+    SessionInfo,
+    is_legacy_date_dir,
+    list_sessions,
+    make_session_id,
+    resolve_session_dir,
+    sanitize_session_label,
+)
+
+
+# --- sanitize_session_label -------------------------------------------------
+
+def test_sanitize_session_label_empty():
+    assert sanitize_session_label("") == ""
+
+
+def test_sanitize_session_label_all_invalid():
+    assert sanitize_session_label("!@#$%") == "_____"
+
+
+def test_sanitize_session_label_exactly_40_chars():
+    label = "a" * 40
+    assert sanitize_session_label(label) == label
+
+
+def test_sanitize_session_label_41_chars_truncated():
+    label = "a" * 41
+    assert sanitize_session_label(label) == "a" * 40
+
+
+def test_sanitize_session_label_valid_only():
+    label = "load-test_123"
+    assert sanitize_session_label(label) == label
+
+
+def test_sanitize_session_label_mixed():
+    assert sanitize_session_label("load test!") == "load_test_"
+
+
+# --- make_session_id --------------------------------------------------------
+
+def test_make_session_id_no_label():
+    from datetime import datetime
+    dt = datetime(2026, 4, 13, 14, 30, tzinfo=timezone.utc)
+    assert make_session_id(dt) == "1430"
+
+
+def test_make_session_id_with_label():
+    from datetime import datetime
+    dt = datetime(2026, 4, 13, 14, 30, tzinfo=timezone.utc)
+    assert make_session_id(dt, "load-test") == "1430-load-test"
+
+
+def test_make_session_id_label_with_spaces():
+    from datetime import datetime
+    dt = datetime(2026, 4, 13, 14, 30, tzinfo=timezone.utc)
+    assert make_session_id(dt, "load test") == "1430-load_test"
+
+
+def test_make_session_id_label_sanitizes_to_empty():
+    from datetime import datetime
+    dt = datetime(2026, 4, 13, 14, 30, tzinfo=timezone.utc)
+    # Empty string sanitizes to "" → no hyphen appended
+    assert make_session_id(dt, "") == "1430"
+
+
+# --- resolve_session_dir ----------------------------------------------------
+
+def test_resolve_session_dir_no_collision(tmp_path, monkeypatch):
+    monkeypatch.setenv("ESCMD_INDEX_WATCH_DIR", str(tmp_path))
+    from datetime import datetime
+    dt = datetime(2026, 4, 13, 14, 30, tzinfo=timezone.utc)
+    result = resolve_session_dir("mycluster", "2026-04-13", dt=dt)
+    expected = tmp_path / "mycluster" / "2026-04-13" / "1430"
+    assert result == expected
+    assert not result.exists()
+
+
+def test_resolve_session_dir_single_collision(tmp_path, monkeypatch):
+    monkeypatch.setenv("ESCMD_INDEX_WATCH_DIR", str(tmp_path))
+    from datetime import datetime
+    dt = datetime(2026, 4, 13, 14, 30, tzinfo=timezone.utc)
+    base = tmp_path / "mycluster" / "2026-04-13"
+    (base / "1430").mkdir(parents=True)
+    result = resolve_session_dir("mycluster", "2026-04-13", dt=dt)
+    assert result == base / "1430-2"
+    assert not result.exists()
+
+
+def test_resolve_session_dir_double_collision(tmp_path, monkeypatch):
+    monkeypatch.setenv("ESCMD_INDEX_WATCH_DIR", str(tmp_path))
+    from datetime import datetime
+    dt = datetime(2026, 4, 13, 14, 30, tzinfo=timezone.utc)
+    base = tmp_path / "mycluster" / "2026-04-13"
+    (base / "1430").mkdir(parents=True)
+    (base / "1430-2").mkdir(parents=True)
+    result = resolve_session_dir("mycluster", "2026-04-13", dt=dt)
+    assert result == base / "1430-3"
+    assert not result.exists()
+
+
+def test_resolve_session_dir_does_not_create(tmp_path, monkeypatch):
+    monkeypatch.setenv("ESCMD_INDEX_WATCH_DIR", str(tmp_path))
+    from datetime import datetime
+    dt = datetime(2026, 4, 13, 9, 5, tzinfo=timezone.utc)
+    result = resolve_session_dir("mycluster", "2026-04-13", dt=dt)
+    assert not result.exists()
+
+
+# --- list_sessions ----------------------------------------------------------
+
+def _write_run_json(session_dir: "Path", **extra):
+    meta = {"schema_version": 2, "started_at": "2026-04-13T14:30:00+00:00", **extra}
+    session_dir.mkdir(parents=True, exist_ok=True)
+    (session_dir / "run.json").write_text(_json.dumps(meta), encoding="utf-8")
+
+
+def test_list_sessions_empty_dir(tmp_path):
+    assert list_sessions(tmp_path) == []
+
+
+def test_list_sessions_one_valid_v2(tmp_path):
+    session_dir = tmp_path / "1430"
+    _write_run_json(session_dir)
+    sessions = list_sessions(tmp_path)
+    assert len(sessions) == 1
+    assert isinstance(sessions[0], SessionInfo)
+    assert sessions[0].session_id == "1430"
+
+
+def test_list_sessions_mixed(tmp_path):
+    # Valid v2 session
+    _write_run_json(tmp_path / "1430")
+    # Subdir with no run.json
+    (tmp_path / "no-run").mkdir()
+    # Subdir with invalid JSON
+    bad = tmp_path / "bad-json"
+    bad.mkdir()
+    (bad / "run.json").write_text("not-json", encoding="utf-8")
+    sessions = list_sessions(tmp_path)
+    assert len(sessions) == 1
+    assert sessions[0].session_id == "1430"
+
+
+def test_list_sessions_sorted_ascending(tmp_path):
+    _write_run_json(tmp_path / "1500", started_at="2026-04-13T15:00:00+00:00")
+    _write_run_json(tmp_path / "1430", started_at="2026-04-13T14:30:00+00:00")
+    sessions = list_sessions(tmp_path)
+    assert len(sessions) == 2
+    assert sessions[0].session_id == "1430"
+    assert sessions[1].session_id == "1500"
+
+
+def test_list_sessions_legacy_flat_dir(tmp_path):
+    # Flat .json sample files, no session subdirs
+    (tmp_path / "20260413T143000_0001.json").write_text(
+        '{"captured_at":"2026-04-13T14:30:00+00:00","indices":[]}', encoding="utf-8"
+    )
+    assert list_sessions(tmp_path) == []
+
+
+# --- is_legacy_date_dir -----------------------------------------------------
+
+def test_is_legacy_date_dir_flat_samples(tmp_path):
+    (tmp_path / "20260413T143000_0001.json").write_text(
+        '{"captured_at":"2026-04-13T14:30:00+00:00","indices":[]}', encoding="utf-8"
+    )
+    assert is_legacy_date_dir(tmp_path) is True
+
+
+def test_is_legacy_date_dir_only_session_subdirs(tmp_path):
+    _write_run_json(tmp_path / "1430")
+    assert is_legacy_date_dir(tmp_path) is False
+
+
+def test_is_legacy_date_dir_both_flat_and_sessions(tmp_path):
+    # Sessions take precedence → not legacy
+    (tmp_path / "20260413T143000_0001.json").write_text(
+        '{"captured_at":"2026-04-13T14:30:00+00:00","indices":[]}', encoding="utf-8"
+    )
+    _write_run_json(tmp_path / "1430")
+    assert is_legacy_date_dir(tmp_path) is False
+
+
+def test_is_legacy_date_dir_nonexistent(tmp_path):
+    assert is_legacy_date_dir(tmp_path / "does-not-exist") is False
+
+
+def test_is_legacy_date_dir_empty(tmp_path):
+    assert is_legacy_date_dir(tmp_path) is False

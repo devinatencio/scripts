@@ -1,3 +1,66 @@
+## [3.11.0] - 2026-04-13
+
+### `indices-watch-collect` / `indices-watch-report` — multi-session support per day
+
+Adds a **session layer** beneath the existing date directory so multiple distinct collection runs on the same day for the same cluster are stored separately and never mixed together.
+
+#### New directory layout
+
+```
+~/.escmd/index-watch/<cluster>/<YYYY-MM-DD>/<session_id>/
+    run.json                        ← schema_version: 2 (new)
+    20260413T143000_0001.json
+    20260413T143100_0002.json
+    ...
+```
+
+Session IDs are derived from the UTC start time (`HHMM`) with an optional user-supplied label (`1430-load-test`). Collisions are resolved automatically by appending `-2`, `-3`, etc.
+
+#### `indices-watch-collect` changes
+
+- **NEW**: **Interactive session picker** — on startup, when sessions already exist for the current cluster and date, a numbered list is shown and the user can join an existing session or create a new one. Non-interactive environments (non-TTY) automatically start a new session and log a notice to stderr.
+- **NEW**: **`--new-session`** — skip the picker and always create a fresh session directory.
+- **NEW**: **`--join-latest`** — skip the picker and automatically join the most recently started session (creates a new one if none exist).
+- **NEW**: **`--label LABEL`** — append a human-readable label to the session ID (e.g. `--label load-test` → `1430-load-test`).
+- **Behavior**: When joining an existing session, the original `run.json` is preserved and the sequence counter picks up from the last sample already in the directory (no more `_0001.json` restarts).
+- **Behavior**: `--output-dir` bypasses all session logic and writes directly to the specified path (unchanged behavior).
+
+#### `top` / `es-top --collect` changes
+
+- **NEW**: Same `--new-session`, `--join-latest`, and `--label` flags accepted by `es-top` / `top` when `--collect` is active. No effect when `--collect` is not set.
+- **Behavior**: When `--collect-dir` is given, the existing direct-path behavior is preserved with no session logic.
+
+#### `indices-watch-report` changes
+
+- **NEW**: **Interactive session picker** — when multiple sessions exist for the resolved cluster and date and no `--dir` or `--session` flag is given, a numbered list is shown and the user selects which session to report on. Non-interactive environments auto-select the most recent session and log a notice to stderr.
+- **NEW**: **`--session SESSION_ID`** — load from the named session directly without prompting.
+- **NEW**: **`--list-sessions`** — print available sessions (ID, start time, sample count, label) and exit without generating a report.
+- **Behavior**: Exactly one session → loaded silently, no prompt. Legacy flat date directories (no session subdirs) → loaded directly, full backward compatibility.
+- **Behavior**: `--session <id>` not found → prints an error listing available sessions and exits non-zero.
+
+#### Backward compatibility
+
+- Legacy flat `<YYYY-MM-DD>/` directories (schema_version 1) continue to work without any migration. The session picker offers a "continue appending to legacy directory" option when flat files are detected.
+- `default_run_dir()` is unchanged. All session resolution flows through the new `resolve_session_dir()` / `pick_or_create_session_dir()` helpers.
+- `run.json` schema_version 1 files are still parsed and reported correctly.
+
+- **Code**: `processors/indices_watch.py` (`sanitize_session_label`, `make_session_id`, `resolve_session_dir`, `SessionInfo`, `list_sessions`, `is_legacy_date_dir`, `format_session_list`, `pick_or_create_session_dir`, updated `write_run_metadata`, updated `run_indices_watch_report`), `handlers/index_handler.py` (`handle_indices_watch_collect`), `commands/estop_commands.py` (`EsTopDashboard.__init__`), `handlers/estop_handler.py`, `cli/argument_parser.py`.
+- **Tests**: `tests/unit/processors/test_indices_watch.py` (24 new session unit tests, 35 total passing).
+
+---
+
+## [3.10.1] - 2026-04-13
+
+### `top` / `es-top` — `--collect` flag for post-session analysis
+
+
+- **NEW**: **`--collect`** flag on `top` / `es-top` — writes a JSON index-stats snapshot to disk on every poll cycle, using the same file format and directory layout as `indices-watch-collect` (`~/.escmd/index-watch/<cluster>/<UTC-date>/`). When you exit `top`, run `indices-watch-report` against the saved directory to analyze ingest rates, HOT indices, and peer comparisons without an Elasticsearch connection.
+- **NEW**: **`--collect-dir PATH`** — override the output directory when `--collect` is active (default: `~/.escmd/index-watch/<cluster>/<UTC-date>/`).
+- **Behavior**: A `run.json` metadata file is written at startup (same schema as `indices-watch-collect`). Each poll cycle that returns valid `cat_indices` data saves a timestamped sample file (`YYYYMMDDTHHMMSS_NNNN.json`). Failed poll cycles are skipped silently (no partial files written).
+- **Code**: `commands/estop_commands.py` (`EsTopDashboard.__init__`, `_poll_loop`), `handlers/estop_handler.py`, `cli/argument_parser.py`, `handlers/help/estop_help.py`.
+
+---
+
 ## [3.10.0] - 2026-04-11
 
 ### `es-top` — live Elasticsearch cluster dashboard

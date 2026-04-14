@@ -24,6 +24,7 @@ The initial scope focuses on the core essentials: cluster health header, node pr
 - **HotIndex**: An index ranked in the top N by docs/sec or searches/sec during the current interval.
 - **SessionTotal**: The cumulative count of docs written or searches executed for an index since `es-top` started, accumulated across all poll cycles in the current session.
 - **WatermarkBreach**: A condition where a node's disk usage exceeds the Elasticsearch low-watermark threshold.
+- **HotIndicator**: The configurable visual mode (`emoji`, `color`, `both`, `none`) that controls how the top-ranked index and node are flagged in the dashboard.
 
 ---
 
@@ -101,6 +102,24 @@ The initial scope focuses on the core essentials: cluster health header, node pr
 5. THE IndexHotList SHALL display for each index: index name, docs/sec, searches/sec, session total docs written, session total searches executed, total doc count, and store size, sourced from `_cat/indices` using explicit field selection via the `h` parameter.
 6. WHEN only one PollSnapshot exists (first poll), THE IndexHotList SHALL display total counts and session totals without rate columns and indicate that rates will be available after the next poll.
 7. IF the `_cat/indices` API call fails, THEN THE IndexHotList SHALL display a warning banner and retain the last successfully computed rates and session totals.
+
+---
+
+### Requirement 9: Hot Indicator Display Mode
+
+**User Story:** As an operator, I want to control how the "hottest" indices and nodes are visually flagged in the dashboard, so that I can quickly spot the highest-load items in a way that suits my terminal and workflow.
+
+#### Acceptance Criteria
+
+1. THE EsTopRenderer SHALL support a configurable `hot_indicator` mode with four valid values: `emoji`, `color`, `both`, and `none`.
+2. THE `hot_indicator` setting SHALL be read from `escmd.yml` under the `es_top` section (key: `hot_indicator`) with a default value of `emoji`.
+3. WHEN `hot_indicator` is `emoji`, THE IndexHotList SHALL prepend a 🔥 emoji to the index name of the single highest docs/sec index, and a 🌡️ emoji to the second-highest, with no color-based activity styling applied to rows.
+4. WHEN `hot_indicator` is `color`, THE IndexHotList SHALL apply the existing relative color coding (`bold white` → `white` → `dim white`) based on docs/sec ratio, with no emoji prepended.
+5. WHEN `hot_indicator` is `both`, THE IndexHotList SHALL apply both the emoji indicators and the relative color coding simultaneously.
+6. WHEN `hot_indicator` is `none`, THE IndexHotList SHALL display all rows in the default style with no emoji and no relative color coding.
+7. THE same `hot_indicator` setting SHALL apply to the NodePanel: WHEN `emoji` or `both`, the node with the highest heap % SHALL have a 🔥 prepended to its name; the second-highest SHALL have a 🌡️ prepended.
+8. WHEN `hot_indicator` is `emoji` or `both` and there is only one active index or one node, only the 🔥 indicator SHALL be shown (no 🌡️ for a non-existent second entry).
+9. THE `hot_indicator` value SHALL be readable via a `get_estop_hot_indicator()` method on `ConfigurationManager`, returning one of the four valid string values; invalid values in the config SHALL fall back to `emoji`.
 
 ---
 

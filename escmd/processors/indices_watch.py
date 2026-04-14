@@ -12,6 +12,7 @@ import os
 import re
 import sys
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -46,6 +47,223 @@ def utc_today_iso() -> str:
 
 def default_run_dir(cluster_slug: str, day_iso: str) -> Path:
     return default_watch_base_dir() / sanitize_cluster_slug(cluster_slug) / day_iso
+
+
+def sanitize_session_label(label: str) -> str:
+    """Replace any character not in [a-zA-Z0-9_-] with '_', truncate to 40 chars."""
+    sanitized = re.sub(r'[^a-zA-Z0-9_\-]', '_', label)
+    return sanitized[:40]
+
+
+def make_session_id(dt: datetime, label: Optional[str] = None) -> str:
+    """Return 'HHMM' or 'HHMM-<sanitized_label>' for the given UTC datetime."""
+    hhmm = dt.strftime("%H%M")
+    if label is not None:
+        sanitized = sanitize_session_label(label)
+        if sanitized:
+            return f"{hhmm}-{sanitized}"
+    return hhmm
+
+
+def resolve_session_dir(
+    cluster_slug: str,
+    day_iso: str,
+    *,
+    label: Optional[str] = None,
+    dt: Optional[datetime] = None,
+) -> Path:
+    """Compute a non-conflicting session directory path under default_run_dir().
+
+    Uses datetime.now(timezone.utc) if dt is None. Appends -2, -3, … if the
+    computed path already exists on disk. Does NOT create the directory.
+    """
+    if dt is None:
+        dt = datetime.now(timezone.utc)
+    session_id = make_session_id(dt, label)
+    base = default_run_dir(cluster_slug, day_iso)
+    candidate = base / session_id
+    if not candidate.exists():
+        return candidate
+    suffix = 2
+    while True:
+        candidate = base / f"{session_id}-{suffix}"
+        if not candidate.exists():
+            return candidate
+        suffix += 1
+
+
+@dataclass
+class SessionInfo:
+    session_id: str
+    session_dir: Path
+    started_at: str
+    label: Optional[str]
+    sample_count: int
+    schema_version: int
+
+
+def list_sessions(date_dir: Path) -> List[SessionInfo]:
+    """Scan date_dir for subdirectories containing a valid v2 run.json.
+
+    Returns SessionInfo objects sorted ascending by started_at.
+    Returns [] if date_dir does not exist.
+    """
+    if not date_dir.is_dir():
+        return []
+    sessions: List[SessionInfo] = []
+    for subdir in date_dir.iterdir():
+        if not subdir.is_dir():
+            continue
+        run_json = subdir / RUN_META_FILENAME
+        if not run_json.is_file():
+            continue
+        try:
+            with open(run_json, encoding="utf-8") as f:
+                meta = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+        if not isinstance(meta, dict):
+            continue
+        if meta.get("schema_version") != 2:
+            continue
+        started_at = meta.get("started_at", "")
+        label = meta.get("label") or None
+        sample_count = sum(
+            1 for p in subdir.iterdir() if p.is_file() and _is_sample_file(p)
+        )
+        sessions.append(
+            SessionInfo(
+                session_id=str(subdir.name),
+                session_dir=subdir,
+                started_at=str(started_at),
+                label=label,
+                sample_count=sample_count,
+                schema_version=2,
+            )
+        )
+    sessions.sort(key=lambda s: s.started_at)
+    return sessions
+
+
+def is_legacy_date_dir(date_dir: Path) -> bool:
+    """Return True if date_dir contains flat .json sample files but no valid v2 sessions."""
+    if not date_dir.is_dir():
+        return False
+    has_flat_samples = any(
+        p.is_file() and _is_sample_file(p) for p in date_dir.iterdir()
+    )
+    if not has_flat_samples:
+        return False
+    return len(list_sessions(date_dir)) == 0
+
+
+def format_session_list(sessions: List[SessionInfo]) -> str:
+    """Return a human-readable numbered list of sessions.
+
+    Each line shows: number, session_id, start time (HH:MM UTC), sample count, label (or —).
+    """
+    lines: List[str] = []
+    for i, s in enumerate(sessions, start=1):
+        # Parse ISO-8601 started_at to extract HH:MM UTC
+        try:
+            dt = datetime.fromisoformat(s.started_at.replace("Z", "+00:00"))
+            time_str = dt.strftime("%H:%M") + " UTC"
+        except (ValueError, AttributeError):
+            time_str = s.started_at
+        label_str = s.label if s.label is not None else "\u2014"
+        lines.append(
+            f"  {i}. {s.session_id}  started {time_str}  {s.sample_count} samples  label: {label_str}"
+        )
+    return "\n".join(lines)
+
+
+def pick_or_create_session_dir(
+    cluster_slug: str,
+    day_iso: str,
+    *,
+    new_session: bool = False,
+    join_latest: bool = False,
+    label: Optional[str] = None,
+    console: Any = None,
+    is_tty: bool = True,
+) -> Tuple[Path, bool]:
+    """Central session-resolution helper.
+
+    Returns (session_dir, is_new) where is_new=True means a fresh session was
+    created (caller must write run.json), is_new=False means joining an existing
+    session (caller must NOT write run.json).
+    """
+
+    def _print(msg: str) -> None:
+        if console is not None:
+            console.print(msg)
+        else:
+            print(msg)
+
+    # 1. --new-session takes precedence over everything
+    if new_session:
+        return resolve_session_dir(cluster_slug, day_iso, label=label), True
+
+    # 2. Build date_dir and list sessions
+    date_dir = default_run_dir(cluster_slug, day_iso)
+    sessions = list_sessions(date_dir)
+
+    # 4. --join-latest with sessions present
+    if join_latest and sessions:
+        return sessions[-1].session_dir, False
+
+    # 5. --join-latest with no sessions
+    if join_latest and not sessions:
+        return resolve_session_dir(cluster_slug, day_iso, label=label), True
+
+    # 6. No sessions and not a legacy dir → create new
+    if not sessions and not is_legacy_date_dir(date_dir):
+        return resolve_session_dir(cluster_slug, day_iso, label=label), True
+
+    # 7. Legacy flat directory
+    if is_legacy_date_dir(date_dir):
+        if not is_tty:
+            print(
+                "[indices-watch] Non-interactive: starting new session in legacy date directory",
+                file=sys.stderr,
+            )
+            return resolve_session_dir(cluster_slug, day_iso, label=label), True
+        # TTY: show picker with legacy option + new session
+        _print("  1. legacy (continue appending to date directory)")
+        _print("  2. (Create new session)")
+        n_options = 2
+        while True:
+            try:
+                choice = int(input(f"Select session [1-{n_options}]: ").strip())
+            except (ValueError, EOFError):
+                continue
+            if choice == 1:
+                return date_dir, False
+            if choice == 2:
+                return resolve_session_dir(cluster_slug, day_iso, label=label), True
+
+    # 8. Sessions exist (non-empty, not legacy)
+    if not is_tty:
+        selected = sessions[-1]
+        print(
+            f"[indices-watch] Non-interactive: joining latest session {selected.session_id}",
+            file=sys.stderr,
+        )
+        return selected.session_dir, False
+
+    # TTY: show picker
+    _print(format_session_list(sessions))
+    n = len(sessions)
+    _print(f"  {n + 1}. (Create new session)")
+    while True:
+        try:
+            choice = int(input(f"Select session [1-{n + 1}]: ").strip())
+        except (ValueError, EOFError):
+            continue
+        if 1 <= choice <= n:
+            return sessions[choice - 1].session_dir, False
+        if choice == n + 1:
+            return resolve_session_dir(cluster_slug, day_iso, label=label), True
 
 
 def _raw_index_watch_location_slug(args: Any, config_manager: Any) -> str:
@@ -136,17 +354,33 @@ def write_run_metadata(
     duration_seconds: Optional[int],
     pattern: Optional[str],
     status: Optional[str],
+    session_id: Optional[str] = None,
+    label: Optional[str] = None,
 ) -> None:
-    meta = {
-        "kind": "indices-watch-run",
-        "schema_version": SCHEMA_VERSION,
-        "cluster": cluster,
-        "started_at": datetime.now(timezone.utc).isoformat(),
-        "interval_seconds": interval_seconds,
-        "duration_seconds": duration_seconds,
-        "pattern": pattern,
-        "status": status,
-    }
+    if session_id is not None:
+        meta: Dict[str, Any] = {
+            "kind": "indices-watch-run",
+            "schema_version": 2,
+            "cluster": cluster,
+            "session_id": session_id,
+            "label": label,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "interval_seconds": interval_seconds,
+            "duration_seconds": duration_seconds,
+            "pattern": pattern,
+            "status": status,
+        }
+    else:
+        meta = {
+            "kind": "indices-watch-run",
+            "schema_version": SCHEMA_VERSION,
+            "cluster": cluster,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "interval_seconds": interval_seconds,
+            "duration_seconds": duration_seconds,
+            "pattern": pattern,
+            "status": status,
+        }
     p = out_dir / RUN_META_FILENAME
     with open(p, "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
@@ -558,16 +792,86 @@ def run_indices_watch_report(args: Any, console: Any, config_manager: Any) -> No
     from display.table_renderer import TableRenderer
     from display.theme_manager import ThemeManager
 
+    import sys as _sys
+
     out_dir_arg = getattr(args, "report_sample_dir", None)
     day_iso = getattr(args, "date", None) or utc_today_iso()
+    session_id_arg = getattr(args, "session_id", None)
+    list_sessions_flag = getattr(args, "list_sessions", False)
 
+    # Resolve the date directory for session operations
     if out_dir_arg and str(out_dir_arg).strip():
+        # --dir supplied: load directly, no session logic
         sample_dir = Path(str(out_dir_arg).strip()).expanduser()
         samples = load_samples(sample_dir)
     else:
-        sample_dir, samples = resolve_default_watch_sample_dir(
-            args, config_manager, day_iso
-        )
+        # Resolve the date directory
+        raw = _raw_index_watch_location_slug(args, config_manager)
+        slug_order = _index_watch_sample_dir_candidates(raw, config_manager)
+        date_dir = default_run_dir(slug_order[0], day_iso)
+        # Try to find a date_dir that exists
+        for slug in slug_order:
+            candidate = default_run_dir(slug, day_iso)
+            if candidate.is_dir():
+                date_dir = candidate
+                break
+
+        # Handle --list-sessions
+        if list_sessions_flag:
+            sessions = list_sessions(date_dir)
+            if not sessions:
+                console.print(f"[dim]No sessions found in {date_dir}[/dim]")
+            else:
+                console.print(format_session_list(sessions))
+            return
+
+        # Handle --session SESSION_ID
+        if session_id_arg:
+            sessions = list_sessions(date_dir)
+            matched = next((s for s in sessions if s.session_id == session_id_arg), None)
+            if matched is None:
+                console.print(f"[red]Session '{session_id_arg}' not found in {date_dir}[/red]")
+                if sessions:
+                    console.print("Available sessions:")
+                    console.print(format_session_list(sessions))
+                raise SystemExit(1)
+            sample_dir = matched.session_dir
+            samples = load_samples(sample_dir)
+        else:
+            # Auto-detect: sessions, legacy, or empty
+            sessions = list_sessions(date_dir)
+            if len(sessions) > 1:
+                # Multiple sessions: prompt if TTY, else auto-select latest
+                if _sys.stdin.isatty():
+                    console.print(f"Multiple sessions found in {date_dir}:")
+                    console.print(format_session_list(sessions))
+                    n = len(sessions)
+                    while True:
+                        try:
+                            choice = int(input(f"Select session [1-{n}]: ").strip())
+                        except (ValueError, EOFError):
+                            continue
+                        if 1 <= choice <= n:
+                            sample_dir = sessions[choice - 1].session_dir
+                            break
+                else:
+                    selected = sessions[-1]
+                    print(
+                        f"[indices-watch-report] Non-interactive: using latest session {selected.session_id}",
+                        file=_sys.stderr,
+                    )
+                    sample_dir = selected.session_dir
+                samples = load_samples(sample_dir)
+            elif len(sessions) == 1:
+                # Exactly one session: load without prompting
+                sample_dir = sessions[0].session_dir
+                samples = load_samples(sample_dir)
+            else:
+                # Legacy flat dir or empty: use existing resolve logic
+                sample_dir, samples = resolve_default_watch_sample_dir(
+                    args, config_manager, day_iso
+                )
+
     min_docs_delta = int(getattr(args, "min_docs_delta", 0) or 0)
     hot_ratio = float(getattr(args, "hot_ratio", 2.0) or 2.0)
     min_peers = int(getattr(args, "min_peers", 1) or 1)
@@ -617,6 +921,8 @@ def run_indices_watch_report(args: Any, console: Any, config_manager: Any) -> No
         rows = rows[: int(top_n)]
 
     show_rate_med = any(r.get("rate_vs_peer_median") is not None for r in rows)
+    show_hot = any(r.get("hot") or r.get("docs_level_elevated") for r in rows)
+    show_delta_store = any(int(r.get("delta_store_bytes", 0)) != 0 for r in rows)
 
     border_style = theme_manager.get_themed_style(
         "table_styles", "border_style", "bright_magenta"
@@ -653,7 +959,8 @@ def run_indices_watch_report(args: Any, console: Any, config_manager: Any) -> No
         title=f"Non-zero doc Δ only (sorted by {sort_hint})",
         style_variant="dashboard",
     )
-    style_system.add_themed_column(table, "Hot", "status", justify="center", width=6)
+    if show_hot:
+        style_system.add_themed_column(table, "Hot", "status", justify="center", width=6)
     style_system.add_themed_column(table, "Index", "name", overflow="fold", min_width=32)
     style_system.add_themed_column(table, "Δ docs", "count", justify="right", width=14)
     if interval_primary:
@@ -663,7 +970,8 @@ def run_indices_watch_report(args: Any, console: Any, config_manager: Any) -> No
         style_system.add_themed_column(table, "span/s", "count", justify="right", width=10)
     else:
         style_system.add_themed_column(table, "docs/s", "count", justify="right", width=12)
-    style_system.add_themed_column(table, "Δ store", "size", justify="right", width=12)
+    if show_delta_store:
+        style_system.add_themed_column(table, "Δ store", "size", justify="right", width=12)
     style_system.add_themed_column(table, "docs", "count", justify="right", width=11)
     style_system.add_themed_column(table, "med peer", "count", justify="right", width=11)
     style_system.add_themed_column(table, "docs/med", "percentage", justify="right", width=9)
@@ -703,16 +1011,18 @@ def run_indices_watch_report(args: Any, console: Any, config_manager: Any) -> No
                 return "—"
             return f"{float(v):.2f}"
 
+        store_cells: Tuple[str, ...] = (table_renderer.format_bytes(int(r.get("delta_store_bytes", 0))),) if show_delta_store else ()
+        hot_cells: Tuple[str, ...] = (hot_mark,) if show_hot else ()
         if interval_primary:
             table.add_row(
-                hot_mark,
+                *hot_cells,
                 r.get("index", ""),
                 f"{r.get('delta_docs', 0):,}",
                 _fmt_rate(r.get("docs_per_sec_interval_median")),
                 _fmt_rate(r.get("docs_per_sec_interval_p90")),
                 _fmt_rate(r.get("docs_per_sec_interval_max")),
                 f"{r.get('docs_per_sec', 0):.2f}",
-                table_renderer.format_bytes(int(r.get("delta_store_bytes", 0))),
+                *store_cells,
                 format_doc_count_compact(int(r.get("docs_end", 0))),
                 format_doc_count_compact(r.get("peer_median_docs_count")),
                 doc_vs_s,
@@ -721,11 +1031,11 @@ def run_indices_watch_report(args: Any, console: Any, config_manager: Any) -> No
             )
         else:
             table.add_row(
-                hot_mark,
+                *hot_cells,
                 r.get("index", ""),
                 f"{r.get('delta_docs', 0):,}",
                 f"{r.get('docs_per_sec', 0):.2f}",
-                table_renderer.format_bytes(int(r.get("delta_store_bytes", 0))),
+                *store_cells,
                 format_doc_count_compact(int(r.get("docs_end", 0))),
                 format_doc_count_compact(r.get("peer_median_docs_count")),
                 doc_vs_s,
@@ -741,8 +1051,8 @@ def run_indices_watch_report(args: Any, console: Any, config_manager: Any) -> No
     foot = (
         "docs / med peer = last-sample doc count vs leave-one-out median doc count among "
         "other backing indices in the same rollover series (like indices-analyze). docs/med is "
-        "that ratio; ⚠ when ≥ --docs-peer-ratio (default 5). Negative Δ store is normal "
-        "(merges/compaction)."
+        "that ratio; ⚠ when ≥ --docs-peer-ratio (default 5)."
+        + (" Negative Δ store is normal (merges/compaction)." if show_delta_store else "")
     )
     if show_rate_med:
         foot += (

@@ -112,78 +112,68 @@ themes:
         open:
           icon: bold
           text: bold
-        yellow:
+        close:
           icon: bold
           text: bold
-        red:
+      state_styles:
+        STARTED:
           icon: bold
           text: bold
-          status_styles:
-            open:
-              icon: bold
-              text: bold
-            close:
-              icon: bold
-              text: bold
-          state_styles:
-            STARTED:
-              icon: bold
-              text: bold
-            INITIALIZING:
-              icon: bold
-              text: bold
-            RELOCATING:
-              icon: bold
-              text: bold
-            UNASSIGNED:
-              icon: bold
-              text: bold
-            default:
-              icon: bold
-              text: bold
-          type_styles:
-            primary:
-              icon: bold
-              text: bold
-            replica:
-              icon: bold
-              text: bold
-          row_styles:
-            normal: white
-            hot: bold
-            frozen: bold
-            critical_health: bold
-            warning_health: bold
-            healthy: white
-      panel_styles:
-        title: bold
-        subtitle: dim
-        success: bold
-        warning: bold
-        error: bold
-        info: bold
-        secondary: bold
-      help_styles:
-        title: bold
-        section_header: bold
-        command: bold
-        description:
-        example:
-        footer: dim
-      semantic_styles:
-        primary: bold
-        secondary: bold
-        success: bold
-        warning: bold
-        error: bold
-        info: bold
+        INITIALIZING:
+          icon: bold
+          text: bold
+        RELOCATING:
+          icon: bold
+          text: bold
+        UNASSIGNED:
+          icon: bold
+          text: bold
+        default:
+          icon: bold
+          text: bold
+      type_styles:
+        primary:
+          icon: bold
+          text: bold
+        replica:
+          icon: bold
+          text: bold
+      row_styles:
+        normal: white
+        hot: bold
+        frozen: bold
+        critical_health: bold
+        warning_health: bold
+        healthy: white
+    panel_styles:
+      title: bold
+      subtitle: dim
+      success: bold
+      warning: bold
+      error: bold
+      info: bold
+      secondary: bold
+    help_styles:
+      title: bold
+      section_header: bold
+      command: bold
+      description: ""
+      example: ""
+      footer: dim
+    semantic_styles:
+      primary: bold
+      secondary: bold
+      success: bold
+      warning: bold
+      error: bold
+      info: bold
 
   # 🚀 Cyberpunk Theme - Futuristic neon theme for terminal warriors
   cyberpunk:
     table_styles:
       border_style: bright_magenta
-      header_style: bold bright_white on dark_magenta
-      table_box: None # Options: heavy, rounded, simple, double, or None for no borders
+      header_style: bold bright_cyan on dark_magenta
+      table_box: heavy # Options: heavy, rounded, simple, double, or None for no borders
       health_styles:
         green:
           icon: bright_green bold
@@ -205,71 +195,54 @@ themes:
         STARTED:
           icon: bright_green bold
           text: bright_green bold
-        yellow:
+        INITIALIZING:
           icon: bright_yellow bold
           text: bright_yellow bold
-        red:
+        RELOCATING:
+          icon: bright_cyan bold
+          text: bright_cyan bold
+        UNASSIGNED:
           icon: bright_red bold
           text: bright_red bold
-          status_styles:
-            open:
-              icon: bright_cyan bold
-              text: bright_cyan bold
-            close:
-              icon: bright_red bold
-              text: bright_red bold
-          state_styles:
-            STARTED:
-              icon: bright_green bold
-              text: bright_green bold
-            INITIALIZING:
-              icon: bright_yellow bold
-              text: bright_yellow bold
-            RELOCATING:
-              icon: bright_blue bold
-              text: bright_blue bold
-            UNASSIGNED:
-              icon: bright_red bold
-              text: bright_red bold
-            default:
-              icon: bright_white bold
-              text: bright_white bold
-          type_styles:
-            primary:
-              icon: bright_white bold
-              text: bright_white bold
-            replica:
-              icon: bright_white bold
-              text: bright_white bold
-          row_styles:
-            normal: bright_white
-            hot: bright_red
-            frozen: bright_cyan
-            critical_health: bright_red
-            warning_health: bright_yellow
-            healthy: bright_white
-      panel_styles:
-        title: bold bright_white
-        subtitle: dim bright_cyan
-        success: bright_green
-        warning: bright_yellow
-        error: bright_red
-        info: bright_cyan
-        secondary: bright_blue
-      help_styles:
-        title: bold bright_magenta
-        section_header: bold bright_cyan
-        command: bright_yellow
-        description: bright_white
-        example: bright_cyan
-        footer: dim bright_white
-      semantic_styles:
-        primary: bright_magenta
-        secondary: bright_blue
-        success: bright_green
-        warning: bright_yellow
-        error: bright_red
-        info: bright_cyan
+        default:
+          icon: bright_white bold
+          text: bright_white bold
+      type_styles:
+        primary:
+          icon: bright_magenta bold
+          text: bright_magenta bold
+        replica:
+          icon: bright_cyan bold
+          text: bright_cyan bold
+      row_styles:
+        normal: bright_white
+        hot: bright_red
+        frozen: bright_cyan
+        critical_health: bright_red
+        warning_health: bright_yellow
+        healthy: bright_white
+    panel_styles:
+      title: bold bright_magenta
+      subtitle: dim bright_cyan
+      success: bright_green
+      warning: bright_yellow
+      error: bright_red
+      info: bright_cyan
+      secondary: bright_cyan
+    help_styles:
+      title: bold bright_magenta
+      section_header: bold bright_cyan
+      command: bright_yellow
+      description: bright_white
+      example: bright_cyan
+      footer: dim bright_white
+    semantic_styles:
+      primary: bright_magenta
+      secondary: bright_cyan
+      success: bright_green
+      warning: bright_yellow
+      error: bright_red
+      info: bright_cyan
 
   # ⚡ Cyberpunk Yellow Theme - Electric neon yellow theme for the digital underground
   cyberpunk_yellow:
@@ -298,71 +271,54 @@ themes:
         STARTED:
           icon: bright_green bold
           text: bright_green bold
-        yellow:
+        INITIALIZING:
           icon: gold1 bold
           text: gold1 bold
-        red:
+        RELOCATING:
+          icon: orange1 bold
+          text: orange1 bold
+        UNASSIGNED:
           icon: red1 bold
           text: red1 bold
-          status_styles:
-            open:
-              icon: bright_yellow bold
-              text: bright_yellow bold
-            close:
-              icon: red1 bold
-              text: red1 bold
-          state_styles:
-            STARTED:
-              icon: bright_green bold
-              text: bright_green bold
-            INITIALIZING:
-              icon: gold1 bold
-              text: gold1 bold
-            RELOCATING:
-              icon: orange1 bold
-              text: orange1 bold
-            UNASSIGNED:
-              icon: red1 bold
-              text: red1 bold
-            default:
-              icon: bright_white bold
-              text: bright_white bold
-          type_styles:
-            primary:
-              icon: gold1 bold
-              text: gold1 bold
-            replica:
-              icon: yellow bold
-              text: yellow bold
-          row_styles:
-            normal: bright_white
-            hot: red1
-            frozen: cyan1
-            critical_health: red1
-            warning_health: gold1
-            healthy: bright_white
-      panel_styles:
-        title: bold bright_white
-        subtitle: dim gold1
-        success: bright_green
-        warning: gold1
-        error: red1
-        info: bright_yellow
-        secondary: orange1
-      help_styles:
-        title: bold bright_yellow
-        section_header: bold gold1
-        command: bright_yellow
-        description: bright_white
-        example: gold1
-        footer: dim bright_white
-      semantic_styles:
-        primary: bright_yellow
-        secondary: gold1
-        success: bright_green
-        warning: gold1
-        error: red1
-        info: bright_yellow
+        default:
+          icon: bright_white bold
+          text: bright_white bold
+      type_styles:
+        primary:
+          icon: gold1 bold
+          text: gold1 bold
+        replica:
+          icon: yellow bold
+          text: yellow bold
+      row_styles:
+        normal: bright_white
+        hot: red1
+        frozen: cyan1
+        critical_health: red1
+        warning_health: gold1
+        healthy: bright_white
+    panel_styles:
+      title: bold bright_yellow
+      subtitle: dim gold1
+      success: bright_green
+      warning: gold1
+      error: red1
+      info: bright_yellow
+      secondary: orange1
+    help_styles:
+      title: bold bright_yellow
+      section_header: bold gold1
+      command: bright_yellow
+      description: bright_white
+      example: gold1
+      footer: dim bright_white
+    semantic_styles:
+      primary: bright_yellow
+      secondary: gold1
+      success: bright_green
+      warning: gold1
+      error: red1
+      info: bright_yellow
 
   # 🌊 Ocean Theme - Professional oceanic theme
   ocean:
@@ -467,71 +423,54 @@ themes:
         STARTED:
           icon: pale_green1 bold
           text: pale_green1 bold
-        yellow:
+        INITIALIZING:
           icon: khaki1 bold
           text: khaki1 bold
-        red:
+        RELOCATING:
+          icon: light_steel_blue1 bold
+          text: light_steel_blue1 bold
+        UNASSIGNED:
           icon: light_coral bold
           text: light_coral bold
-          status_styles:
-            open:
-              icon: light_steel_blue1 bold
-              text: light_steel_blue1 bold
-            close:
-              icon: light_coral bold
-              text: light_coral bold
-          state_styles:
-            STARTED:
-              icon: pale_green1 bold
-              text: pale_green1 bold
-            INITIALIZING:
-              icon: khaki1 bold
-              text: khaki1 bold
-            RELOCATING:
-              icon: light_steel_blue1 bold
-              text: light_steel_blue1 bold
-            UNASSIGNED:
-              icon: light_coral bold
-              text: light_coral bold
-            default:
-              icon: silver bold
-              text: silver bold
-          type_styles:
-            primary:
-              icon: lavender bold
-              text: lavender bold
-            replica:
-              icon: light_steel_blue1 bold
-              text: light_steel_blue1 bold
-          row_styles:
-            normal: silver
-            hot: light_coral
-            frozen: light_steel_blue1
-            critical_health: light_coral
-            warning_health: khaki1
-            healthy: silver
-      panel_styles:
-        title: bold lavender
-        subtitle: dim light_steel_blue1
-        success: pale_green1
-        warning: khaki1
-        error: light_coral
-        info: light_steel_blue1
-        secondary: plum1
-      help_styles:
-        title: bold lavender
-        section_header: bold light_steel_blue1
-        command: khaki1 bold
-        description: silver
-        example: light_steel_blue1
-        footer: dim grey70
-      semantic_styles:
-        primary: lavender
-        secondary: plum1
-        success: pale_green1
-        warning: khaki1
-        error: light_coral
-        info: light_steel_blue1
+        default:
+          icon: silver bold
+          text: silver bold
+      type_styles:
+        primary:
+          icon: lavender bold
+          text: lavender bold
+        replica:
+          icon: light_steel_blue1 bold
+          text: light_steel_blue1 bold
+      row_styles:
+        normal: silver
+        hot: light_coral
+        frozen: light_steel_blue1
+        critical_health: light_coral
+        warning_health: khaki1
+        healthy: silver
+    panel_styles:
+      title: bold lavender
+      subtitle: dim light_steel_blue1
+      success: pale_green1
+      warning: khaki1
+      error: light_coral
+      info: light_steel_blue1
+      secondary: plum1
+    help_styles:
+      title: bold lavender
+      section_header: bold light_steel_blue1
+      command: khaki1 bold
+      description: silver
+      example: light_steel_blue1
+      footer: dim grey70
+    semantic_styles:
+      primary: lavender
+      secondary: plum1
+      success: pale_green1
+      warning: khaki1
+      error: light_coral
+      info: light_steel_blue1
 
   # 🔥 Fire Theme - High-energy theme with warm colors
   fire:
@@ -560,71 +499,54 @@ themes:
         STARTED:
           icon: chartreuse1 bold
           text: chartreuse1 bold
-        yellow:
+        INITIALIZING:
           icon: yellow1 bold
           text: yellow1 bold
-        red:
+        RELOCATING:
+          icon: orange1 bold
+          text: orange1 bold
+        UNASSIGNED:
           icon: red1 bold
           text: red1 bold
-          status_styles:
-            open:
-              icon: orange1 bold
-              text: orange1 bold
-            close:
-              icon: red1 bold
-              text: red1 bold
-          state_styles:
-            STARTED:
-              icon: chartreuse1 bold
-              text: chartreuse1 bold
-            INITIALIZING:
-              icon: yellow1 bold
-              text: yellow1 bold
-            RELOCATING:
-              icon: orange1 bold
-              text: orange1 bold
-            UNASSIGNED:
-              icon: red1 bold
-              text: red1 bold
-            default:
-              icon: orange3 bold
-              text: orange3 bold
-          type_styles:
-            primary:
-              icon: gold1 bold
-              text: gold1 bold
-            replica:
-              icon: dark_orange bold
-              text: dark_orange bold
-          row_styles:
-            normal: orange3
-            hot: red1
-            frozen: gold3
-            critical_health: red1
-            warning_health: yellow1
-            healthy: orange3
-      panel_styles:
-        title: bold orange1
-        subtitle: dim gold3
-        success: chartreuse1
-        warning: yellow1
-        error: red1
-        info: orange1
-        secondary: dark_orange
-      help_styles:
-        title: bold orange_red1
-        section_header: bold orange1
-        command: yellow1 bold
-        description: orange3
-        example: gold1
-        footer: dim dark_orange
-      semantic_styles:
-        primary: orange_red1
-        secondary: dark_orange
-        success: chartreuse1
-        warning: yellow1
-        error: red1
-        info: orange1
+        default:
+          icon: orange3 bold
+          text: orange3 bold
+      type_styles:
+        primary:
+          icon: gold1 bold
+          text: gold1 bold
+        replica:
+          icon: dark_orange bold
+          text: dark_orange bold
+      row_styles:
+        normal: orange3
+        hot: red1
+        frozen: gold3
+        critical_health: red1
+        warning_health: yellow1
+        healthy: orange3
+    panel_styles:
+      title: bold orange1
+      subtitle: dim gold3
+      success: chartreuse1
+      warning: yellow1
+      error: red1
+      info: orange1
+      secondary: dark_orange
+    help_styles:
+      title: bold orange_red1
+      section_header: bold orange1
+      command: yellow1 bold
+      description: orange3
+      example: gold1
+      footer: dim dark_orange
+    semantic_styles:
+      primary: orange_red1
+      secondary: dark_orange
+      success: chartreuse1
+      warning: yellow1
+      error: red1
+      info: orange1
 
   # 🏢 Corporate Theme - Professional business theme
   corporate:
@@ -653,71 +575,54 @@ themes:
         STARTED:
           icon: bright_green bold
           text: bright_green bold
-        yellow:
+        INITIALIZING:
           icon: bright_yellow bold
           text: bright_yellow bold
-        red:
+        RELOCATING:
+          icon: bright_blue bold
+          text: bright_blue bold
+        UNASSIGNED:
           icon: bright_red bold
           text: bright_red bold
-          status_styles:
-            open:
-              icon: bright_blue bold
-              text: bright_blue bold
-            close:
-              icon: bright_red bold
-              text: bright_red bold
-          state_styles:
-            STARTED:
-              icon: bright_green bold
-              text: bright_green bold
-            INITIALIZING:
-              icon: bright_yellow bold
-              text: bright_yellow bold
-            RELOCATING:
-              icon: bright_blue bold
-              text: bright_blue bold
-            UNASSIGNED:
-              icon: bright_red bold
-              text: bright_red bold
-            default:
-              icon: bright_white bold
-              text: bright_white bold
-          type_styles:
-            primary:
-              icon: bright_cyan bold
-              text: bright_cyan bold
-            replica:
-              icon: bright_magenta bold
-              text: bright_magenta bold
-          row_styles:
-            normal: bright_white
-            hot: bright_red
-            frozen: bright_blue
-            critical_health: bright_red
-            warning_health: bright_yellow
-            healthy: bright_white
-      panel_styles:
-        title: bold bright_white
-        subtitle: dim bright_white
-        success: bright_green
-        warning: bright_yellow
-        error: bright_red
-        info: bright_blue
-        secondary: bright_magenta
-      help_styles:
-        title: bold bright_cyan
-        section_header: bold bright_white
-        command: bright_yellow bold
-        description: bright_white
-        example: bright_cyan
-        footer: dim bright_black
-      semantic_styles:
-        primary: bright_cyan
-        secondary: bright_magenta
-        success: bright_green
-        warning: bright_yellow
-        error: bright_red
-        info: bright_blue
+        default:
+          icon: bright_white bold
+          text: bright_white bold
+      type_styles:
+        primary:
+          icon: bright_cyan bold
+          text: bright_cyan bold
+        replica:
+          icon: bright_magenta bold
+          text: bright_magenta bold
+      row_styles:
+        normal: bright_white
+        hot: bright_red
+        frozen: bright_blue
+        critical_health: bright_red
+        warning_health: bright_yellow
+        healthy: bright_white
+    panel_styles:
+      title: bold bright_white
+      subtitle: dim bright_white
+      success: bright_green
+      warning: bright_yellow
+      error: bright_red
+      info: bright_blue
+      secondary: bright_magenta
+    help_styles:
+      title: bold bright_cyan
+      section_header: bold bright_white
+      command: bright_yellow bold
+      description: bright_white
+      example: bright_cyan
+      footer: dim bright_black
+    semantic_styles:
+      primary: bright_cyan
+      secondary: bright_magenta
+      success: bright_green
+      warning: bright_yellow
+      error: bright_red
+      info: bright_blue
 
   # 🌟 Matrix Theme - Terminal/hacker aesthetic
   matrix:
@@ -746,68 +651,51 @@ themes:
         STARTED:
           icon: bright_green bold
           text: bright_green bold
-        yellow:
+        INITIALIZING:
           icon: bright_yellow bold
           text: bright_yellow bold
-        red:
+        RELOCATING:
+          icon: green bold
+          text: green bold
+        UNASSIGNED:
           icon: bright_red bold
           text: bright_red bold
-          status_styles:
-            open:
-              icon: green bold
-              text: green bold
-            close:
-              icon: bright_red bold
-              text: bright_red bold
-          state_styles:
-            STARTED:
-              icon: bright_green bold
-              text: bright_green bold
-            INITIALIZING:
-              icon: bright_yellow bold
-              text: bright_yellow bold
-            RELOCATING:
-              icon: green bold
-              text: green bold
-            UNASSIGNED:
-              icon: bright_red bold
-              text: bright_red bold
-            default:
-              icon: green bold
-              text: green bold
-          type_styles:
-            primary:
-              icon: bright_green bold
-              text: bright_green bold
-            replica:
-              icon: green bold
-              text: green bold
-          row_styles:
-            normal: green
-            hot: bright_red
-            frozen: bright_blue
-            critical_health: bright_red
-            warning_health: bright_yellow
-            healthy: green
-      panel_styles:
-        title: bold bright_green
-        subtitle: dim green
-        success: bright_green
-        warning: bright_yellow
-        error: bright_red
-        info: green
-        secondary: bright_cyan
-      help_styles:
-        title: bold bright_green
-        section_header: bold green
-        command: bright_yellow bold
-        description: green
-        example: bright_green
-        footer: dim green
-      semantic_styles:
-        primary: bright_green
-        secondary: bright_cyan
-        success: bright_green
-        warning: bright_yellow
-        error: bright_red
-        info: green
+        default:
+          icon: green bold
+          text: green bold
+      type_styles:
+        primary:
+          icon: bright_green bold
+          text: bright_green bold
+        replica:
+          icon: green bold
+          text: green bold
+      row_styles:
+        normal: green
+        hot: bright_red
+        frozen: bright_blue
+        critical_health: bright_red
+        warning_health: bright_yellow
+        healthy: green
+    panel_styles:
+      title: bold bright_green
+      subtitle: dim green
+      success: bright_green
+      warning: bright_yellow
+      error: bright_red
+      info: green
+      secondary: bright_cyan
+    help_styles:
+      title: bold bright_green
+      section_header: bold green
+      command: bright_yellow bold
+      description: green
+      example: bright_green
+      footer: dim green
+    semantic_styles:
+      primary: bright_green
+      secondary: bright_cyan
+      success: bright_green
+      warning: bright_yellow
+      error: bright_red
+      info: green

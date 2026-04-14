@@ -65,7 +65,7 @@ Implement the `es-top` live terminal dashboard as a self-contained feature integ
     - **Validates: Requirements 1.8**
     - `@given(st.lists(st.builds(PollSnapshot, ...), min_size=1, max_size=20))`: process each snapshot in sequence; verify `poll_count` equals the 1-based index of each call; call `reset()` and verify the next `process()` returns `poll_count = 1`
 
-  - [x] 3.8 Write unit tests for `DeltaCalculator`
+  - [x] 3.8 Wrgite unit tests for `DeltaCalculator`
     - Verify first poll returns `is_first_poll=True` with empty `top_indices`
     - Verify `reset()` clears `_prior`, `_session_totals`, and `_poll_count`
     - Verify elapsed time is derived from snapshot timestamps, not the configured interval
@@ -148,7 +148,49 @@ Implement the `es-top` live terminal dashboard as a self-contained feature integ
     - Verify `'es-top'` key exists in the `command_handlers` dict inside `CommandHandler.execute()`
     - _Requirements: 2.2_
 
-- [ ] 8. Final checkpoint — ensure all tests pass
+- [x] 8. Implement hot indicator display mode
+  - [x] 8.1 Add `get_estop_hot_indicator()` to `ConfigurationManager`
+    - Read `es_top.hot_indicator` from `escmd.yml`; validate against `{'emoji', 'color', 'both', 'none'}`; return `'emoji'` as default and for any invalid value
+    - _Requirements: 9.2, 9.9_
+
+  - [x] 8.2 Add `hot_indicator` field to `ProcessedData` and thread it through `EsTopDashboard` → `DeltaCalculator.process()` → `ProcessedData`
+    - `EsTopDashboard.__init__` reads `hot_indicator` from config (via `ConfigurationManager.get_estop_hot_indicator()`) and passes it to `DeltaCalculator.process()` each cycle
+    - `ProcessedData` gains a `hot_indicator: str = "emoji"` field
+    - _Requirements: 9.1, 9.2_
+
+  - [x] 8.3 Add `_hot_prefix(rank, mode)` helper to `EsTopRenderer`
+    - Returns `'🔥 '` for rank 0 when mode is `emoji` or `both`
+    - Returns `'🌡️ '` for rank 1 when mode is `emoji` or `both`
+    - Returns `''` for rank ≥ 2, or when mode is `color` or `none`
+    - _Requirements: 9.3, 9.7, 9.8_
+
+  - [x] 8.4 Update `_render_index_hot_list` to apply hot indicator
+    - Indices are already sorted by `docs_per_sec` descending; use rank position (0, 1, …) to call `_hot_prefix`
+    - WHEN mode is `emoji` or `none`: skip `_index_activity_style` (use default row style)
+    - WHEN mode is `color` or `both`: apply existing `_index_activity_style` relative color coding
+    - Prepend the prefix from `_hot_prefix` to the index name `Text` object
+    - _Requirements: 9.3, 9.4, 9.5, 9.6_
+
+  - [x] 8.5 Update `_render_node_panel` to apply hot indicator to node names
+    - Nodes are already sorted by `heap_pct` descending; apply `_hot_prefix(rank, mode)` to node name column
+    - _Requirements: 9.7, 9.8_
+
+  - [x] 8.6 Add `hot_indicator: emoji` to `escmd.yml` under `es_top` section with a comment listing valid values
+    - _Requirements: 9.2_
+
+  - [ ]* 8.7 Write property test: hot indicator prefix correctness (Property 13)
+    - **Property 13: Hot indicator prefix correctness**
+    - **Validates: Requirements 9.3, 9.4, 9.5, 9.6, 9.7, 9.8**
+    - `@given(st.sampled_from(['emoji', 'color', 'both', 'none']), st.integers(min_value=0, max_value=5))`: call `_hot_prefix(rank, mode)`; verify 🔥 returned for rank 0 with emoji/both, 🌡️ for rank 1 with emoji/both, empty string otherwise
+
+  - [ ]* 8.8 Write unit tests for hot indicator
+    - Verify `get_estop_hot_indicator()` returns `'emoji'` for missing/invalid config values
+    - Verify `_render_index_hot_list` prepends 🔥 to the top index name when mode is `emoji`
+    - Verify no emoji appears when mode is `none`
+    - Verify color coding is absent when mode is `emoji`, present when mode is `color`
+    - _Requirements: 9.1–9.9_
+
+- [ ] 9. Final checkpoint — ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

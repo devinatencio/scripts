@@ -922,6 +922,33 @@ class HealthCommands(BaseCommand):
             print(f"ERROR: Error displaying group health: {str(e)}")
 
 
+    def get_unassigned_shard_reasons(self) -> Dict[str, int]:
+        """
+        Fetch unassigned shards and group them by reason.
+
+        Returns:
+            dict: Mapping of reason -> count, e.g. {'NODE_LEFT': 2, 'ALLOCATION_FAILED': 1}
+        """
+        try:
+            shards = self.es_client.es.cat.shards(
+                h="state,unassigned.reason",
+                format="json"
+            )
+            if hasattr(shards, "body"):
+                shards = shards.body
+            elif not isinstance(shards, list):
+                shards = list(shards)
+
+            reasons: Dict[str, int] = {}
+            for shard in shards:
+                if shard.get("state", "").upper() == "UNASSIGNED":
+                    reason = shard.get("unassigned.reason") or "UNKNOWN"
+                    reasons[reason] = reasons.get(reason, 0) + 1
+            return reasons
+        except Exception:
+            return {}
+
+
 # Backward compatibility functions
 def check_cluster_health(es_client, level: str = 'cluster',
                         wait_for_status: Optional[str] = None) -> Dict[str, Any]:

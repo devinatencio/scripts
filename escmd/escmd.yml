@@ -79,6 +79,7 @@ es_top:
   interval: 30       # refresh interval in seconds (minimum 10)
   top_nodes: 5       # number of nodes to show in node panel
   top_indices: 10    # number of indices to show in hot list
+  hot_indicator: emoji  # how to flag the hottest index/node: emoji | color | both | none
 
 # Centralized password management by environment
 # Format: passwords.<env>.<username>: <password>

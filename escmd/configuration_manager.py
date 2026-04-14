@@ -319,6 +319,21 @@ class ConfigurationManager:
         estop_config = (self.main_config or {}).get("es_top", {})
         return max(10, estop_config.get("interval", 30))
 
+    def get_estop_hot_indicator(self):
+        """
+        Get the es-top hot indicator display mode from configuration.
+
+        Valid values: 'emoji', 'color', 'both', 'none'.
+        Invalid or missing values fall back to 'emoji'.
+
+        Returns:
+            str: One of 'emoji', 'color', 'both', 'none' (defaults to 'emoji')
+        """
+        _valid = {"emoji", "color", "both", "none"}
+        estop_config = (self.main_config or {}).get("es_top", {})
+        value = estop_config.get("hot_indicator", "emoji")
+        return value if value in _valid else "emoji"
+
     def get_display_theme(self):
         """
         Get the display theme from state file first, then configuration file.
