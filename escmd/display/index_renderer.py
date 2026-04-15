@@ -25,8 +25,10 @@ class IndexRenderer:
             theme_manager: Optional theme manager for styling
             es_client: ElasticsearchClient instance for data access
         """
+        from display.style_system import StyleSystem
         self.theme_manager = theme_manager
         self.es_client = es_client
+        self.style_system = StyleSystem(theme_manager) if theme_manager else None
 
     def get_themed_style(self, category: str, key: str, default: str) -> str:
         """Get themed style or return default."""
@@ -81,59 +83,110 @@ class IndexRenderer:
             is_frozen = settings.get('frozen', 'false') == 'true'
 
             # Set theme colors using the theme system
-            if is_hot:
-                theme_color = self.get_themed_style('panel_styles', 'error', 'bright_red')
-                type_indicator = "🔥 Hot Index"
-            elif is_frozen:
-                theme_color = self.get_themed_style('panel_styles', 'info', 'bright_blue')
-                type_indicator = "🧊 Frozen Index"
-            else:
-                theme_color = self.get_themed_style('panel_styles', 'title', 'bright_cyan')
-                type_indicator = "📋 Standard Index"
+            is_hot = indice_name in getattr(self.es_client, 'cluster_indices_hot_indexes', [])
+            is_frozen = settings.get('frozen', 'false') == 'true'
 
-            # Create title panel
-            title_text = Text(f"Index Details: {indice_name}", style=f"bold {theme_color}", justify="center")
+            ss = self.style_system
+            ts = ss._get_style('semantic', 'primary', 'bold cyan') if ss else 'bold cyan'
+            _title = self.theme_manager.get_themed_style("panel_styles", "title", "bold white") if self.theme_manager else "bold white"
+
+            # --- Title panel (standard pattern) ---
+            health = index_info['health']
+            health_icon = "🟢" if health == 'green' else "🟡" if health == 'yellow' else "🔴"
+            docs_count = f"{int(index_info['docs.count']):,}" if index_info['docs.count'] != '-' else 'N/A'
+            pri_count = str(index_info['pri'])
+            rep_count = str(index_info['rep'])
+
+            # Shard state counts for status text
+            shard_states = {}
+            shard_types = {'primary': 0, 'replica': 0}
+            nodes_distribution = {}
+            for shard in index_shards:
+                state = shard['state']
+                shard_states[state] = shard_states.get(state, 0) + 1
+                if shard['prirep'] == 'p':
+                    shard_types['primary'] += 1
+                else:
+                    shard_types['replica'] += 1
+                node = shard.get('node', 'unassigned')
+                nodes_distribution[node] = nodes_distribution.get(node, 0) + 1
+
+            unassigned_count = shard_states.get('UNASSIGNED', 0)
+
+            # Body: health-aware status
+            if health == 'red':
+                status_text = f"🔴 {indice_name} - {unassigned_count} Unassigned Shard{'s' if unassigned_count != 1 else ''}"
+                body_style = "bold red"
+                border = "red"
+            elif health == 'yellow':
+                status_text = f"🟡 {indice_name} - {unassigned_count} Unassigned Replica{'s' if unassigned_count != 1 else ''}"
+                body_style = "bold yellow"
+                border = "yellow"
+            else:
+                status_text = f"🟢 {indice_name} - Healthy (All Shards Assigned)"
+                body_style = "bold green"
+                border = ss._get_style('table_styles', 'border_style', 'bright_magenta') if ss else "bright_magenta"
+
+            # Subtitle bar
+            subtitle_rich = Text()
+            subtitle_rich.append("Docs: ", style="default")
+            subtitle_rich.append(str(docs_count), style=ss._get_style('semantic', 'info', 'cyan') if ss else "cyan")
+            subtitle_rich.append(" | Shards: ", style="default")
+            subtitle_rich.append(f"{pri_count}p", style=ss._get_style('semantic', 'primary', 'bright_magenta') if ss else "bright_magenta")
+            subtitle_rich.append("/", style="default")
+            subtitle_rich.append(f"{rep_count}r", style=ss._get_style('semantic', 'info', 'blue') if ss else "blue")
+            subtitle_rich.append(" | Size: ", style="default")
+            subtitle_rich.append(str(index_info.get('pri.store.size', '-')), style=ss._get_style('semantic', 'info', 'cyan') if ss else "cyan")
+            subtitle_rich.append(" / ", style="default")
+            subtitle_rich.append(str(index_info.get('store.size', '-')), style=ss._get_style('semantic', 'info', 'cyan') if ss else "cyan")
+            subtitle_rich.append(" | Status: ", style="default")
+            if index_info['status'] == 'open':
+                subtitle_rich.append("Open", style=ss._get_style('semantic', 'success', 'green') if ss else "green")
+            else:
+                subtitle_rich.append("Closed", style=ss._get_style('semantic', 'warning', 'yellow') if ss else "yellow")
+
+            # ILM info in subtitle
+            ilm_policy = settings.get('lifecycle', {}).get('name', None)
+            ilm_phase = None
+            ilm_phase_icon = ''
+            if ilm_policy:
+                try:
+                    ilm_explain = self.es_client.es.ilm.explain_lifecycle(index=indice_name)
+                    if indice_name in ilm_explain['indices']:
+                        phase_name = ilm_explain['indices'][indice_name].get('phase', '')
+                        phase_icons = {'hot': '🔥', 'warm': '🟡', 'cold': '🧊', 'frozen': '🧊', 'delete': '🗑'}
+                        ilm_phase_icon = phase_icons.get(phase_name, '')
+                        ilm_phase = phase_name.title()
+                except Exception:
+                    pass
+
+                subtitle_rich.append(" | ILM: ", style="default")
+                subtitle_rich.append(ilm_policy, style=ss._get_style('semantic', 'primary', 'bright_magenta') if ss else "bright_magenta")
+                if ilm_phase:
+                    subtitle_rich.append(f" ({ilm_phase_icon} {ilm_phase})", style=ss._get_style('semantic', 'primary', 'bright_magenta') if ss else "bright_magenta")
+
+            if is_hot:
+                subtitle_rich.append(" | 🔥 Hot Index", style=ss._get_style('semantic', 'error', 'bright_red') if ss else "bright_red")
+            elif is_frozen:
+                subtitle_rich.append(" | 🧊 Frozen", style=ss._get_style('semantic', 'info', 'bright_blue') if ss else "bright_blue")
+
             title_panel = Panel(
-                title_text,
-                subtitle=type_indicator,
-                border_style=theme_color,
+                Text(status_text, style=body_style, justify="center"),
+                title=f"[{ts}]📋 Index Details[/{ts}]",
+                subtitle=subtitle_rich,
+                border_style=border,
                 padding=(1, 2)
             )
 
-            # Index Overview Panel - Create table for aligned columns
+            # --- Settings panel (left) ---
             from rich.table import Table as InnerTable
 
-            health_icon = "🟢" if index_info['health'] == 'green' else "🟡" if index_info['health'] == 'yellow' else "🔴"
-            status_icon = "📂" if index_info['status'] == 'open' else "🔒"
-            docs_count = f"{int(index_info['docs.count']):,}" if index_info['docs.count'] != '-' else 'N/A'
-
-            overview_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-            overview_table.add_column("Label", style="bold", no_wrap=True)
-            overview_table.add_column("Icon", justify="left", width=2)
-            overview_table.add_column("Value", no_wrap=True)
-
-            overview_table.add_row("Health:", health_icon, str(index_info['health']).title())
-            overview_table.add_row("Status:", status_icon, str(index_info['status']).title())
-            overview_table.add_row("Documents:", "📊", str(docs_count))
-            overview_table.add_row("Primary Shards:", "🔢", str(index_info['pri']))
-            overview_table.add_row("Replica Shards:", "📋", str(index_info['rep']))
-            overview_table.add_row("Primary Size:", "💾", str(index_info['pri.store.size']))
-            overview_table.add_row("Total Size:", "📦", str(index_info['store.size']))
-
-            overview_panel = Panel(
-                overview_table,
-                title="Overview",
-                border_style=self.get_themed_style('panel_styles', 'secondary', 'magenta'),
-                padding=(1, 2)
-            )
-
-            # Index Settings Panel
             creation_date = settings.get('creation_date', 'Unknown')
             if creation_date != 'Unknown':
                 try:
                     import datetime
                     creation_date = datetime.datetime.fromtimestamp(int(creation_date) / 1000).strftime('%Y-%m-%d %H:%M:%S')
-                except:
+                except Exception:
                     pass
 
             uuid = settings.get('uuid', 'Unknown')
@@ -141,55 +194,75 @@ class IndexRenderer:
             number_of_shards = settings.get('number_of_shards', 'Unknown')
             number_of_replicas = settings.get('number_of_replicas', 'Unknown')
 
-            # Get ILM policy information
-            ilm_policy = settings.get('lifecycle', {}).get('name', 'None')
-            ilm_icon = "📋" if ilm_policy != 'None' else "❌"
-
-            # Get ILM phase if available
-            ilm_phase = 'Unknown'
-            ilm_phase_icon = ''
-            if ilm_policy != 'None':
-                try:
-                    # Try to get ILM explain info for this index
-                    ilm_explain = self.es_client.es.ilm.explain_lifecycle(index=indice_name)
-                    if indice_name in ilm_explain['indices']:
-                        index_ilm = ilm_explain['indices'][indice_name]
-                        phase_name = index_ilm.get('phase', 'Unknown')
-                        # Add phase icon
-                        phase_icons = {
-                            'hot': '🔥',
-                            'warm': '🟡',
-                            'cold': '🧊',
-                            'frozen': '🧊',
-                            'delete': '🗑'
-                        }
-                        ilm_phase_icon = phase_icons.get(phase_name, '❓')
-                        ilm_phase = phase_name.title()
-                except:
-                    pass
-
-            # Index Settings Panel - Create table for aligned columns
             settings_table = InnerTable(show_header=False, box=None, padding=(0, 1))
             settings_table.add_column("Label", style="bold", no_wrap=True)
-            settings_table.add_column("Icon", justify="left", width=2)
+            settings_table.add_column("Icon", justify="left", width=3)
             settings_table.add_column("Value", no_wrap=True)
 
             settings_table.add_row("UUID:", "🆔", str(uuid))
             settings_table.add_row("Created:", "📅", str(creation_date))
             settings_table.add_row("Version:", "🔩", str(version))
-            settings_table.add_row("ILM Policy:", ilm_icon, str(ilm_policy))
-            settings_table.add_row("ILM Phase:", ilm_phase_icon, str(ilm_phase))
-            settings_table.add_row("Configured Shards:", "🔢", str(number_of_shards))
-            settings_table.add_row("Configured Replicas:", "📋", str(number_of_replicas))
+            if ilm_policy:
+                settings_table.add_row("ILM Policy:", "📋", str(ilm_policy))
+                if ilm_phase:
+                    settings_table.add_row("ILM Phase:", ilm_phase_icon or "📋", str(ilm_phase))
+            else:
+                settings_table.add_row("ILM Policy:", "❌", "None")
+            settings_table.add_row("Shards:", "🔢", f"{number_of_shards} primary / {number_of_replicas} replica")
 
             settings_panel = Panel(
                 settings_table,
-                title="Settings",
-                border_style=self.get_themed_style('panel_styles', 'info', 'blue'),
+                title=f"[{_title}]🔩 Settings[/{_title}]",
+                border_style=ss._get_style('table_styles', 'border_style', 'bright_magenta') if ss else "bright_magenta",
                 padding=(1, 2)
             )
 
-            # Metadata Panel - Display as themed table
+            # --- Shard Overview panel (right) ---
+            shard_table = InnerTable(show_header=False, box=None, padding=(0, 1))
+            shard_table.add_column("Label", style="bold", no_wrap=True)
+            shard_table.add_column("Icon", justify="left", width=3)
+            shard_table.add_column("Value", no_wrap=True)
+
+            shard_table.add_row("Total Shards:", "📊", str(len(index_shards)))
+
+            # Primary status
+            pri_started = sum(1 for s in index_shards if s['prirep'] == 'p' and s['state'] == 'STARTED')
+            pri_other = shard_types['primary'] - pri_started
+            if pri_other == 0:
+                shard_table.add_row("Primary:", "🔑", Text(f"{shard_types['primary']} Started", style=ss.get_semantic_style("success") if ss else "green"))
+            else:
+                shard_table.add_row("Primary:", "🔑", Text(f"{pri_started} Started, {pri_other} Other", style=ss.get_semantic_style("warning") if ss else "yellow"))
+
+            # Replica status
+            rep_unassigned = sum(1 for s in index_shards if s['prirep'] == 'r' and s['state'] == 'UNASSIGNED')
+            rep_started = shard_types['replica'] - rep_unassigned
+            if rep_unassigned > 0:
+                shard_table.add_row("Replica:", "📋", Text(f"{rep_unassigned} Unassigned", style=ss.get_semantic_style("error") if ss else "red"))
+            elif shard_types['replica'] > 0:
+                shard_table.add_row("Replica:", "📋", Text(f"{shard_types['replica']} Started", style=ss.get_semantic_style("success") if ss else "green"))
+            else:
+                shard_table.add_row("Replica:", "📋", "0")
+
+            # Node distribution
+            if nodes_distribution:
+                shard_table.add_row("", "", "")
+                top_nodes = sorted(nodes_distribution.items(), key=lambda x: x[1], reverse=True)[:5]
+                for node, count in top_nodes:
+                    shard_word = "shard" if count == 1 else "shards"
+                    if node != 'unassigned':
+                        shard_table.add_row(f"{node}:", "💻", f"{count} {shard_word}")
+                    else:
+                        shard_table.add_row("Unassigned:", "🔶", f"{count} {shard_word}")
+
+            shard_border = ss.get_semantic_style("warning") if unassigned_count > 0 else ss.get_semantic_style("success") if ss else ("yellow" if unassigned_count > 0 else "green")
+            shard_panel = Panel(
+                shard_table,
+                title=f"[{_title}]📊 Shard Overview[/{_title}]",
+                border_style=shard_border,
+                padding=(1, 2)
+            )
+
+            # --- Metadata Panel ---
             metadata_panel = None
             metadata = mapping_meta
             if metadata:
@@ -197,27 +270,7 @@ class IndexRenderer:
                 full_theme = self.theme_manager.get_full_theme_data() if self.theme_manager else {}
                 table_styles = full_theme.get('table_styles', {})
 
-                # Get table box style from theme
-                table_box = table_styles.get('table_box', 'heavy')
-                box_style = None
-                if table_box == 'heavy':
-                    from rich.box import HEAVY
-                    box_style = HEAVY
-                elif table_box == 'rounded':
-                    from rich.box import ROUNDED
-                    box_style = ROUNDED
-                elif table_box == 'simple':
-                    from rich.box import SIMPLE
-                    box_style = SIMPLE
-                elif table_box == 'double':
-                    from rich.box import DOUBLE
-                    box_style = DOUBLE
-                elif table_box is None or table_box == 'None':
-                    box_style = None
-                else:
-                    from rich.box import HEAVY
-                    box_style = HEAVY  # Default fallback
-
+                box_style = self.style_system.get_table_box() if self.style_system else None
                 header_style = table_styles.get('header_style', 'bold bright_white on dark_magenta')
                 border_style = table_styles.get('border_style', 'bright_magenta')
 
@@ -288,99 +341,11 @@ class IndexRenderer:
                     padding=(1, 2)
                 )
 
-            # Shards Distribution Panel - Create 3 separate tables
-            shard_states = {}
-            shard_types = {'primary': 0, 'replica': 0}
-            nodes_distribution = {}
-
-            for shard in index_shards:
-                # Count states
-                state = shard['state']
-                shard_states[state] = shard_states.get(state, 0) + 1
-
-                # Count types
-                if shard['prirep'] == 'p':
-                    shard_types['primary'] += 1
-                else:
-                    shard_types['replica'] += 1
-
-                # Count node distribution
-                node = shard.get('node', 'unassigned')
-                nodes_distribution[node] = nodes_distribution.get(node, 0) + 1
-
-            # Create Shard Totals Table
-            totals_table = Table.grid(padding=(0, 3))
-            totals_table.add_column(style="bold cyan", min_width=16)
-            totals_table.add_column(style="white")
-            totals_table.add_row("Total Shards:", f"📊 {len(index_shards)}")
-            totals_table.add_row("Primary:", f"🔑 {shard_types['primary']}")
-            totals_table.add_row("Replica:", f"📋 {shard_types['replica']}")
-
-            totals_panel = Panel(
-                totals_table,
-                title="Shard Totals",
-                border_style=self.get_themed_style('panel_styles', 'success', 'green'),
-                padding=(1, 1)
-            )
-
-            # Create States Table
-            states_table = Table.grid(padding=(0, 3))
-            states_table.add_column(style="bold cyan", min_width=16)
-            states_table.add_column(style="white")
-            for state, count in shard_states.items():
-                icon = "✅" if state == "STARTED" else "🔄" if state == "INITIALIZING" else "❌"
-                states_table.add_row(f"{state}:", f"{icon} {count}")
-
-            states_panel = Panel(
-                states_table,
-                title="🔄 Shard States",
-                border_style=self.get_themed_style('panel_styles', 'warning', 'yellow'),
-                padding=(1, 1)
-            )
-
-            # Create Nodes Table
-            nodes_table = Table.grid(padding=(0, 3))
-            nodes_table.add_column(style="bold cyan", min_width=16)
-            nodes_table.add_column(style="white")
-            top_nodes = sorted(nodes_distribution.items(), key=lambda x: x[1], reverse=True)[:5]
-            for node, count in top_nodes:
-                if node != 'unassigned':
-                    nodes_table.add_row(f"{node}:", f"💻 {count}")
-                else:
-                    nodes_table.add_row("None:", f"🔶 {count}")
-
-            nodes_panel = Panel(
-                nodes_table,
-                title="💻 Node Distribution",
-                border_style=self.get_themed_style('panel_styles', 'secondary', 'magenta'),
-                padding=(1, 1)
-            )
-
             # Create detailed shards table with full theme integration
             full_theme = self.theme_manager.get_full_theme_data() if self.theme_manager else {}
             table_styles = full_theme.get('table_styles', {})
 
-            # Get table box style from theme
-            table_box = table_styles.get('table_box', 'heavy')
-            box_style = None
-            if table_box == 'heavy':
-                from rich.box import HEAVY
-                box_style = HEAVY
-            elif table_box == 'rounded':
-                from rich.box import ROUNDED
-                box_style = ROUNDED
-            elif table_box == 'simple':
-                from rich.box import SIMPLE
-                box_style = SIMPLE
-            elif table_box == 'double':
-                from rich.box import DOUBLE
-                box_style = DOUBLE
-            elif table_box is None or table_box == 'None':
-                box_style = None
-            else:
-                from rich.box import HEAVY
-                box_style = HEAVY  # Default fallback
-
+            box_style = self.style_system.get_table_box() if self.style_system else None
             header_style = table_styles.get('header_style', 'bold bright_white on dark_magenta')
             border_style = table_styles.get('border_style', 'bright_magenta')
 
@@ -460,7 +425,7 @@ class IndexRenderer:
                 # Format type with theme styles
                 type_mini_table = MiniTable.grid(padding=(0, 1))
                 type_mini_table.add_column(justify="center", width=1)  # Icon column
-                type_mini_table.add_column(justify="left", width=6)  # Text column
+                type_mini_table.add_column(justify="left", width=7)  # Text column
 
                 type_styles = full_theme.get('table_styles', {}).get('type_styles', {})
 
@@ -509,20 +474,14 @@ class IndexRenderer:
             console.print(title_panel)
             print()
 
-            # Create layout for top panels - two columns
-            top_panels = Columns([overview_panel, settings_panel], expand=True)
-            console.print(top_panels)
+            # Settings + Shard Overview side by side
+            console.print(Columns([settings_panel, shard_panel], expand=True))
             print()
 
             # Display metadata panel if it exists
             if metadata_panel:
                 console.print(metadata_panel)
                 print()
-
-            # Shards distribution in three columns
-            shards_distribution_panels = Columns([totals_panel, states_panel, nodes_panel], expand=True)
-            console.print(shards_distribution_panels)
-            print()
 
             console.print(shards_table)
 
@@ -547,26 +506,47 @@ class IndexRenderer:
         style_system = getattr(self.es_client, "style_system", None) if self.es_client else None
 
         flagged = summary.get("flagged_rows", len(rows))
-        sub = (
-            f"Indices scanned: {summary.get('indices_input', 0)} | "
-            f"Rollover groups: {summary.get('rollover_groups', 0)} | "
-            f"Flagged: {flagged}"
-        )
+
+        # Build themed subtitle bar
+        subtitle_rich = Text()
+        subtitle_rich.append("Scanned: ", style="default")
+        subtitle_rich.append(str(summary.get('indices_input', 0)), style=style_system._get_style('semantic', 'info', 'cyan') if style_system else "cyan")
+        subtitle_rich.append(" | Groups: ", style="default")
+        subtitle_rich.append(str(summary.get('rollover_groups', 0)), style=style_system._get_style('semantic', 'primary', 'bright_magenta') if style_system else "bright_magenta")
+        subtitle_rich.append(" | Flagged: ", style="default")
+        if flagged > 0:
+            subtitle_rich.append(str(flagged), style=style_system._get_style('semantic', 'warning', 'yellow') if style_system else "yellow")
+        else:
+            subtitle_rich.append(str(flagged), style=style_system._get_style('semantic', 'success', 'green') if style_system else "green")
+
         if summary.get("within_days") is not None:
-            sub += (
-                f" | Rollover date ≥ {summary.get('rollover_date_cutoff_utc', '?')} "
-                f"(UTC, last {summary['within_days']}d)"
+            subtitle_rich.append(" | Window: ", style="default")
+            subtitle_rich.append(
+                f"last {summary['within_days']}d",
+                style=style_system._get_style('semantic', 'info', 'cyan') if style_system else "cyan"
             )
+
         md = summary.get("min_docs")
         if md is not None and md > 0:
-            sub += f" | Docs ≥ {md:,}"
-        title_text = Text("Index traffic analysis", style="bold", justify="center")
+            subtitle_rich.append(" | Docs ≥ ", style="default")
+            subtitle_rich.append(f"{md:,}", style=style_system._get_style('semantic', 'info', 'cyan') if style_system else "cyan")
+
+        # Body: status text centered
+        if flagged > 0:
+            status_text = f"🔶 {flagged} Outlier{'s' if flagged != 1 else ''} Detected"
+            body_style = "bold yellow"
+            border = "yellow"
+        else:
+            status_text = "✅ No Outliers - All Indices Within Normal Range"
+            body_style = "bold green"
+            border = self.get_themed_style("table_styles", "border_style", "cyan")
+
+        ts = style_system._get_style('semantic', 'primary', 'bold cyan') if style_system else 'bold cyan'
         title_panel = Panel(
-            title_text,
-            subtitle=sub,
-            border_style=self.get_themed_style(
-                "table_styles", "border_style", "bright_magenta"
-            ),
+            Text(status_text, style=body_style, justify="center"),
+            title=f"[{ts}]📊 Index Traffic Analysis[/{ts}]",
+            subtitle=subtitle_rich,
+            border_style=border,
             padding=(1, 2),
         )
 
@@ -605,7 +585,7 @@ class IndexRenderer:
             getattr(self.es_client, "cluster_indices_hot_indexes", []) or []
         )
 
-        for r in rows:
+        for i, r in enumerate(rows):
             idx = r.get("index", "")
             hot_mark = "🔥" if idx in hot_names else ""
             sr = r.get("store_ratio")
@@ -613,9 +593,20 @@ class IndexRenderer:
             med_gap = r.get("median_days_between_rollovers")
             gap_s = f"{med_gap:.1f}" if med_gap is not None else "—"
 
-            row_style = "bright_red" if r.get("docs_ratio", 0) >= 4 else None
-            if not row_style and r.get("docs_ratio", 0) >= 2.5:
-                row_style = "yellow"
+            dr = r.get("docs_ratio", 0) or 0
+            severity_style = "bright_red" if dr >= 4 else None
+            if not severity_style and dr >= 2.5:
+                severity_style = "yellow"
+
+            zebra_bg = (
+                style_system.get_zebra_style(i) if style_system else None
+            )
+            if severity_style and zebra_bg:
+                row_style = f"{severity_style} {zebra_bg}"
+            elif zebra_bg:
+                row_style = zebra_bg
+            else:
+                row_style = severity_style
 
             table.add_row(
                 f"{r.get('docs_ratio', 0):.2f}x",

@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/dangling_help.py
-# hypothesis_version: 6.151.12
-
-['./escmd.py dangling', 'Cleanup all:', 'Delete specific:', 'Environment JSON:', 'Environment cleanup:', 'Environment report:', 'Group cleanup:', 'Group report JSON:', 'Group report:', 'JSON output:', 'List dangling:', 'Show details:', 'dangling', 'dangling <uuid>', '🚀 Dangling Examples']

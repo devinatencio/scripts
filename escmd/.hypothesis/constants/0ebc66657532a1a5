@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/handlers/themes_handler.py
-# hypothesis_version: 6.151.12
-
-[' on ', './escmd.py themes', 'Action', 'Border:', 'Command', 'Dark', 'Element', 'Error:', 'Light', 'List Themes:', 'Plain/Minimal', 'Preview', 'Preview Theme:', 'Quick Switch:', 'Recommended For', 'Rich/Colorful', 'Specialty', 'Success:', 'Switch Theme:', 'Terminal Background', 'Test Theme:', 'Theme Type', 'Varies', 'Warning:', 'blue', 'bold', 'bold cyan', 'bold green', 'bold red', 'bold white', 'bold yellow', 'border_style', 'center', 'cyan', 'cyberpunk', 'error', 'escmd.json', 'fire', 'green', 'header_style', 'health_styles', 'info', 'midnight', 'no_confirm', 'ocean', 'panel_styles', 'plain', 'preview', 'r', 'red', 'rich', 'style_system', 'success', 'table_styles', 'text', 'themes', 'themes.yml', 'themes_file', 'title', 'warning', 'white', 'y', 'yellow', 'yes', '🎯 ACTIVE', '📋 Theme Categories']

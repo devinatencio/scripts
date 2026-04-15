@@ -136,19 +136,6 @@ class StorageRenderer:
 
         subtitle_rich.append(" | Shards: ", style="default")
         subtitle_rich.append(f"{total_shards:,}", style=self.style_system._get_style('semantic', 'success', 'green') if self.style_system else "green")
-        subtitle_rich.append(" | Cluster Usage: ", style="default")
-
-        # Color code cluster usage based on percentage
-        if cluster_used_percent >= 90:
-            usage_style = self.style_system._get_style('semantic', 'error', 'red') if self.style_system else "red"
-        elif cluster_used_percent >= 80:
-            usage_style = self.style_system._get_style('semantic', 'warning', 'yellow') if self.style_system else "yellow"
-        elif cluster_used_percent >= 70:
-            usage_style = self.style_system._get_style('semantic', 'warning', 'yellow') if self.style_system else "yellow"
-        else:
-            usage_style = self.style_system._get_style('semantic', 'success', 'green') if self.style_system else "green"
-
-        subtitle_rich.append(f"{cluster_used_percent:.1f}%", style=usage_style)
 
         # Add status indicators for problematic nodes
         if len(elevated_nodes) > 0:
@@ -163,27 +150,75 @@ class StorageRenderer:
             subtitle_rich.append(" | Critical: ", style="default")
             subtitle_rich.append(str(len(critical_nodes)), style=self.style_system._get_style('semantic', 'error', 'red') if self.style_system else "red")
 
-        # Create title panel with colorful subtitle
+        # Build centered body with progress bar
+        from rich.table import Table as InnerTable
+        from rich.align import Align
+
+        formatted_used = self.statistics_processor.format_bytes(total_used_bytes) if self.statistics_processor else self._format_bytes_fallback(total_used_bytes)
+        formatted_avail = self.statistics_processor.format_bytes(total_avail_bytes) if self.statistics_processor else self._format_bytes_fallback(total_avail_bytes)
+        formatted_total = self.statistics_processor.format_bytes(total_size_bytes) if self.statistics_processor else self._format_bytes_fallback(total_size_bytes)
+
+        # Progress bar
+        bar_width = 20
+        filled = int((cluster_used_percent / 100) * bar_width)
+        empty = bar_width - filled
+
+        if cluster_used_percent >= 90:
+            bar_style = "bold red"
+            val_style = "bold red"
+        elif cluster_used_percent >= 80:
+            bar_style = "red"
+            val_style = "red"
+        elif cluster_used_percent >= 70:
+            bar_style = "yellow"
+            val_style = "yellow"
+        else:
+            bar_style = "green"
+            val_style = "green"
+
+        usage_bar = Text()
+        usage_bar.append("█" * filled, style=bar_style)
+        usage_bar.append("░" * empty, style="dim")
+        usage_bar.append(f"  {cluster_used_percent:.1f}%", style=val_style)
+
+        summary_table = InnerTable(show_header=False, box=None, padding=(0, 1))
+        summary_table.add_column("Metric", style="bold", no_wrap=True)
+        summary_table.add_column("Icon", justify="center", width=3)
+        summary_table.add_column("Value")
+
+        summary_table.add_row("Cluster Usage:", "💾", usage_bar)
+        summary_table.add_row("Used:", "📊", Text(formatted_used, style=val_style))
+        summary_table.add_row("Available:", "🆓", Text(formatted_avail, style=self.style_system._get_style('semantic', 'info', 'cyan') if self.style_system else "cyan"))
+        summary_table.add_row("Total:", "📦", Text(formatted_total, style="white"))
+
+        # Health-aware border
+        if len(critical_nodes) > 0:
+            panel_border = "red"
+        elif len(high_usage_nodes) > 0 or len(elevated_nodes) > 0:
+            panel_border = "yellow"
+        else:
+            panel_border = border_color
+
+        ts = self.style_system._get_style('semantic', 'primary', 'bold cyan') if self.style_system else 'bold cyan'
         title_panel = Panel(
-            Text("💾 Elasticsearch Storage Overview", style=f"bold {title_color}", justify="center"),
+            Align.center(summary_table),
+            title=f"[{ts}]💾 Elasticsearch Storage Overview[/{ts}]",
             subtitle=subtitle_rich,
-            border_style=border_color,
+            border_style=panel_border,
             padding=(1, 2)
         )
 
-        # Create enhanced storage table
+        # Create enhanced storage table (no redundant title)
         table = Table(
             show_header=True,
             header_style=header_style,
-            title="💾 Node Storage Details",
-            title_style=f"bold {title_color}",
             border_style=border_color,
             box=self.style_system.get_table_box() if self.style_system else None,
             expand=True
         )
         table.add_column("💻 Node", justify="left", width=16)
         table.add_column("🔄 Shards", justify="center", width=8)
-        table.add_column("📊 Usage %", justify="center", width=22)  # Centered for progress bar
+        table.add_column("📊 Usage %", justify="center", width=22)
         table.add_column("💾 Used", justify="right", width=12)
         table.add_column("🆓 Available", justify="right", width=12)
         table.add_column("📦 Total", justify="right", width=12)
@@ -248,33 +283,6 @@ class StorageRenderer:
                 style=row_style
             )
 
-        # Create summary statistics panel with aligned table
-        from rich.table import Table as InnerTable
-        summary_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-        summary_table.add_column("Metric", style="bold", no_wrap=True)
-        summary_table.add_column("Icon", justify="center", width=4)
-        summary_table.add_column("Value", style=title_color)
-
-        formatted_used = self.statistics_processor.format_bytes(total_used_bytes) if self.statistics_processor else self._format_bytes_fallback(total_used_bytes)
-        formatted_avail = self.statistics_processor.format_bytes(total_avail_bytes) if self.statistics_processor else self._format_bytes_fallback(total_avail_bytes)
-        formatted_total = self.statistics_processor.format_bytes(total_size_bytes) if self.statistics_processor else self._format_bytes_fallback(total_size_bytes)
-
-        summary_table.add_row("Total Nodes:", "💻", f"{total_nodes}")
-        if indices_count is not None:
-            summary_table.add_row("Total Indices:", "📑", f"{indices_count:,}")
-        summary_table.add_row("Total Shards:", "🔄", f"{total_shards:,}")
-        summary_table.add_row("Cluster Used:", "💾", formatted_used)
-        summary_table.add_row("Cluster Available:", "🆓", formatted_avail)
-        summary_table.add_row("Cluster Total:", "📦", formatted_total)
-        summary_table.add_row("Average Usage:", "📊", f"{cluster_used_percent:.1f}%")
-
-        summary_panel = Panel(
-            summary_table,
-            title="📈 Cluster Summary",
-            border_style=self.get_themed_style('panel_styles', 'secondary', 'magenta'),
-            padding=(1, 2)
-        )
-
         # Create alerts panel if there are issues
         if critical_nodes or high_usage_nodes or elevated_nodes:
             alerts_content = ""
@@ -315,15 +323,13 @@ class StorageRenderer:
             print()
             console.print(title_panel)
             print()
-            console.print(Columns([summary_panel, alerts_panel], expand=True))
+            console.print(alerts_panel)
             print()
             console.print(table)
         else:
-            # No alerts - just show summary
+            # No alerts - just show header and table
             print()
             console.print(title_panel)
-            print()
-            console.print(summary_panel)
             print()
             console.print(table)
 

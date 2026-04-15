@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/commands/cluster_commands.py
-# hypothesis_version: 6.151.12
-
-['10s', '30s', 'No master node found', 'body', 'cluster', 'cluster_name', 'cluster_tagline', 'cluster_version', 'error', 'get', 'get_cluster_health', 'get_cluster_info', 'host', 'ip', 'master_node', 'name', 'node_id', 'nodes', 'requested_status', 'roles', 'status', 'tagline', 'timeout', 'unknown', 'version', 'yellow']

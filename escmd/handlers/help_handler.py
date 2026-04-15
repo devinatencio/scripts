@@ -35,50 +35,130 @@ class HelpHandler(BaseHandler):
             self._show_command_help(self.args.topic)
 
     def _show_general_help(self):
-        """Show general help with all available help topics."""
-        if Console is None:
+        """Show general help — zebra table with coloured topic pills, sorted alphabetically within groups."""
+        if Console is None or Table is None or Panel is None:
             print("Rich library not available. Please install it with: pip install rich")
             return
 
+        from collections import OrderedDict
+        from rich.text import Text
+        from rich.align import Align
+
         console = Console()
 
-        # Get theme styles
-        help_styles, border_style = self._get_theme_styles()
+        # ── topic catalogue: (category, colour, topic, description) ──
+        # All registered topics have detailed docs — badge shown on all
+        _TOPICS = [
+            ("🏥 Cluster & Health",  "green",        "allocation",            "Shard allocation management"),
+            ("🏥 Cluster & Health",  "green",        "health",                "Cluster health monitoring options"),
+            ("🏥 Cluster & Health",  "green",        "nodes",                 "Node management and information"),
+            ("🏥 Cluster & Health",  "green",        "shards",                "Shard distribution and analysis"),
 
-        # Create help topics table
-        if Table is None:
-            print("Rich library not available for table formatting")
-            return
+            ("📑 Index Management",  "blue",         "dangling",              "Dangling index management"),
+            ("📑 Index Management",  "blue",         "exclude",               "Index exclusion from specific hosts"),
+            ("📑 Index Management",  "blue",         "freeze",                "Freeze indices to prevent write operations"),
+            ("📑 Index Management",  "blue",         "indice-add-metadata",   "Add custom metadata to indices"),
+            ("📑 Index Management",  "blue",         "indices",               "Index management operations and examples"),
+            ("📑 Index Management",  "blue",         "unfreeze",              "Unfreeze indices to restore write operations"),
 
-        topics_table = Table.grid(padding=(0, 3))
-        topics_table.add_column(style=help_styles.get('command', 'bold cyan'), min_width=16)
-        topics_table.add_column(style=help_styles.get('description', 'white'))
+            ("📋 Templates",         "cyan",         "template-backup",       "Backup an Elasticsearch template to JSON"),
+            ("📋 Templates",         "cyan",         "template-modify",       "Modify template fields (set/append/remove/delete)"),
+            ("📋 Templates",         "cyan",         "template-restore",      "Restore a template from a backup file"),
+            ("📋 Templates",         "cyan",         "templates",             "Index template management operations"),
 
-        # Get available topics from registry
-        available_topics = self.help_registry.get_available_topics()
+            ("📊 Analytics",         "yellow",       "es-top",                "Live auto-refreshing cluster dashboard"),
+            ("📊 Analytics",         "yellow",       "indices-analyze",       "Rollover backing indices outlier analysis"),
+            ("📊 Analytics",         "yellow",       "indices-s3-estimate",   "Rough monthly S3 cost from primary store sizes"),
+            ("📊 Analytics",         "yellow",       "indices-watch-collect", "Sample index stats on an interval to JSON"),
+            ("📊 Analytics",         "yellow",       "indices-watch-report",  "Summarize watch JSON samples without Elasticsearch"),
 
-        # Add topics in a specific order for consistency
-        # Display all topics sorted alphabetically
-        for topic, description in sorted(available_topics.items()):
-            topics_table.add_row(topic, description)
+            ("🔄 ILM & Lifecycle",   "yellow",       "ilm",                   "Index Lifecycle Management commands"),
 
-        # Create main help panel
-        if Panel is None:
-            print("Rich library not available for panel formatting")
-            return
+            ("📸 Snapshots",         "magenta",      "repositories",          "Snapshot repository configuration and management"),
+            ("📸 Snapshots",         "magenta",      "snapshots",             "Backup and snapshot operations"),
 
-        help_panel = Panel(
-            topics_table,
-            title=f"[{help_styles.get('header', 'bold magenta')}]📚 Available Help Topics[/{help_styles.get('header', 'bold magenta')}]",
-            subtitle=f"[{help_styles.get('usage', 'yellow')}]Use: ./escmd.py help <topic> for detailed information[/{help_styles.get('usage', 'yellow')}]",
-            border_style=border_style,
-            padding=(1, 2)
+            ("🔐 Security",          "red",          "security",              "Password management and security features"),
+            ("🔐 Security",          "red",          "store-password",        "Store an encrypted password for an environment"),
+
+            ("🛠  Utilities",        "bright_black", "actions",               "Action sequence management and execution"),
+        ]
+
+        # Pull any registry topics not already listed (future-proof)
+        available = self.help_registry.get_available_topics()
+        listed = {t[2] for t in _TOPICS}
+        for topic, desc in sorted(available.items()):
+            if topic not in listed:
+                _TOPICS.append(("🛠  Utilities", "bright_black", topic, desc))
+
+        # Get theme styles for the table
+        from handlers.help.base_help_content import BaseHelpContent
+        class _TmpContent(BaseHelpContent):
+            def show_help(self): pass
+            def get_topic_name(self): return ""
+            def get_topic_description(self): return ""
+        _tmp = _TmpContent(self._get_theme_manager())
+        _styles, _border = _tmp._get_theme_styles()
+        _hdr   = _styles['header_style']
+        _zebra = _styles['zebra']
+        _desc  = _styles['description']
+
+        _CAT_BG = ["", "on grey7", "", "on grey7", "", "on grey7", "", "on grey7"]
+        cat_order = list(OrderedDict.fromkeys(t[0] for t in _TOPICS))
+
+        from rich import box as rich_box
+        _box_map = {
+            'heavy': rich_box.HEAVY, 'double': rich_box.DOUBLE,
+            'rounded': rich_box.ROUNDED, 'simple': rich_box.SIMPLE,
+            'minimal': rich_box.MINIMAL, 'horizontals': rich_box.HORIZONTALS,
+            'none': None,
+        }
+        _table_box = _box_map.get(_styles.get('table_box', 'heavy').lower(), rich_box.HEAVY)
+
+        tbl = Table(
+            expand=True,
+            show_header=True,
+            header_style=_hdr,
+            border_style=_border,
+            box=_table_box,
+            show_lines=False,
+            pad_edge=True,
+            padding=(0, 1),
         )
+        tbl.add_column("Category",    no_wrap=True, min_width=22)
+        tbl.add_column("Topic",       no_wrap=True, min_width=28)
+        tbl.add_column("Description")
+        tbl.add_column("",            no_wrap=True, width=10)
 
-        # Display help
-        print()
-        console.print(help_panel)
-        print()
+        prev_cat = None
+        for row in _TOPICS:
+            cat, colour, topic, desc = row[0], row[1], row[2], row[3]
+            cat_idx = cat_order.index(cat)
+            bg = _CAT_BG[cat_idx % len(_CAT_BG)]
+
+            cat_cell   = Text(cat, style=f"bold {colour} {bg}") if cat != prev_cat else Text("", style=bg)
+            topic_cell = Text(f" {topic} ", style=f"bold black on {colour}")
+            desc_cell  = Text(desc, style=f"{_desc} {bg}")
+            badge_cell = Text(" detailed ", style=f"dim {colour} {bg}")
+
+            tbl.add_row(cat_cell, topic_cell, desc_cell, badge_cell)
+            prev_cat = cat
+
+        console.print()
+        console.print(Panel(
+            tbl,
+            title=f"[bold white]📚 Help Topics[/bold white]  [dim]({len(_TOPICS)} topics)[/dim]",
+            border_style="dim",
+            padding=(0, 0),
+        ))
+        console.print()
+
+        hint = Text(justify="center")
+        hint.append("./escmd.py help <topic>", style="bold cyan")
+        hint.append("  ·  ", style="dim")
+        hint.append("detailed", style="dim cyan")
+        hint.append(" = rich subcommand docs available", style="dim")
+        console.print(Panel(Align.center(hint), border_style="dim", padding=(0, 1)))
+        console.print()
 
     def _show_command_help(self, command):
         """Show detailed help for a specific command."""
@@ -147,10 +227,13 @@ class HelpHandler(BaseHandler):
 
     def _get_theme_manager(self) -> Optional[object]:
         """Get theme manager instance if available."""
-        # Try to get theme manager from parent class or configuration
-        if hasattr(self, 'theme_manager'):
+        # Check direct attribute first
+        if hasattr(self, 'theme_manager') and self.theme_manager:
             return self.theme_manager
-        elif hasattr(self, 'config_manager') and hasattr(self.config_manager, 'theme_manager'):
+        # Check es_client (MockESClient or real client both carry theme_manager)
+        if self.es_client and hasattr(self.es_client, 'theme_manager') and self.es_client.theme_manager:
+            return self.es_client.theme_manager
+        # Check config_manager
+        if hasattr(self, 'config_manager') and hasattr(self.config_manager, 'theme_manager'):
             return self.config_manager.theme_manager
-        else:
-            return None
+        return None

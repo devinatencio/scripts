@@ -229,71 +229,6 @@ class DanglingHandler(BaseHandler):
                 self.es_client.pretty_print_json({"dangling_indices": dangling_indices})
                 return
 
-            # Create title panel
-            title_panel = Panel(
-                Text(
-                    f"🔍 Dangling Indices Analysis",
-                    style="bold orange1",
-                    justify="center",
-                ),
-                subtitle=f"Cluster: {cluster_name} | Nodes: {total_nodes}",
-                border_style="orange1",
-                padding=(1, 2),
-            )
-
-            print()
-            console.print(title_panel)
-            print()
-
-            # Check if there are dangling indices
-            if not dangling_indices:
-                # No dangling indices found - success case
-                self.es_client.show_message_box(
-                    "✅ Cluster Index Status: Clean",
-                    "🎉 No dangling indices found in the cluster!\n\n"
-                    + "This indicates that:\n"
-                    + "• All indices are properly assigned to nodes\n"
-                    + "• No orphaned index metadata exists\n"
-                    + "• Cluster index management is healthy",
-                    message_style="green",
-                    border_style="green",
-                )
-
-                # Get theme styles for consistent theming
-                from esclient import get_theme_styles
-
-                styles = get_theme_styles(self.es_client.configuration_manager)
-
-                # Create quick actions panel
-                actions_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-                actions_table.add_column(
-                    "Action",
-                    style=styles.get("health_styles", {})
-                    .get("green", {})
-                    .get("text", "bold cyan"),
-                    no_wrap=True,
-                )
-                actions_table.add_column(
-                    "Command", style=styles.get("border_style", "dim white")
-                )
-
-                actions_table.add_row("Check cluster health:", "./escmd.py health")
-                actions_table.add_row("List all indices:", "./escmd.py indices")
-                actions_table.add_row("View cluster nodes:", "./escmd.py nodes")
-                actions_table.add_row("Monitor recovery:", "./escmd.py recovery")
-
-                actions_panel = Panel(
-                    actions_table,
-                    title="🚀 Related Commands",
-                    border_style=styles["border_style"],
-                    padding=(1, 2),
-                )
-
-                print()
-                console.print(actions_panel)
-                print()
-                return
-
             # Calculate statistics
             total_dangling = len(dangling_indices)
             unique_nodes = set()
@@ -306,48 +241,91 @@ class DanglingHandler(BaseHandler):
                 if creation_date != "Unknown":
                     creation_dates.append(creation_date)
 
-            # Create statistics panel
+            ss = self.es_client.style_system
+
+            # Build colorized subtitle — same pattern as shards/storage/ilm commands
+            subtitle_rich = Text()
+            subtitle_rich.append("Cluster: ", style="default")
+            subtitle_rich.append(cluster_name, style=ss._get_style('semantic', 'info', 'cyan') if ss else "cyan")
+            subtitle_rich.append(" | Nodes: ", style="default")
+            subtitle_rich.append(str(total_nodes), style=ss._get_style('semantic', 'primary', 'bright_magenta') if ss else "bright_magenta")
+
+            # Check if there are dangling indices
+            if not dangling_indices:
+                subtitle_rich.append(" | Status: ", style="default")
+                subtitle_rich.append("✅ Clean", style=ss._get_style('semantic', 'success', 'green') if ss else "green")
+
+                clean_table = InnerTable(show_header=False, box=None, padding=(0, 1))
+                clean_table.add_column("Icon", justify="left", width=3)
+                clean_table.add_column("Detail", no_wrap=True)
+
+                clean_table.add_row("🎉", ss.create_semantic_text("No dangling indices found in the cluster!", "success") if ss else Text("No dangling indices found in the cluster!", style="green"))
+                clean_table.add_row("✅", Text("All indices are properly assigned to nodes"))
+                clean_table.add_row("✅", Text("No orphaned index metadata exists"))
+                clean_table.add_row("✅", Text("Cluster index management is healthy"))
+
+                clean_panel = Panel(
+                    clean_table,
+                    title=f"[{ss._get_style('semantic', 'primary', 'bold cyan') if ss else 'bold cyan'}]🔍 Dangling Indices Analysis[/{ss._get_style('semantic', 'primary', 'bold cyan') if ss else 'bold cyan'}]",
+                    subtitle=subtitle_rich,
+                    border_style=ss._get_style('semantic', 'success', 'green') if ss else "green",
+                    padding=(1, 2),
+                )
+                print()
+                console.print(clean_panel)
+                print()
+
+                actions_table = InnerTable(show_header=False, box=None, padding=(0, 1))
+                actions_table.add_column("Action", style=ss._get_style('semantic', 'primary', 'bold cyan') if ss else "bold cyan", no_wrap=True)
+                actions_table.add_column("Command", style=ss._get_style('semantic', 'muted', 'dim white') if ss else "dim white")
+
+                actions_table.add_row("Check cluster health:", "./escmd.py health")
+                actions_table.add_row("List all indices:", "./escmd.py indices")
+                actions_table.add_row("View cluster nodes:", "./escmd.py nodes")
+                actions_table.add_row("Monitor recovery:", "./escmd.py recovery")
+
+                actions_panel = Panel(
+                    actions_table,
+                    title="🚀 Related Commands",
+                    border_style=ss._get_style('table_styles', 'border_style', 'cyan') if ss else "cyan",
+                    padding=(1, 2),
+                )
+
+                print()
+                console.print(actions_panel)
+                print()
+                return
+
+            # Dangling indices found — add counts to subtitle
+            subtitle_rich.append(" | Dangling: ", style="default")
+            subtitle_rich.append(str(total_dangling), style=ss._get_style('semantic', 'warning', 'orange1') if ss else "orange1")
+            subtitle_rich.append(" | Affected Nodes: ", style="default")
+            subtitle_rich.append(str(len(unique_nodes)), style=ss._get_style('semantic', 'error', 'red') if ss else "red")
+
             stats_table = InnerTable(show_header=False, box=None, padding=(0, 1))
             stats_table.add_column("Label", style="bold", no_wrap=True)
             stats_table.add_column("Icon", justify="left", width=3)
             stats_table.add_column("Value", no_wrap=True)
 
-            stats_table.add_row("Total Dangling:", "🔶", f"{total_dangling:,}")
-            stats_table.add_row("Affected Nodes:", "💻", f"{len(unique_nodes):,}")
-            stats_table.add_row("Cluster Nodes:", "📊", f"{total_nodes:,}")
+            stats_table.add_row("Status:", "🔶", ss.create_semantic_text("Dangling indices detected", "warning") if ss else Text("Dangling indices detected", style="yellow"))
+            stats_table.add_row("Total Dangling:", "🔶", ss.create_semantic_text(f"{total_dangling:,}", "warning") if ss else Text(f"{total_dangling:,}", style="yellow"))
+            stats_table.add_row("Affected Nodes:", "💻", ss.create_semantic_text(f"{len(unique_nodes):,}", "error") if ss else Text(f"{len(unique_nodes):,}", style="red"))
+            stats_table.add_row("Cluster Nodes:", "📊", ss.create_semantic_text(f"{total_nodes:,}", "info") if ss else Text(f"{total_nodes:,}", style="cyan"))
 
             if creation_dates:
-                # Find oldest creation date
                 oldest_date = min(creation_dates)
-                stats_table.add_row("Oldest Found:", "📅", oldest_date)
+                stats_table.add_row("Oldest Found:", "📅", ss.create_semantic_text(oldest_date, "muted") if ss else Text(oldest_date, style="dim"))
 
-            stats_panel = Panel(
+            title_panel = Panel(
                 stats_table,
-                title="📊 Dangling Indices Summary",
-                border_style=self.es_client.style_system.get_semantic_style("warning"),
+                title=f"[{ss._get_style('semantic', 'primary', 'bold cyan') if ss else 'bold cyan'}]🔍 Dangling Indices Analysis[/{ss._get_style('semantic', 'primary', 'bold cyan') if ss else 'bold cyan'}]",
+                subtitle=subtitle_rich,
+                border_style=ss._get_style('semantic', 'warning', 'orange1') if ss else "orange1",
                 padding=(1, 2),
             )
 
-            # Create information panel about dangling indices
-            info_text = (
-                "🔍 About Dangling Indices:\n\n"
-                "• Indices that exist on disk but are not part of cluster metadata\n"
-                "• Often caused by node failures or split-brain scenarios\n"
-                "• Can be imported back to cluster or deleted manually\n"
-                "• May contain important data that needs recovery"
-            )
-
-            info_panel = Panel(
-                info_text,
-                title="🔵 Information",
-                border_style=self.es_client.style_system._get_style(
-                    "table_styles", "border_style", "white"
-                ),
-                padding=(1, 2),
-            )
-
-            # Display summary panels
-            console.print(Columns([stats_panel, info_panel], expand=True))
+            print()
+            console.print(title_panel)
             print()
 
             # Get node mapping once for efficient hostname resolution

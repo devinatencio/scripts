@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/base_help_content.py
-# hypothesis_version: 6.151.12
-
-['bold blue', 'bold cyan', 'bold green', 'bold magenta', 'bold red', 'border_style', 'command', 'description', 'example', 'green', 'header', 'help_styles', 'subheader', 'success', 'table_styles', 'usage', 'warning', 'white', 'yellow']

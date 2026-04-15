@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/display/table_renderer.py
-# hypothesis_version: 6.151.12
-
-[1024, '0B', 'B', 'GB', 'INITIALIZING', 'KB', 'Key', 'MB', 'PB', 'RELOCATING', 'STARTED', 'TB', 'UNASSIGNED', 'Value', 'blue', 'bold white', 'close', 'cyan', 'default', 'green', 'header_style', 'health_styles', 'open', 'red', 'state_styles', 'table_styles', 'text', 'white', 'yellow']

@@ -440,35 +440,8 @@ class NodesCommands(BaseCommand):
         subtitle_rich = Text()
         subtitle_rich.append("Total: ", style="default")
         subtitle_rich.append(str(total_nodes), style=style_system._get_style('semantic', 'info', 'cyan'))
-        
-        # Add health status with appropriate colors
-        if cluster_status != 'UNKNOWN':
-            subtitle_rich.append(" | Health: ", style="default")
-            if cluster_status == 'GREEN':
-                subtitle_rich.append(f"{cluster_status} ✅", style=style_system._get_style('semantic', 'success', 'green'))
-            elif cluster_status == 'YELLOW':
-                subtitle_rich.append(f"{cluster_status} 🔶", style=style_system._get_style('semantic', 'warning', 'yellow'))
-            elif cluster_status == 'RED':
-                subtitle_rich.append(f"{cluster_status} ❌", style=style_system._get_style('semantic', 'error', 'red'))
-            else:
-                subtitle_rich.append(cluster_status, style=style_system._get_style('semantic', 'neutral', 'white'))
-        
-        # Add shard info if available with appropriate colors
-        if cluster_status != 'UNKNOWN' and active_shards > 0:
-            if unassigned_shards > 0 or relocating_shards > 0:
-                subtitle_rich.append(" | Shards: ", style="default")
-                subtitle_rich.append(f"{active_shards} active", style=style_system._get_style('semantic', 'success', 'green'))
-                if relocating_shards > 0:
-                    subtitle_rich.append(" | ", style="default")
-                    subtitle_rich.append(f"{relocating_shards} relocating", style=style_system._get_style('semantic', 'warning', 'yellow'))
-                if unassigned_shards > 0:
-                    subtitle_rich.append(" | ", style="default")
-                    subtitle_rich.append(f"{unassigned_shards} unassigned", style=style_system._get_style('semantic', 'error', 'red'))
-            else:
-                subtitle_rich.append(" | Shards: ", style="default")
-                subtitle_rich.append(f"{active_shards} active", style=style_system._get_style('semantic', 'success', 'green'))
-        
-        # Add node breakdown with themed colors
+
+        # Node breakdown
         subtitle_rich.append(" | Master: ", style="default")
         subtitle_rich.append(str(master_eligible), style=style_system._get_style('semantic', 'primary', 'bright_magenta'))
         subtitle_rich.append(" | Data: ", style="default")
@@ -479,13 +452,45 @@ class NodesCommands(BaseCommand):
             subtitle_rich.append(" | Client: ", style="default")
             subtitle_rich.append(str(client_nodes), style=style_system._get_style('semantic', 'secondary', 'bright_blue'))
 
-        # Use semantic styling with theme manager
-        style_system = self.es_client.style_system
-        
+        # Shard counts
+        if cluster_status != 'UNKNOWN' and active_shards > 0:
+            subtitle_rich.append(" | Shards: ", style="default")
+            subtitle_rich.append(str(active_shards), style=style_system._get_style('semantic', 'success', 'green'))
+            if unassigned_shards > 0:
+                subtitle_rich.append(" | ", style="default")
+                subtitle_rich.append(f"{unassigned_shards} unassigned", style=style_system._get_style('semantic', 'error', 'red'))
+            if relocating_shards > 0:
+                subtitle_rich.append(" | ", style="default")
+                subtitle_rich.append(f"{relocating_shards} relocating", style=style_system._get_style('semantic', 'warning', 'yellow'))
+
+        # Status body text
+        if cluster_status == 'RED':
+            status_text = f"🔴 Critical - {unassigned_shards} Unassigned Shards"
+            body_style = "bold red"
+            border = "red"
+        elif cluster_status == 'YELLOW':
+            status_text = f"🟡 Warning - {unassigned_shards} Unassigned Shard{'s' if unassigned_shards != 1 else ''}"
+            body_style = "bold yellow"
+            border = "yellow"
+        else:
+            status_text = f"🟢 All Nodes Healthy - {total_nodes} Node{'s' if total_nodes != 1 else ''} Online"
+            body_style = "bold green"
+            border = style_system._get_style('table_styles', 'border_style', 'bright_magenta')
+
+        # Build cluster subtitle matching indices format
+        cluster_subtitle = Text()
+        cluster_subtitle.append(cluster_name, style=style_system._get_style('semantic', 'primary', 'cyan'))
+        cluster_subtitle.append("  ", style="default")
+        if cluster_version != 'Unknown':
+            cluster_subtitle.append(f"v{cluster_version}", style=style_system._get_style('semantic', 'muted', 'dim'))
+            cluster_subtitle.append("   ", style="default")
+        cluster_subtitle.append_text(subtitle_rich)
+
         title_panel = Panel(
-            style_system.create_semantic_text(nodes_title, "primary", justify="center"),
-            subtitle=subtitle_rich,
-            border_style=style_system._get_style('table_styles', 'border_style', 'bright_magenta'),
+            Text(status_text, style=body_style, justify="center"),
+            title=style_system.create_semantic_text(f"💻 Elasticsearch Nodes{filter_text}", "primary"),
+            subtitle=cluster_subtitle,
+            border_style=border,
             padding=(1, 2)
         )
 
@@ -494,10 +499,10 @@ class NodesCommands(BaseCommand):
 
         # Create enhanced nodes table with semantic styling
         if style_system:
-            table = style_system.create_standard_table("Elasticsearch Nodes", style_variant='dashboard')
+            table = style_system.create_standard_table(None, style_variant='dashboard')
         else:
             # Fallback to original styling
-            table = Table(show_header=True, header_style=styles.get('header_style', 'bold magenta'), title="Elasticsearch Nodes", expand=True, box=self.es_client.style_system.get_table_box())
+            table = Table(show_header=True, header_style=styles.get('header_style', 'bold magenta'), expand=True, box=self.es_client.style_system.get_table_box())
         
         # Add columns with semantic column types
         if style_system:

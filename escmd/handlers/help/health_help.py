@@ -18,46 +18,37 @@ class HealthHelpContent(BaseHelpContent):
 
     def show_help(self) -> None:
         """Show detailed help for health commands."""
-        # Create tables
         commands_table = self._create_commands_table()
         examples_table = self._create_examples_table()
-        usage_table = self._create_usage_table()
+        usage_table    = self._create_usage_table()
 
-        # Add commands (exact from original)
-        commands_table.add_row("health", "Quick health check")
-        commands_table.add_row("health --compare <cluster>", "Compare with another cluster")
-        commands_table.add_row("health --group <prefix>", "Group clusters by prefix")
-        commands_table.add_row("health-detail", "Show comprehensive cluster health")
-        commands_table.add_row("health-detail --style dashboard", "Modern dashboard view")
-        commands_table.add_row("health-detail --style classic", "Traditional table format")
+        # 3-col merged: command | description | example
+        commands_table.add_row("health",                          "Quick cluster health check",       "./escmd.py health")
+        commands_table.add_row("health --compare <cluster>",      "Compare with another cluster",     "./escmd.py health --compare prod")
+        commands_table.add_row("health --group <prefix>",         "Group clusters by prefix",         "./escmd.py health --group us")
+        commands_table.add_row("health --format json",            "Machine-readable JSON output",     "./escmd.py health --format json")
+        commands_table.add_row("health-detail",                   "Full health dashboard",            "./escmd.py health-detail")
+        commands_table.add_row("health-detail --style dashboard", "Modern dashboard view",            "./escmd.py health-detail --style dashboard")
+        commands_table.add_row("health-detail --style classic",   "Traditional table format",         "./escmd.py health-detail --style classic")
 
-        # Add examples (exact from original)
-        examples_table.add_row("Basic health:", "./escmd.py health")
-        examples_table.add_row("Dashboard style:", "./escmd.py health-detail")
-        examples_table.add_row("Compare clusters:", "./escmd.py health --compare prod")
-        examples_table.add_row("Group by prefix:", "./escmd.py health --group us")
-        examples_table.add_row("JSON format:", "./escmd.py health --format json")
-
-        # Add usage patterns (exact from original)
-        usage_table.add_row("🚨 Incident Response:", "Quick cluster status during outages")
-        usage_table.add_row("   Command:", "./escmd.py health")
-        usage_table.add_row("   Purpose:", "Immediate status for emergency situations")
-        usage_table.add_row("   Follow-up:", "./escmd.py health-detail")
-        usage_table.add_row("   Purpose:", "Detailed view for thorough analysis")
+        # Workflow scenarios
+        usage_table.add_row("🚨 Incident Response:", "Quick cluster status during an outage")
+        usage_table.add_row("   Check status:",      "./escmd.py health")
+        usage_table.add_row("   Full detail:",       "./escmd.py health-detail")
+        usage_table.add_row("   JSON for alert:",    "./escmd.py health --format json")
         usage_table.add_row("", "")
-        usage_table.add_row("📊 Daily Monitoring:", "Regular cluster health checks")
-        usage_table.add_row("   Morning Check:", "./escmd.py health-detail")
-        usage_table.add_row("   Automation:", "./escmd.py health --format json")
-        usage_table.add_row("   Pipeline:", "| monitor_script.py")
+        usage_table.add_row("📊 Daily Monitoring:", "Regular health checks and automation")
+        usage_table.add_row("   Morning check:",    "./escmd.py health-detail")
+        usage_table.add_row("   Cron / CI:",        "./escmd.py health --format json | monitor.py")
+        usage_table.add_row("   Group view:",       "./escmd.py health --group prod")
         usage_table.add_row("", "")
-        usage_table.add_row("🔄 Multi-Cluster Ops:", "Managing multiple environments")
-        usage_table.add_row("   Compare:", "./escmd.py health --compare production")
-        usage_table.add_row("   Group View:", "./escmd.py health --group us")
-        usage_table.add_row("   Note:", "Works with clusters like us-east, us-west")
+        usage_table.add_row("🔄 Multi-Cluster Ops:", "Managing and comparing multiple environments")
+        usage_table.add_row("   Compare two:",       "./escmd.py health --compare staging")
+        usage_table.add_row("   Group by region:",   "./escmd.py health --group us")
+        usage_table.add_row("   All clusters:",      "./escmd.py locations && ./escmd.py health")
 
-        # Display help panels
         self._display_help_panels(
             commands_table, examples_table,
-            "❤️ Cluster Health Commands", "🚀 Health Examples",
+            "❤️  Cluster Health Commands", "🚀 Health Examples",
             usage_table, "🎯 Monitoring & Troubleshooting Workflows"
         )

@@ -20,13 +20,6 @@ from configuration_manager import ConfigurationManager
 class UtilityHandler(BaseHandler):
     """Handler for utility commands like locations and cluster health checks."""
 
-    def handle_locations(self):
-        """
-        Display all configured Elasticsearch locations.
-        """
-        config_manager = ConfigurationManager(self.config_file, os.path.join(os.path.dirname(self.config_file), 'escmd.json'))
-        config_manager.show_locations()
-
     def handle_show_settings(self):
         """
         Display current configuration settings.
@@ -128,6 +121,15 @@ class UtilityHandler(BaseHandler):
         force = getattr(self.args, 'force', False)
         format_output = getattr(self.args, 'format', 'table')
 
+        # Show help if no targeting args provided
+        if not indices_arg and not pattern and not no_replicas_only:
+            if format_output == 'json':
+                error_result = {'error': 'No indices specified. Use --indices, --pattern, or --no-replicas-only.', 'success': False}
+                self.es_client.pretty_print_json(error_result)
+            else:
+                self._show_set_replicas_help()
+            return
+
         try:
             # Parse indices if provided
             target_indices = []
@@ -151,6 +153,79 @@ class UtilityHandler(BaseHandler):
                 self.es_client.pretty_print_json(error_result)
             else:
                 self.console.print(f"[red]Error: {str(e)}[/red]")
+
+    def _show_set_replicas_help(self):
+        """Display help screen for set-replicas command."""
+        from rich.panel import Panel
+        from rich.table import Table
+        from rich.text import Text
+
+        console = self.console
+        ss = self.es_client.style_system
+        tm = self.es_client.theme_manager
+
+        primary_style = ss.get_semantic_style("primary")
+        success_style = ss.get_semantic_style("success")
+        muted_style = ss._get_style('semantic', 'muted', 'dim')
+        border_style = ss._get_style('table_styles', 'border_style', 'white')
+        header_style = tm.get_theme_styles().get('header_style', 'bold white') if tm else 'bold white'
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        box_style = ss.get_table_box()
+
+        header_panel = Panel(
+            Text("Run ./escmd.py set-replicas --count <n> [target options]", style="bold white"),
+            title=f"[{title_style}]🔢 Set Replicas[/{title_style}]",
+            subtitle=Text.from_markup("[dim]Use[/dim] [cyan]--help[/cyan] [dim]for full options[/dim]"),
+            border_style=border_style,
+            padding=(1, 2),
+            expand=True,
+        )
+
+        table = Table(
+            show_header=True,
+            header_style=header_style,
+            border_style=border_style,
+            box=box_style,
+            show_lines=False,
+            expand=True,
+        )
+        table.add_column("Option", style=primary_style, ratio=2)
+        table.add_column("Description", style="white", ratio=3)
+        table.add_column("Example", style=success_style, ratio=3)
+
+        rows = [
+            ("--count <n>", "Target replica count (default: 1)", "set-replicas --count 1 --pattern 'logs-*'"),
+            ("--indices <list>", "Comma-separated list of indices", "set-replicas --count 0 --indices idx1,idx2"),
+            ("--pattern <regex>", "Pattern to match indices", "set-replicas --count 1 --pattern 'temp-*'"),
+            ("--no-replicas-only", "Only update indices with 0 replicas", "set-replicas --count 1 --no-replicas-only"),
+        ]
+        for i, (cmd, desc, ex) in enumerate(rows):
+            table.add_row(cmd, desc, f"./escmd.py {ex}", style=ss.get_zebra_style(i) if ss else None)
+
+        table.add_row(
+            Text("── Safety ──", style=muted_style),
+            Text("", style=muted_style),
+            Text("", style=muted_style),
+        )
+
+        safety = [
+            ("--dry-run", "Preview changes without applying", "set-replicas --count 1 --pattern 'logs-*' --dry-run"),
+            ("--force", "Skip confirmation prompts", "set-replicas --count 0 --pattern 'temp-*' --force"),
+            ("--format json", "JSON output", "set-replicas --count 1 --pattern '*' --format json"),
+        ]
+        for i, (opt, desc, ex) in enumerate(safety):
+            table.add_row(
+                Text(opt, style=ss._get_style('semantic', 'secondary', 'magenta')),
+                desc,
+                Text(f"./escmd.py {ex}", style=muted_style),
+                style=ss.get_zebra_style(i) if ss else None,
+            )
+
+        console.print()
+        console.print(header_panel)
+        console.print()
+        console.print(table)
+        console.print()
 
     def _sanitize_for_json(self, obj):
         """Recursively sanitize data to ensure valid JSON by removing problematic fields and characters."""

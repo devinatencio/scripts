@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/display/../security/password_manager.py
-# hypothesis_version: 6.151.12
-
-[b'escmd_salt_2025', 3600, 100000, '=', 'Confirm password: ', 'ESCMD_MASTER_KEY', 'InvalidToken', 'active', 'backup_path', 'cached_environments', 'decrypt', 'decrypt_key_source', 'default', 'encrypted_passwords', 'entry_count', 'escmd.json', 'global', 'master_key', 'r', 'reencrypted_count', 'remaining_time', 'security', 'state_path', 'storage_keys', 'timeout', 'utf-8', 'w', '💾']

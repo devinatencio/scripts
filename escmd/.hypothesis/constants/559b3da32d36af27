@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/error_handling.py
-# hypothesis_version: 6.151.12
-
-[9200, '__class__', '__name__', 'additional_context', 'class', 'context', 'critical', 'data', 'error', 'esclient', 'high', 'host', 'low', 'medium', 'message', 'operation', 'parameters', 'password', 'port', 'secret', 'severity', 'success', 'token', 'type', 'unknown', 'unknown_operation', 'username']

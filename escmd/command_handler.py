@@ -246,7 +246,6 @@ class CommandHandler:
             "indices-s3-estimate": self.index_handler.handle_indices_s3_estimate,
             "indices-watch-collect": self.index_handler.handle_indices_watch_collect,
             "create-index": self.index_handler.handle_create_index,  # Using handler
-            "locations": self.utility_handler.handle_locations,  # Using handler
             "recovery": self.index_handler.handle_recovery,  # Using handler
             "rollover": self.lifecycle_handler.handle_rollover,  # Using handler
             "auto-rollover": self.lifecycle_handler.handle_auto_rollover,  # Using handler

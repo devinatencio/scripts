@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/utils.py
-# hypothesis_version: 6.151.12
-
-[1024.0, 1024, '-', '.', '0b', 'b', 'disk.total', 'gb', 'kb', 'mb', 'none', 'null', 'size', 'store', 'store_size', 'tb']

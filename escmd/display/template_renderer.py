@@ -78,6 +78,7 @@ class TemplateRenderer:
 
             # Create tables for each template type
             if template_type in ['all', 'legacy'] and templates_data.get('legacy_templates'):
+                print()
                 legacy_table = self._create_legacy_templates_table(templates_data['legacy_templates'])
                 if legacy_table:
                     self.console.print(legacy_table)
@@ -185,61 +186,111 @@ class TemplateRenderer:
                 self.console.print(error_panel)
                 return
 
-            # Templates in use table
             templates_in_use = usage_data.get('templates_in_use', {})
+            unused_templates = usage_data.get('unused_templates', [])
+
+            # Header panel — matches the style of shards/indices commands
+            self.console.print(self._create_usage_header_panel(templates_in_use, unused_templates))
+            self.console.print()
+
+            # Templates in use table
             if templates_in_use:
-                usage_table = self._create_usage_table(templates_in_use)
-                self.console.print(usage_table)
+                self.console.print(self._create_usage_table(templates_in_use))
                 self.console.print()
 
             # Unused templates table
-            unused_templates = usage_data.get('unused_templates', [])
             if unused_templates:
-                unused_table = self._create_unused_templates_table(unused_templates)
-                self.console.print(unused_table)
+                self.console.print(self._create_unused_templates_table(unused_templates))
                 self.console.print()
-
-            # Usage summary
-            self._print_usage_summary(templates_in_use, unused_templates)
 
         except Exception as e:
             error_text = Text(f"Error displaying template usage: {str(e)}", style="bold red")
             error_panel = self._create_themed_panel(error_text, "🔶 Display Error", "error")
             self.console.print(error_panel)
 
+    def _create_usage_header_panel(self, templates_in_use: Dict[str, Any], unused_templates: List[Dict[str, Any]]) -> Panel:
+        """Create the header panel for template usage — consistent with shards/indices style."""
+        ss = self.style_system
+        in_use_count = len(templates_in_use)
+        unused_count = len(unused_templates)
+
+        # Status message driven by whether there are unused templates
+        if unused_count > 0 and in_use_count == 0:
+            status_text = "🔶 Warning — No Templates In Use"
+            status_style = "bold yellow"
+            border_style = "yellow"
+        elif unused_count > 0:
+            status_text = "🔶 Some Templates Are Unused"
+            status_style = "bold yellow"
+            border_style = ss._get_style('table_styles', 'border_style', 'white') if ss else 'white'
+        else:
+            status_text = "✅ All Templates In Use"
+            status_style = "bold green"
+            border_style = ss._get_style('table_styles', 'border_style', 'white') if ss else 'white'
+
+        # Inline stats as subtitle
+        subtitle = Text()
+        subtitle.append("In Use: ", style="default")
+        subtitle.append(str(in_use_count), style=ss._get_style('semantic', 'success', 'green') if ss else 'green')
+        subtitle.append("  |  Unused: ", style="default")
+        subtitle.append(str(unused_count), style=ss._get_style('semantic', 'warning', 'yellow') if ss else 'yellow')
+
+        ts = ss._get_style('semantic', 'primary', 'bold cyan') if ss else 'bold cyan'
+        return Panel(
+            Text(status_text, style=status_style, justify="center"),
+            title=f"[{ts}]📋 Elasticsearch Template Usage[/{ts}]",
+            subtitle=subtitle,
+            border_style=border_style,
+            padding=(1, 2)
+        )
+
     def _print_template_summary(self, summary: Dict[str, Any], template_type: str) -> None:
-        """Create and display template summary panel."""
-        summary_text = Text()
+        """Create and display template summary panel matching the standard pattern."""
+        ss = self.style_system
+        ts = ss._get_style('semantic', 'primary', 'bold cyan') if ss else 'bold cyan'
 
+        total = summary.get('total_count', 0)
+        legacy = summary.get('legacy_count', 0)
+        composable = summary.get('composable_count', 0)
+        component = summary.get('component_count', 0)
+
+        # Body: status centered
         if template_type == 'all':
-            # Use semantic styling for consistent theming
-            total_style = self.get_themed_style('semantic_styles', 'primary', 'bold cyan')
-            legacy_style = self.get_themed_style('semantic_styles', 'warning', 'yellow')
-            composable_style = self.get_themed_style('semantic_styles', 'success', 'green')
-            component_style = self.get_themed_style('semantic_styles', 'info', 'blue')
-
-            summary_text.append(f"📋 Total Templates: {summary.get('total_count', 0)}\n", style=total_style)
-            summary_text.append(f"  • Legacy: {summary.get('legacy_count', 0)}\n", style=legacy_style)
-            summary_text.append(f"  • Composable: {summary.get('composable_count', 0)}\n", style=composable_style)
-            summary_text.append(f"  • Component: {summary.get('component_count', 0)}", style=component_style)
+            tmpl_word = "Template" if total == 1 else "Templates"
+            status_text = f"✅ {total} {tmpl_word} Configured"
         else:
             type_name = template_type.replace('_', ' ').title()
             count_key = f"{template_type}_count"
-            header_style = self.get_themed_style('semantic_styles', 'primary', 'bold cyan')
-            summary_text.append(f"📋 {type_name} Templates: {summary.get(count_key, 0)}", style=header_style)
+            count = summary.get(count_key, 0)
+            tmpl_word = "Template" if count == 1 else "Templates"
+            status_text = f"✅ {count} {type_name} {tmpl_word}"
 
-        # Use StyleSystem panel creation if available
-        if self.style_system:
-            summary_panel = self.style_system.create_info_panel(
-                summary_text,
-                "📊 Template Summary"
-            )
+        # Subtitle bar
+        subtitle_rich = Text()
+        if template_type == 'all':
+            subtitle_rich.append("Total: ", style="default")
+            subtitle_rich.append(str(total), style=ss._get_style('semantic', 'info', 'cyan') if ss else "cyan")
+            subtitle_rich.append(" | Legacy: ", style="default")
+            subtitle_rich.append(str(legacy), style=ss._get_style('semantic', 'warning', 'yellow') if ss else "yellow")
+            subtitle_rich.append(" | Composable: ", style="default")
+            subtitle_rich.append(str(composable), style=ss._get_style('semantic', 'success', 'green') if ss else "green")
+            subtitle_rich.append(" | Component: ", style="default")
+            subtitle_rich.append(str(component), style=ss._get_style('semantic', 'info', 'blue') if ss else "blue")
         else:
-            summary_panel = self._create_themed_panel(
-                summary_text,
-                "📊 Template Summary",
-                "info"
-            )
+            type_name = template_type.replace('_', ' ').title()
+            count_key = f"{template_type}_count"
+            subtitle_rich.append(f"{type_name}: ", style="default")
+            subtitle_rich.append(str(summary.get(count_key, 0)), style=ss._get_style('semantic', 'info', 'cyan') if ss else "cyan")
+
+        border = ss._get_style('table_styles', 'border_style', 'bright_magenta') if ss else 'bright_magenta'
+
+        summary_panel = Panel(
+            Text(status_text, style="bold green", justify="center"),
+            title=f"[{ts}]📋 Elasticsearch Templates[/{ts}]",
+            subtitle=subtitle_rich,
+            border_style=border,
+            padding=(1, 2)
+        )
         self.console.print(summary_panel)
 
     def _create_legacy_templates_table(self, legacy_templates: Dict[str, Any]) -> Optional[Table]:
@@ -502,16 +553,18 @@ class TemplateRenderer:
             table.add_column("Patterns", style=self.get_themed_style('semantic_styles', 'success', 'green'))
             table.add_column("Matching Indices", justify="right", style=self.get_themed_style('semantic_styles', 'info', 'blue'))
 
-        for template_name, info in templates_in_use.items():
+        for i, (template_name, info) in enumerate(templates_in_use.items()):
             patterns = ', '.join(info['patterns'])
             match_count = info['match_count']
             template_type = info['type'].title()
+            zebra = self.style_system.get_zebra_style(i) if self.style_system else None
 
             table.add_row(
                 template_name,
                 template_type,
                 patterns,
-                str(match_count)
+                str(match_count),
+                style=zebra
             )
 
         return table
@@ -552,14 +605,16 @@ class TemplateRenderer:
             table.add_column("Type", style=self.get_themed_style('semantic_styles', 'warning', 'yellow'))
             table.add_column("Patterns", style=self.get_themed_style('semantic_styles', 'success', 'green'))
 
-        for template_info in unused_templates:
+        for i, template_info in enumerate(unused_templates):
             patterns = ', '.join(template_info['patterns'])
             template_type = template_info['type'].title()
+            zebra = self.style_system.get_zebra_style(i) if self.style_system else None
 
             table.add_row(
                 template_info['name'],
                 template_type,
-                patterns
+                patterns,
+                style=zebra
             )
 
         return table

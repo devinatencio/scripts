@@ -454,15 +454,16 @@ class IndicesCommands(BaseCommand):
         console = Console()
 
         # Get theme styles
-        from display import ThemeManager
-        theme_manager = ThemeManager()
+        theme_manager = getattr(self.es_client, 'theme_manager', None)
+        if theme_manager is None:
+            from display import ThemeManager
+            config_manager = getattr(self.es_client, 'config_manager', None)
+            theme_manager = ThemeManager(config_manager)
         styles = theme_manager.get_theme_styles()
 
         if not data_dict:
             # Use theme-aware styling for the no data message
             from display.style_system import StyleSystem
-            config_manager = getattr(self.es_client, 'config_manager', None)
-            theme_manager = ThemeManager(config_manager)
             style_system = StyleSystem(theme_manager)
 
             # Create a themed info panel for no data
@@ -515,9 +516,6 @@ class IndicesCommands(BaseCommand):
                 if frozen_status == "true":
                     frozen_count += 1
 
-        # Build enhanced title with version info
-        indices_title = "📊 Elasticsearch Indices"
-
         # Use semantic styling with theme manager
         style_system = self.es_client.style_system
 
@@ -540,16 +538,43 @@ class IndicesCommands(BaseCommand):
             subtitle_rich.append(" | Frozen: ", style="default")
             subtitle_rich.append(str(frozen_count), style=style_system._get_style('semantic', 'secondary', 'bright_blue'))
 
+        # Build status body text based on index health
+        red_count = health_counts.get('red', 0)
+        yellow_count = health_counts.get('yellow', 0)
+        green_count = health_counts.get('green', 0)
+
+        if red_count > 0:
+            status_text = f"🔴 Critical - {red_count} Indic{'es' if red_count != 1 else 'e'} Red"
+            body_style = "bold red"
+            border = "red"
+        elif yellow_count > 0:
+            status_text = f"🟡 Warning - {yellow_count} Indic{'es' if yellow_count != 1 else 'e'} Yellow"
+            body_style = "bold yellow"
+            border = "yellow"
+        else:
+            status_text = f"✅ Cluster Healthy - {green_count} of {total_indices} Indices Green"
+            body_style = "bold green"
+            border = style_system._get_style('table_styles', 'border_style', 'bright_magenta')
+
+        # Build cluster subtitle
+        cluster_subtitle = Text()
+        cluster_subtitle.append(cluster_name, style=style_system._get_style('semantic', 'primary', 'cyan'))
+        cluster_subtitle.append("  ", style="default")
+        cluster_subtitle.append(f"v{cluster_version}", style=style_system._get_style('semantic', 'muted', 'dim'))
+        cluster_subtitle.append("   ", style="default")
+        cluster_subtitle.append_text(subtitle_rich)
+
         title_panel = Panel(
-            style_system.create_semantic_text(indices_title, "primary", justify="center"),
-            subtitle=subtitle_rich,
-            border_style=style_system._get_style('table_styles', 'border_style', 'bright_magenta'),
+            Text(status_text, style=body_style, justify="center"),
+            title=style_system.create_semantic_text("📊 Elasticsearch Indices", "primary"),
+            subtitle=cluster_subtitle,
+            border_style=border,
             padding=(1, 2)
         )
 
         # Create enhanced indices table with semantic styling
         table = style_system.create_standard_table(
-            title=f"Cluster: {cluster_name} (v{cluster_version})",
+            title=None,
             style_variant='dashboard'
         )
         table.add_column("Index Name", no_wrap=False, min_width=40)
@@ -597,19 +622,19 @@ class IndicesCommands(BaseCommand):
             # Index name with hot/frozen indicators - ORIGINAL DESIGN
             indice_name = indice['index']
 
-            # Determine row style based on health and index state
+            # Determine foreground color based on health and index state
             health = indice['health']
             if health == 'red':
-                row_style = 'red'
+                fg_style = 'red'
             elif health == 'yellow':
-                row_style = 'yellow'
+                fg_style = 'yellow'
             else:
-                row_style = 'white'
+                fg_style = 'white'
 
             # Check if hot and add flame indicator
             if indice_name in cluster_indices_hot_indexes:
                 indice_name = f"{indice_name} 🔥"
-                row_style = 'bright_red'
+                fg_style = 'bright_red'
 
             # Check if frozen and add snowflake indicator
             index_settings = cluster_all_settings.get(indice['index'], {})
@@ -618,7 +643,11 @@ class IndicesCommands(BaseCommand):
                 if frozen_status == "true":
                     indice_name = f"{indice_name} 🧊"
                     if not indice_name.endswith("🔥 🧊"):  # Only set frozen if not already hot
-                        row_style = 'bright_blue'
+                        fg_style = 'bright_blue'
+
+            # Combine foreground with theme-aware zebra background
+            zebra_bg = style_system.get_zebra_style(data_dict.index(indice))
+            row_style = f"{fg_style} {zebra_bg}" if zebra_bg else fg_style
 
             # Format numbers with proper commas - handle None, empty, and dash values
             docs_count_raw = indice.get('docs.count')

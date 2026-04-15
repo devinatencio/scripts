@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/ilm_help.py
-# hypothesis_version: 6.151.12
-
-['   Action:', '   Analyze:', '   Apply Policy:', '   Check Policy:', '   Check Status:', '   Create Policies:', '   Delete Policy:', '   Explain Index:', '   Export Policies:', '   From File:', '   From Policy:', '   Inline JSON:', '   Integration:', '   List All:', '   Monitor Status:', '   Monitor:', '   Purpose:', '   Remove Policy:', '   Show Errors:', 'Create policy:', 'Delete policy:', 'ILM status:', 'Index status:', 'Inline policy:', 'JSON output:', 'List policies:', 'Migrate policies:', 'Policy details:', 'Remove policy:', 'Set policy:', 'Show errors:', 'ilm', 'ilm errors', 'ilm explain <index>', 'ilm policies', 'ilm policy <name>', 'ilm status', '🆕 Policy Creation:', '💡 ILM Examples', '📊 Automation:', '🔄 Policy Management:', '🔍 Troubleshooting:']

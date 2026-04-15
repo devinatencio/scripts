@@ -398,24 +398,32 @@ class ShardProcessor:
         risk_pct = summary.get("risk_percentage", 0)
         
         if affected == 0:
-            title_text = f"✅ No Shard Colocation Issues Found"
             console.print()
             console.print(Panel(
-                Text(f"✅ All {total_analyzed} indices have proper shard distribution!\n\nNo primary and replica shards are colocated on the same host.", 
+                Text(f"✅ No Colocation Issues - All {total_analyzed} Indices Properly Distributed",
                      style="bold green", justify="center"),
-                title="🔍 Shard Colocation Analysis",
-                border_style="green",
-                padding=(2, 4)
+                title="[bold cyan]🔍 Shard Colocation Analysis[/bold cyan]",
+                subtitle=f"Analyzed: {total_analyzed} | Issues: 0",
+                border_style="cyan",
+                padding=(1, 2)
             ))
             console.print()
             return
             
-        title_text = f"{risk_icon} Shard Colocation Issues Detected"
-        subtitle_text = f"Analyzed: {total_analyzed} | Affected: {affected} | Risk: {risk_pct:.1f}%"
+        title_text = f"{risk_icon} {affected} {'Index' if affected == 1 else 'Indices'} With Colocation Issues"
+        
+        subtitle_rich = Text()
+        subtitle_rich.append("Analyzed: ", style="default")
+        subtitle_rich.append(str(total_analyzed), style="cyan")
+        subtitle_rich.append(" | Affected: ", style="default")
+        subtitle_rich.append(str(affected), style="red")
+        subtitle_rich.append(" | Risk: ", style="default")
+        subtitle_rich.append(f"{risk_pct:.1f}%", style=risk_color)
         
         title_panel = Panel(
             Text(title_text, style=f"bold {risk_color}", justify="center"),
-            subtitle=subtitle_text,
+            title="[bold cyan]🔍 Shard Colocation Analysis[/bold cyan]",
+            subtitle=subtitle_rich,
             border_style=risk_color,
             padding=(1, 2)
         )

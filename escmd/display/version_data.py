@@ -17,10 +17,11 @@ if _parent_dir not in sys.path:
 
 # Central version — only version.py needs updating to change across all tools
 try:
-    from version import VERSION as _ESCMD_VERSION, DATE as _ESCMD_DATE
+    from version import VERSION as _ESCMD_VERSION, DATE as _ESCMD_DATE, HASH as _ESCMD_HASH
 except ImportError:
     _ESCMD_VERSION = "3.8.4"
     _ESCMD_DATE = "04/04/2026"
+    _ESCMD_HASH = "unknown"
 
 
 class VersionDataCollector:
@@ -48,6 +49,7 @@ class VersionDataCollector:
 
         return {
             "version": version,
+            "hash": _ESCMD_HASH,
             "date": date,
             "tool_name": "ESCMD",
             "full_name": "Elasticsearch Terminal (ESTERM)",

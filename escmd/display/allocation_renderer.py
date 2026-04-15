@@ -147,7 +147,10 @@ class AllocationRenderer:
 
     def render_enhanced_allocation_settings(self, settings: Dict[str, Any], health_data: Dict[str, Any]) -> str:
         """
-        Render allocation settings in enhanced multi-panel format.
+        Render allocation settings in condensed multi-panel format.
+
+        Layout: Title panel + two side-by-side panels (Status & Quick Actions).
+        Configuration and exclusion details are folded into the status panel.
 
         Args:
             settings: Cluster settings data
@@ -158,17 +161,14 @@ class AllocationRenderer:
         """
         import json
 
-        # Get style system for semantic styling
         style_system = self.style_system
 
         try:
             # Parse allocation settings
             allocation_settings = None
-            exclusion_settings = None
             excluded_nodes = []
 
-            # Check both transient and persistent settings for exclusions
-            # Transient settings
+            # Check transient settings
             transient_exclusions = []
             if 'transient' in settings and 'cluster' in settings['transient']:
                 if 'routing' in settings['transient']['cluster']:
@@ -179,7 +179,7 @@ class AllocationRenderer:
                             if exclusion_settings and exclusion_settings.strip():
                                 transient_exclusions = [node.strip() for node in exclusion_settings.split(',') if node.strip()]
 
-            # Persistent settings
+            # Check persistent settings
             persistent_exclusions = []
             persistent_allocation_settings = None
             if 'persistent' in settings and 'cluster' in settings['persistent']:
@@ -191,10 +191,10 @@ class AllocationRenderer:
                             if persistent_exclusion_settings and persistent_exclusion_settings.strip():
                                 persistent_exclusions = [node.strip() for node in persistent_exclusion_settings.split(',') if node.strip()]
 
-            # Combine exclusions from both sources
+            # Combine exclusions
             excluded_nodes = list(set(transient_exclusions + persistent_exclusions))
 
-            # Check if allocation is enabled by looking for enable setting in either location
+            # Determine allocation state
             allocation_enabled = True
             if allocation_settings and 'enable' in allocation_settings:
                 if allocation_settings['enable'] == 'primaries':
@@ -209,162 +209,124 @@ class AllocationRenderer:
             excluded_count = len(excluded_nodes)
             active_nodes = data_nodes - excluded_count
 
-            # Create title panel - status_text and status_style now handled in subtitle
-
-            # Create colorized subtitle with theme-based styling for statistics
+            # --- Title panel with status data as body ---
             from rich.text import Text
-            subtitle_rich = Text()
+            from rich.table import Table as InnerTable
 
-            # Status with appropriate color
-            subtitle_rich.append("Status: ", style="default")
+            ts = style_system._get_style('semantic', 'primary', 'bold cyan') if style_system else 'bold cyan'
+            _title = self.theme_manager.get_themed_style("panel_styles", "title", "bold white") if self.theme_manager else "bold white"
+
+            # Body: allocation status centered
             if allocation_enabled:
-                subtitle_rich.append("✅ Enabled", style=style_system._get_style('semantic', 'success', 'green') if style_system else "green")
+                status_text = "✅ Enabled - All Shards Allocated"
+                body_style = "bold green"
+                border_style = style_system._get_style('table_styles', 'border_style', 'cyan') if style_system else "cyan"
             else:
-                subtitle_rich.append("🔶 Disabled", style=style_system._get_style('semantic', 'warning', 'yellow') if style_system else "yellow")
+                status_text = "🔶 Disabled - Primaries Only"
+                body_style = "bold yellow"
+                border_style = "yellow"
 
-            # Total nodes
-            subtitle_rich.append(" | Total: ", style="default")
+            # Subtitle: node stats bar
+            subtitle_rich = Text()
+            subtitle_rich.append("Total Nodes: ", style="default")
             subtitle_rich.append(str(total_nodes), style=style_system._get_style('semantic', 'info', 'cyan') if style_system else "cyan")
-
-            # Data nodes
             subtitle_rich.append(" | Data: ", style="default")
             subtitle_rich.append(str(data_nodes), style=style_system._get_style('semantic', 'primary', 'bright_magenta') if style_system else "bright_magenta")
-
-            # Excluded nodes (only if any exist)
             if excluded_count > 0:
                 subtitle_rich.append(" | Excluded: ", style="default")
                 subtitle_rich.append(str(excluded_count), style=style_system._get_style('semantic', 'error', 'red') if style_system else "red")
-
-            # Active nodes
             subtitle_rich.append(" | Active: ", style="default")
             subtitle_rich.append(str(active_nodes), style=style_system._get_style('semantic', 'success', 'green') if style_system else "green")
 
-            # Create title panel with semantic styling
-            if style_system:
-                title_panel = Panel(
-                    style_system.create_semantic_text("🔀 Elasticsearch Allocation Settings Overview", "primary", justify="center"),
-                    subtitle=subtitle_rich,
-                    border_style=style_system.get_semantic_style("info"),
-                    padding=(1, 2)
-                )
-            else:
-                title_panel = Panel(
-                    Text("🔀 Elasticsearch Allocation Settings Overview", style="bold cyan", justify="center"),
-                    subtitle=subtitle_rich,
-                    border_style="cyan",
-                    padding=(1, 2)
-                )
-
-            # Create allocation status panel
-            status_table = Table(show_header=False, box=None, padding=(0, 1))
-            status_table.add_column("Label", style=style_system.get_semantic_style("primary") if style_system else "bold", no_wrap=True)
-            status_table.add_column("Icon", justify="left", width=3)
-            status_table.add_column("Value", no_wrap=True)
+            # Build body table with status data
+            body_table = InnerTable(show_header=False, box=None, padding=(0, 1))
+            body_table.add_column("Label", style="bold", no_wrap=True)
+            body_table.add_column("Icon", justify="left", width=3)
+            body_table.add_column("Value", no_wrap=True)
 
             if allocation_enabled:
-                status_table.add_row("Allocation Status:", "✅", "Enabled (All Shards)")
-                status_table.add_row("Shard Movement:", "🔄", "Primary & Replica")
+                body_table.add_row("Allocation Status:", "✅", "Enabled (All Shards)")
+                body_table.add_row("Shard Movement:", "🔄", "Primary & Replica")
             else:
-                status_table.add_row("Allocation Status:", "🔶", "Disabled (Primaries Only)")
-                status_table.add_row("Shard Movement:", "🔒", "Primaries Only")
+                body_table.add_row("Allocation Status:", "🔶", "Disabled (Primaries Only)")
+                body_table.add_row("Shard Movement:", "🔒", "Primaries Only")
 
-            status_table.add_row("Total Nodes:", "💻", str(total_nodes))
-            status_table.add_row("Data Nodes:", "💾", str(data_nodes))
-            status_table.add_row("Excluded Nodes:", "❌", str(excluded_count))
-            status_table.add_row("Active Nodes:", "✅", str(active_nodes))
+            body_table.add_row("Total Nodes:", "💻", str(total_nodes))
+            body_table.add_row("Data Nodes:", "💾", str(data_nodes))
+            body_table.add_row("Active Nodes:", "✅", str(active_nodes))
 
-            status_panel = Panel(
-                status_table,
-                title="📊 Allocation Status",
-                border_style=style_system.get_semantic_style("success" if allocation_enabled else "warning") if style_system else ("green" if allocation_enabled else "yellow"),
-                padding=(1, 2)
-            )
-
-            # Create exclusions panel
             if excluded_nodes:
-                exclusion_content = ""
-                if style_system:
-                    error_style = style_system.get_semantic_style("error")
-                    for i, node in enumerate(excluded_nodes, 1):
-                        exclusion_content += f"[{error_style}]{i}. {node}[/{error_style}]\n"
-                else:
-                    for i, node in enumerate(excluded_nodes, 1):
-                        exclusion_content += f"[bold red]{i}.[/bold red] [red]{node}[/red]\n"
-                exclusion_content = exclusion_content.rstrip()
-
-                exclusions_panel = Panel(
-                    exclusion_content,
-                    title="❌ Excluded Nodes",
-                    border_style=style_system.get_semantic_style("error") if style_system else "red",
-                    padding=(1, 2)
-                )
+                body_table.add_row("", "", "")
+                body_table.add_row("Excluded Nodes:", "❌", str(excluded_count))
+                for node in excluded_nodes:
+                    body_table.add_row("", "🔴", node)
             else:
-                exclusions_panel = Panel(
-                    Text("✅ No nodes are currently excluded from allocation", style="bold green", justify="center"),
-                    title="❌ Excluded Nodes",
-                    border_style="green",
-                    padding=(1, 2)
-                )
+                body_table.add_row("Excluded Nodes:", "✅", "None")
 
-            # Create configuration details panel
-            config_table = Table(show_header=False, box=None, padding=(0, 1))
-            config_table.add_column("Setting", style="bold", no_wrap=True)
-            config_table.add_column("Icon", justify="left", width=3)
-            config_table.add_column("Value", no_wrap=True)
-
-            if allocation_settings:
-                for key, value in allocation_settings.items():
-                    if key == 'exclude':
-                        continue  # Skip - handled in exclusions panel
-                    elif key == 'enable':
-                        icon = "✅" if value == 'all' else "🔶" if value == 'primaries' else "❌"
-                        display_value = "All Shards" if value == 'all' else "Primaries Only" if value == 'primaries' else "Disabled"
-                        config_table.add_row("Enable Setting:", icon, display_value)
-                    else:
-                        config_table.add_row(f"{key.title()}:", "🔩", str(value))
-            else:
-                config_table.add_row("Configuration:", "📋", "Default Settings (No Custom Config)")
-
-            config_panel = Panel(
-                config_table,
-                title="🔩 Configuration Details",
-                border_style="blue",
+            title_panel = Panel(
+                body_table,
+                title=f"[{ts}]🔀 Elasticsearch Allocation Settings[/{ts}]",
+                subtitle=subtitle_rich,
+                border_style=border_style,
                 padding=(1, 2)
             )
 
-            # Create quick actions panel
-            actions_table = Table(show_header=False, box=None, padding=(0, 1))
-            actions_table.add_column("Action", style="bold magenta", no_wrap=True)
-            actions_table.add_column("Command", style="dim white")
+            # --- Help table (matching snapshots/ilm/template standard) ---
+            full_theme = self.theme_manager.get_full_theme_data() if self.theme_manager else {}
+            table_styles = full_theme.get('table_styles', {})
+            header_style = table_styles.get('header_style', 'bold white')
+            tbl_border = style_system._get_style('table_styles', 'border_style', 'white') if style_system else 'white'
+            box_style = style_system.get_table_box() if style_system else None
 
-            actions_table.add_row("Enable allocation:", "./escmd.py allocation enable")
-            actions_table.add_row("Disable allocation:", "./escmd.py allocation disable")
-            actions_table.add_row("Exclude node:", "./escmd.py allocation exclude add <hostname>")
-            actions_table.add_row("Remove exclusion:", "./escmd.py allocation exclude remove <hostname>")
-            actions_table.add_row("Reset exclusions:", "./escmd.py allocation exclude reset")
+            primary_style = style_system.get_semantic_style("primary") if style_system else "bold"
+            success_style = style_system.get_semantic_style("success") if style_system else "green"
+            muted_style = style_system._get_style('semantic', 'muted', 'dim') if style_system else 'dim'
 
-            actions_panel = Panel(
-                actions_table,
-                title="🚀 Quick Actions",
-                border_style="magenta",
-                padding=(1, 2)
+            help_table = Table(
+                show_header=True,
+                header_style=header_style,
+                border_style=tbl_border,
+                box=box_style,
+                show_lines=False,
+                expand=True,
+            )
+            help_table.add_column("Command", style=primary_style, ratio=2)
+            help_table.add_column("Description", style="white", ratio=3)
+            help_table.add_column("Example", style=success_style, ratio=3)
+
+            rows = [
+                ("allocation", "Show allocation settings overview", "allocation"),
+                ("allocation enable", "Enable shard allocation (all shards)", "allocation enable"),
+                ("allocation disable", "Disable shard allocation (primaries only)", "allocation disable"),
+                ("allocation explain <index>", "Explain allocation decisions for an index", "allocation explain mylog"),
+            ]
+            for i, (cmd, desc, ex) in enumerate(rows):
+                help_table.add_row(cmd, desc, f"./escmd.py {ex}", style=style_system.get_zebra_style(i) if style_system else None)
+
+            help_table.add_row(
+                Text("── Node Exclusions ──", style=muted_style),
+                Text("", style=muted_style),
+                Text("", style=muted_style),
             )
 
-            # Display everything with enhanced layout
+            excl_rows = [
+                ("allocation exclude add <host>", "Exclude node from allocation", "allocation exclude add node-3"),
+                ("allocation exclude remove <host>", "Remove node from exclusion list", "allocation exclude remove node-3"),
+                ("allocation exclude reset", "Reset all node exclusions", "allocation exclude reset"),
+            ]
+            for i, (cmd, desc, ex) in enumerate(excl_rows):
+                help_table.add_row(
+                    Text(cmd, style=style_system._get_style('semantic', 'secondary', 'magenta') if style_system else 'magenta'),
+                    desc,
+                    Text(f"./escmd.py {ex}", style=muted_style),
+                    style=style_system.get_zebra_style(i) if style_system else None,
+                )
+
+            # --- Render layout ---
             print()
             self.console.print(title_panel)
             print()
-
-            # Create two-column layout for main panels - Status and Quick Actions
-            self.console.print(Columns([status_panel, actions_panel], expand=True))
-            print()
-
-            # Configuration details panel spans full width
-            self.console.print(config_panel)
-            print()
-
-            # Excluded nodes panel at the bottom, spans full width
-            self.console.print(exclusions_panel)
+            self.console.print(help_table)
             print()
 
         except Exception as e:
@@ -372,3 +334,281 @@ class AllocationRenderer:
 
         # Return the full JSON for reference
         return json.dumps(settings)
+
+    def render_allocation_explain_results(self, explain_result: Dict[str, Any]) -> None:
+        """
+        Render allocation explain results in themed multi-panel format.
+
+        Args:
+            explain_result: Enhanced allocation explanation data from AllocationProcessor
+        """
+        style_system = self.style_system
+        ss = style_system
+        basic = explain_result.get("basic_explanation", {})
+
+        # Theme helpers matching ILM/health renderer patterns
+        tm = self.theme_manager
+        _title = tm.get_themed_style("panel_styles", "title", "bold white") if tm else "bold white"
+        _border = ss._get_style('table_styles', 'border_style', 'cyan') if ss else "cyan"
+
+        if "error" in explain_result:
+            self.console.print(f"[red]❌ {explain_result['error']}[/red]")
+            return
+
+        index_name = explain_result.get("index_name", "Unknown")
+        shard_number = explain_result.get("shard_number", "?")
+        shard_type = explain_result.get("shard_type", "unknown")
+        current_alloc = explain_result.get("current_allocation", {})
+        summary = explain_result.get("summary", {})
+        metadata = explain_result.get("enhancement_metadata", {})
+        is_allocated = current_alloc.get("allocated")
+        alloc_possible = summary.get("allocation_possible", False)
+        nodes_evaluated = summary.get("total_nodes_evaluated", 0)
+
+        # --- Title panel with subtitle bar ---
+        shard_overview = explain_result.get("shard_overview", {})
+        idx_health = shard_overview.get("health", "unknown")
+        total_shards = shard_overview.get("total_shards", 0)
+        pri_count = shard_overview.get("primary_count", 0)
+        rep_count = shard_overview.get("replica_count", 0)
+        shard_states = shard_overview.get("states", {})
+        shard_nodes = shard_overview.get("nodes", {})
+
+        health_icon = "🟢" if idx_health == "green" else "🟡" if idx_health == "yellow" else "🔴" if idx_health == "red" else "⚪"
+        health_style_key = "success" if idx_health == "green" else "warning" if idx_health == "yellow" else "error" if idx_health == "red" else "muted"
+
+        subtitle_rich = Text()
+        subtitle_rich.append("Index: ", style="default")
+        subtitle_rich.append(index_name, style=ss._get_style('semantic', 'info', 'cyan') if ss else "cyan")
+        subtitle_rich.append(" | Health: ", style="default")
+        subtitle_rich.append(f"{health_icon} {idx_health.capitalize()}", style=ss._get_style('semantic', health_style_key, 'white') if ss else "white")
+        subtitle_rich.append(" | Shards: ", style="default")
+        subtitle_rich.append(f"{pri_count}p", style=ss._get_style('semantic', 'primary', 'bright_magenta') if ss else "bright_magenta")
+        subtitle_rich.append("/", style="default")
+        subtitle_rich.append(f"{rep_count}r", style=ss._get_style('semantic', 'info', 'blue') if ss else "blue")
+
+        started = shard_states.get("STARTED", 0)
+        unassigned = shard_states.get("UNASSIGNED", 0)
+        if started:
+            subtitle_rich.append(" | Started: ", style="default")
+            subtitle_rich.append(str(started), style=ss._get_style('semantic', 'success', 'green') if ss else "green")
+        if unassigned:
+            subtitle_rich.append(" | Unassigned: ", style="default")
+            subtitle_rich.append(str(unassigned), style=ss._get_style('semantic', 'error', 'red') if ss else "red")
+
+        if ss:
+            title_panel = Panel(
+                Text(f"{index_name} [shard {shard_number}] ({shard_type})", style=ss.get_semantic_style("neutral") or "bold white", justify="center"),
+                title=f"[{_title}]🔍 Allocation Explain[/{_title}]",
+                subtitle=subtitle_rich,
+                border_style=_border,
+                padding=(1, 2)
+            )
+        else:
+            title_panel = Panel(
+                Text(f"{index_name} [shard {shard_number}] ({shard_type})", style="bold white", justify="center"),
+                title=f"[{_title}]🔍 Allocation Explain[/{_title}]",
+                subtitle=subtitle_rich,
+                border_style=_border,
+                padding=(1, 2)
+            )
+
+        # --- Allocation Detail panel (left) ---
+        alloc_table = Table(show_header=False, box=None, padding=(0, 1))
+        alloc_table.add_column("Label", style="bold", no_wrap=True)
+        alloc_table.add_column("Icon", justify="left", width=3)
+        alloc_table.add_column("Value", no_wrap=True)
+
+        if is_allocated:
+            alloc_table.add_row("Status:", "✅", "Allocated")
+            alloc_table.add_row("Node:", "💻", current_alloc.get("node_name", "N/A"))
+            alloc_table.add_row("Node ID:", "🔑", current_alloc.get("node_id", "N/A"))
+            weight = current_alloc.get("weight_ranking")
+            if weight is not None:
+                alloc_table.add_row("Weight Ranking:", "📈", str(weight))
+
+            can_remain = basic.get("can_remain_on_current_node")
+            if can_remain is not None:
+                alloc_table.add_row("Can Remain:", "🔒", str(can_remain))
+
+            remain_decisions = basic.get("can_remain_decisions", [])
+            for rd in remain_decisions:
+                if rd.get("decision") == "no":
+                    alloc_table.add_row(f"  {rd.get('decider', '?')}:", "🚫", rd.get("explanation", ""))
+
+            can_move = basic.get("can_move_to_other_node")
+            if can_move is not None:
+                alloc_table.add_row("Can Move:", "🔄", str(can_move))
+
+            alloc_border = ss.get_semantic_style("success") if ss else "green"
+        else:
+            alloc_table.add_row("Status:", "❌", "Unassigned")
+
+            can_allocate = basic.get("can_allocate")
+            if can_allocate is not None:
+                alloc_table.add_row("Can Allocate:", "🔀", str(can_allocate))
+
+            allocate_explanation = basic.get("allocate_explanation")
+            if allocate_explanation:
+                alloc_table.add_row("Explanation:", "📝", str(allocate_explanation))
+
+            unassigned_details = explain_result.get("unassigned_details", {})
+            reason = unassigned_details.get("reason")
+            if reason:
+                alloc_table.add_row("Reason:", "📋", str(reason))
+            last_status = unassigned_details.get("last_allocation_status")
+            if last_status:
+                alloc_table.add_row("Last Status:", "🔄", str(last_status))
+            if unassigned_details.get("at"):
+                alloc_table.add_row("Since:", "🕐", str(unassigned_details["at"]))
+            failed = unassigned_details.get("failed_attempts", 0)
+            if failed:
+                alloc_table.add_row("Failed Attempts:", "🔶", str(failed))
+
+            alloc_border = ss.get_semantic_style("warning") if ss else "yellow"
+
+        alloc_panel = Panel(
+            alloc_table,
+            title=f"[{_title}]📊 Allocation Detail[/{_title}]",
+            border_style=alloc_border,
+            padding=(1, 2)
+        )
+
+        # --- Summary & Shards panel (right) ---
+        summary_table = Table(show_header=False, box=None, padding=(0, 1))
+        summary_table.add_column("Label", style="bold", no_wrap=True)
+        summary_table.add_column("Icon", justify="left", width=3)
+        summary_table.add_column("Value", no_wrap=True)
+
+        recommendation = summary.get("recommendation", "")
+
+        summary_table.add_row("Nodes Evaluated:", "💻", str(nodes_evaluated))
+        nodes_available = metadata.get("nodes_available", 0)
+        if nodes_available:
+            summary_table.add_row("Nodes Available:", "💾", str(nodes_available))
+
+        if alloc_possible:
+            summary_table.add_row("Allocation Possible:", "✅", "Yes")
+        else:
+            summary_table.add_row("Allocation Possible:", "❌", "No")
+
+        barriers = summary.get("primary_barriers", [])
+        for barrier in barriers:
+            barrier_name = barrier.get("barrier", "Unknown")
+            affected = barrier.get("affected_nodes", 0)
+            summary_table.add_row("Barrier:", "🚧", f"{barrier_name} ({affected} node(s))")
+
+        if recommendation:
+            summary_table.add_row("Recommendation:", "💡", recommendation)
+
+        # Shard overview section
+        if total_shards > 0:
+            summary_table.add_row("", "", "")
+            summary_table.add_row("Total Shards:", "📊", str(total_shards))
+
+            # Primary status
+            pri_started = 0
+            pri_other = 0
+            for shard in shard_overview.get('_raw_shards', []):
+                if shard.get('prirep') == 'p':
+                    if shard.get('state') == 'STARTED':
+                        pri_started += 1
+                    else:
+                        pri_other += 1
+
+            if pri_other == 0:
+                summary_table.add_row("Primary:", "🔑", f"{pri_count} Started")
+            else:
+                summary_table.add_row("Primary:", "🔑", f"{pri_started} Started, {pri_other} Other")
+
+            # Replica status
+            rep_started = shard_states.get('STARTED', 0) - pri_started
+            rep_unassigned = unassigned
+            if rep_unassigned > 0:
+                summary_table.add_row("Replica:", "📋", f"{rep_unassigned} Unassigned")
+            elif rep_count > 0:
+                summary_table.add_row("Replica:", "📋", f"{rep_count} Started")
+
+            # Node distribution (top node)
+            if shard_nodes:
+                top_nodes = sorted(shard_nodes.items(), key=lambda x: x[1], reverse=True)
+                for node_name, count in top_nodes[:2]:
+                    if node_name != 'unassigned':
+                        shard_word = "shard" if count == 1 else "shards"
+                        summary_table.add_row("Node:", "💻", f"{node_name} ({count} {shard_word})")
+
+        summary_panel = Panel(
+            summary_table,
+            title=f"[{_title}]📋 Summary & Shards[/{_title}]",
+            border_style=ss.get_semantic_style("success" if alloc_possible else "warning") if ss else ("green" if alloc_possible else "yellow"),
+            padding=(1, 2)
+        )
+
+        # --- Node Allocation Decisions panel (full width) ---
+        node_decisions = explain_result.get("node_decisions", [])
+        decisions_panel = None
+        if node_decisions:
+            decisions_table = Table(
+                show_header=True,
+                box=None,
+                padding=(0, 1),
+                expand=True,
+            )
+            decisions_table.add_column("Node", style="bold", no_wrap=True)
+            decisions_table.add_column("Transport", no_wrap=True, style="dim")
+            decisions_table.add_column("Decision", no_wrap=True)
+            decisions_table.add_column("Weight", justify="right", no_wrap=True)
+            decisions_table.add_column("Deciders", ratio=1)
+
+            for node in node_decisions:
+                node_name = node.get("node_name", "Unknown")
+                transport = node.get("transport_address", "")
+                decision = node.get("node_decision", "unknown")
+                weight = str(node.get("weight_ranking", ""))
+
+                if decision == "yes":
+                    decision_text = Text("Yes", style=ss.get_semantic_style("success") if ss else "green")
+                elif decision == "throttle":
+                    decision_text = Text("Throttled", style=ss.get_semantic_style("warning") if ss else "yellow")
+                elif decision == "no":
+                    decision_text = Text("No", style=ss.get_semantic_style("error") if ss else "red")
+                elif decision == "worse":
+                    decision_text = Text("Worse", style=ss.get_semantic_style("warning") if ss else "yellow")
+                else:
+                    decision_text = Text(decision, style="dim")
+
+                deciders = node.get("deciders", [])
+                if deciders:
+                    decider_lines = []
+                    for d in deciders:
+                        decider_name = d.get("decider", "?")
+                        decider_decision = d.get("decision", "?")
+                        explanation = d.get("explanation", "")
+                        if decider_decision == "no":
+                            decider_lines.append(f"NO  {decider_name}: {explanation}")
+                        elif decider_decision == "yes":
+                            decider_lines.append(f"YES {decider_name}")
+                        else:
+                            decider_lines.append(f"    {decider_name}: {explanation}")
+                    details = "\n".join(decider_lines)
+                else:
+                    details = "No deciders"
+
+                decisions_table.add_row(node_name, transport, decision_text, weight, details)
+
+            decisions_panel = Panel(
+                decisions_table,
+                title=f"[{_title}]🔀 Node Allocation Decisions[/{_title}]",
+                border_style=ss.get_semantic_style("info") if ss else "blue",
+                padding=(1, 2)
+            )
+
+        # --- Render layout ---
+        print()
+        self.console.print(title_panel)
+        print()
+        self.console.print(Columns([alloc_panel, summary_panel], expand=True))
+        print()
+        if decisions_panel:
+            self.console.print(decisions_panel)
+            print()

@@ -122,6 +122,43 @@ class ActionHandler:
         self.current_location = current_location
         self.logger = logger
 
+        # Initialize a standalone style system for when es_client is None
+        # (e.g. `action list` / `action show` which don't need a connection).
+        # We replicate the same config/state file resolution the main app uses so
+        # the user's active theme is respected.
+        try:
+            from display.theme_manager import ThemeManager
+            from display.style_system import StyleSystem
+            from configuration_manager import ConfigurationManager as CM
+            import os as _os
+
+            script_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+            state_file = (
+                _os.environ.get("ESCMD_STATE")
+                or _os.environ.get("ESCMD_CONFIG")
+                or _os.path.join(script_dir, "escmd.json")
+            )
+            main_cfg  = _os.environ.get("ESCMD_MAIN_CONFIG")
+            srv_cfg   = _os.environ.get("ESCMD_SERVERS_CONFIG")
+            legacy    = _os.environ.get("ELASTIC_SERVERS_CONFIG")
+
+            if main_cfg or srv_cfg:
+                _cm = CM(
+                    state_file_path=state_file,
+                    main_config_path=main_cfg or _os.path.join(script_dir, "escmd.yml"),
+                    servers_config_path=srv_cfg or _os.path.join(script_dir, "elastic_servers.yml"),
+                )
+            elif legacy:
+                _cm = CM(config_file_path=legacy, state_file_path=state_file)
+            else:
+                _cm = CM(state_file_path=state_file)
+
+            self._theme_manager = ThemeManager(_cm)
+            self._style_system = StyleSystem(self._theme_manager)
+        except Exception:
+            self._theme_manager = None
+            self._style_system = None
+
         # Detect if we're running in esterm context
         self.in_esterm = self._detect_esterm_context()
 
@@ -143,7 +180,7 @@ class ActionHandler:
         try:
             self.action_manager = ActionManager()
         except Exception as e:
-            self.console.print(f"[red]Error loading actions: {e}[/red]")
+            self.console.print(f"[bold red]✗ Error loading actions:[/bold red] {e}")
             self.action_manager = None
 
     def _detect_esterm_context(self) -> bool:
@@ -166,126 +203,306 @@ class ActionHandler:
 
         return False
 
+    def _get_style_system(self):
+        """Get style system — from es_client if available, otherwise the local fallback."""
+        if self.es_client and hasattr(self.es_client, "style_system"):
+            return self.es_client.style_system
+        return self._style_system
+
+    def _get_theme_styles(self):
+        """Get theme styles — from es_client if available, otherwise the local fallback."""
+        if self.es_client and hasattr(self.es_client, "theme_manager"):
+            return self.es_client.theme_manager.get_theme_styles()
+        return self._theme_manager.get_theme_styles() if self._theme_manager else {}
+
+    def _sem(self, semantic_type: str, default: str = "white") -> str:
+        """Shorthand to get a semantic style string."""
+        ss = self._get_style_system()
+        if ss:
+            return ss.get_semantic_style(semantic_type)
+        return default
+
+    def _print_error(self, message: str):
+        """Print a styled error panel with a fixed title and the message as subtitle."""
+        error_style = self._sem("error", "red")
+        desc_style = self._get_theme_styles().get("panel_styles", {}).get("description", "")
+
+        self.console.print(Panel(
+            Text(message, style=desc_style) if desc_style else message,
+            title=f"[{error_style}]❌ Error[/{error_style}]",
+            border_style=error_style,
+            padding=(0, 2),
+        ))
+
+    def _print_warning(self, message: str):
+        """Print a styled warning message."""
+        error_style = self._sem("error", "red")
+        warning_style = self._sem("warning", "yellow")
+        self.console.print(f"[{warning_style}]⚠ {message}[/{warning_style}]")
+
+    def _print_success(self, message: str):
+        """Print a styled success message."""
+        success_style = self._sem("success", "green")
+        self.console.print(f"[{success_style}]✓ {message}[/{success_style}]")
+
+    def _print_muted(self, message: str):
+        """Print a muted/dim message."""
+        muted_style = self._sem("muted", "dim white")
+        self.console.print(f"[{muted_style}]{message}[/{muted_style}]")
+
     def handle_action(self):
         """Handle action commands."""
         if not self.action_manager:
-            self.console.print(
-                "[red]Actions system unavailable due to loading errors[/red]"
-            )
+            self._print_error("Actions system unavailable due to loading errors")
             return
 
-        # Get subcommand
-        action_cmd = getattr(self.args, "action_cmd", "list")
+        action_cmd = getattr(self.args, "action_cmd", None)
 
-        if action_cmd == "list":
+        if action_cmd is None:
+            self._show_action_help()
+        elif action_cmd == "list":
             self.handle_action_list()
         elif action_cmd == "show":
             self.handle_action_show()
         elif action_cmd == "run":
             self.handle_action_run()
         else:
-            self.console.print(f"[red]Unknown action command: {action_cmd}[/red]")
+            primary = self._sem("primary", "cyan")
+            muted = self._sem("muted", "dim white")
+            desc_style = self._get_theme_styles().get("panel_styles", {}).get("description", "")
+            error_style = self._sem("error", "red")
+
+            content = Text()
+            content.append(f"'{action_cmd}' is not a valid subcommand.\n\n", style=desc_style)
+            content.append("Available subcommands\n", style="bold")
+            content.append("  list  ", style=primary)
+            content.append("show all defined actions\n", style=muted)
+            content.append("  show  ", style=primary)
+            content.append("show details for a specific action\n", style=muted)
+            content.append("  run   ", style=primary)
+            content.append("execute an action", style=muted)
+
+            self.console.print(Panel(
+                content,
+                title=f"[{error_style}]❌ Unknown subcommand[/{error_style}]",
+                border_style=error_style,
+                padding=(0, 1),
+            ))
+
+    def _show_action_help(self):
+        """Display help screen for action commands."""
+        from rich.table import Table
+
+        ss = getattr(self.es_client, 'style_system', None)
+        tm = getattr(self.es_client, 'theme_manager', None)
+
+        if not ss or not tm:
+            self.handle_action_list()
+            return
+
+        primary_style = ss.get_semantic_style("primary")
+        success_style = ss.get_semantic_style("success")
+        muted_style = ss._get_style('semantic', 'muted', 'dim')
+        border_style = ss._get_style('table_styles', 'border_style', 'white')
+        header_style = tm.get_theme_styles().get('header_style', 'bold white')
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white')
+        box_style = ss.get_table_box()
+
+        header_panel = Panel(
+            Text("Run ./escmd.py action <command> [options]", style="bold white"),
+            title=f"[{title_style}]🎬 Action Sequences[/{title_style}]",
+            subtitle=Text.from_markup("[dim]Use[/dim] [cyan]--help[/cyan] [dim]on any subcommand for full options[/dim]"),
+            border_style=border_style,
+            padding=(1, 2),
+            expand=True,
+        )
+
+        table = Table(
+            show_header=True,
+            header_style=header_style,
+            border_style=border_style,
+            box=box_style,
+            show_lines=False,
+            expand=True,
+        )
+        table.add_column("Command / Option", style=primary_style, ratio=2)
+        table.add_column("Description", style="white", ratio=3)
+        table.add_column("Example", style=success_style, ratio=3)
+
+        rows = [
+            ("list", "List all available action sequences", "action list"),
+            ("show <name>", "Show details for a specific action", "action show my-action"),
+            ("run <name>", "Execute an action sequence", "action run my-action"),
+        ]
+        for i, (cmd, desc, ex) in enumerate(rows):
+            table.add_row(cmd, desc, f"./escmd.py {ex}", style=ss.get_zebra_style(i) if ss else None)
+
+        table.add_row(
+            Text("── Options ──", style=muted_style),
+            Text("", style=muted_style),
+            Text("", style=muted_style),
+        )
+
+        options = [
+            ("--dry-run", "Preview action without executing", "action run my-action --dry-run"),
+            ("--format json", "JSON output instead of table", "action list --format json"),
+            ("--var key=value", "Pass variables to action", "action run my-action --var env=prod"),
+        ]
+        for i, (opt, desc, ex) in enumerate(options):
+            table.add_row(
+                Text(opt, style=ss._get_style('semantic', 'secondary', 'magenta')),
+                desc,
+                Text(f"./escmd.py {ex}", style=muted_style),
+                style=ss.get_zebra_style(i) if ss else None,
+            )
+
+        self.console.print()
+        self.console.print(header_panel)
+        self.console.print()
+        self.console.print(table)
+        self.console.print()
 
     def handle_action_list(self):
         """List all available actions."""
+        from rich.padding import Padding
+
         actions = self.action_manager.list_actions()
 
         if not actions:
-            self.console.print("[yellow]No actions defined[/yellow]")
+            self._print_warning("No actions defined")
             return
 
-        table = Table(title="Available Actions")
-        table.add_column("Name", style="cyan", no_wrap=True)
-        table.add_column("Description", style="white")
-        table.add_column("Parameters", style="dim")
+        ss = self._get_style_system()
+        primary = self._sem("primary", "cyan")
+        muted = self._sem("muted", "dim white")
+        border = self._get_theme_styles().get("border_style", "white")
 
+        if ss:
+            table = ss.create_standard_table()
+            ss.add_themed_column(table, "Name", "name", no_wrap=True)
+            ss.add_themed_column(table, "Description", "default")
+            ss.add_themed_column(table, "Parameters", "default")
+            ss.add_themed_column(table, "Steps", "count", justify="center")
+        else:
+            table = Table()
+            table.add_column("Name", style="cyan", no_wrap=True)
+            table.add_column("Description", style="white")
+            table.add_column("Parameters", style="dim")
+            table.add_column("Steps", style="dim", justify="center")
+
+        has_required = False
         for action_name in sorted(actions):
             action = self.action_manager.get_action(action_name)
             description = action.get("description", "No description")
+            steps = action.get("steps", [])
 
-            # Format parameters
             params = action.get("parameters", [])
-            param_names = []
+            param_parts = []
             for param in params:
                 name = param["name"]
                 if param.get("required", False):
                     name = f"*{name}"
-                param_names.append(name)
+                    has_required = True
+                param_parts.append(name)
 
-            param_str = ", ".join(param_names) if param_names else "none"
+            param_str = ", ".join(param_parts) if param_parts else "—"
+            step_count = str(len(steps)) if steps else "—"
 
-            table.add_row(action_name, description, param_str)
+            table.add_row(action_name, description, param_str, step_count)
 
-        self.console.print(table)
+        # Build hint line
+        hint = Text()
+        if has_required:
+            hint.append("* required  ", style=muted)
+        hint.append("action show <name>", style=muted)
+        hint.append(" · ", style=muted)
+        hint.append("action run <name>", style=muted)
 
-        if any(
-            p.get("required", False)
-            for action in [self.action_manager.get_action(name) for name in actions]
-            for p in action.get("parameters", [])
-        ):
-            self.console.print("\n[dim]* indicates required parameter[/dim]")
+        inner = Table.grid()
+        inner.add_column()
+        inner.add_row(table)
+        inner.add_row(Padding(hint, (1, 0, 0, 0)))
+
+        self.console.print(Panel(
+            inner,
+            title=f"[{primary}]⚡ Actions[/{primary}]",
+            border_style=border,
+            padding=(0, 1),
+        ))
 
     def handle_action_show(self):
         """Show details for a specific action."""
         action_name = getattr(self.args, "action_name", None)
         if not action_name:
-            self.console.print("[red]Action name required for 'show' command[/red]")
+            self._print_error("Action name required for 'show' command")
             return
 
         action = self.action_manager.get_action(action_name)
         if not action:
-            self.console.print(f"[red]Action '{action_name}' not found[/red]")
+            self._print_error(f"Action '{action_name}' not found")
             return
 
-        # Create action details panel
-        content = []
+        ss = self._get_style_system()
+        primary = self._sem("primary", "cyan")
+        success = self._sem("success", "green")
+        muted = self._sem("muted", "dim white")
+        warning = self._sem("warning", "yellow")
+        info = self._sem("info", "blue")
+
+        content = Text()
 
         # Description
         description = action.get("description", "No description")
-        content.append(f"[bold]Description:[/bold] {description}")
+        content.append("Description\n", style="bold white")
+        content.append(f"  {description}\n", style=muted)
 
         # Parameters
         params = action.get("parameters", [])
+        content.append("\nParameters\n", style="bold white")
         if params:
-            content.append("\n[bold]Parameters:[/bold]")
             for param in params:
                 name = param["name"]
                 param_type = param.get("type", "string")
-                required = " (required)" if param.get("required", False) else ""
+                required = param.get("required", False)
                 param_desc = param.get("description", "No description")
 
-                content.append(
-                    f"  • [cyan]{name}[/cyan] [{param_type}]{required}: {param_desc}"
-                )
+                content.append(f"  • ", style=muted)
+                content.append(name, style=primary)
+                content.append(f"  [{param_type}]", style=muted)
+                if required:
+                    content.append("  required", style=warning)
+                content.append(f"\n    {param_desc}\n", style=muted)
 
-                # Show choices for choice type
                 if param_type == "choice" and "choices" in param:
                     choices_str = ", ".join(param["choices"])
-                    content.append(f"    Choices: {choices_str}")
-
-                # Show default value
+                    content.append(f"    Choices: {choices_str}\n", style=info)
                 if "default" in param:
-                    content.append(f"    Default: {param['default']}")
+                    content.append(f"    Default: {param['default']}\n", style=muted)
         else:
-            content.append("\n[bold]Parameters:[/bold] none")
+            content.append("  none\n", style=muted)
 
         # Steps
         steps = action.get("steps", [])
         if steps:
-            content.append(f"\n[bold]Steps ({len(steps)}):[/bold]")
+            content.append(f"\nSteps  ({len(steps)} total)\n", style="bold white")
             for i, step in enumerate(steps, 1):
                 step_name = step.get("name", f"Step {i}")
                 step_action = step.get("action", "No action defined")
                 step_desc = step.get("description", "")
 
-                content.append(f"  {i}. [green]{step_name}[/green]")
-                content.append(f"     Command: [dim]{step_action}[/dim]")
+                content.append(f"  {i}. ", style=muted)
+                content.append(f"{step_name}\n", style=success)
+                content.append(f"     {step_action}\n", style=muted)
                 if step_desc:
-                    content.append(f"     {step_desc}")
+                    content.append(f"     {step_desc}\n", style=muted)
 
-        panel_content = "\n".join(content)
+        border = self._get_theme_styles().get("border_style", "white")
+        title_style = primary
         panel = Panel(
-            panel_content, title=f"Action: {action_name}", border_style="blue"
+            content,
+            title=f"[{title_style}]⚡ {action_name}[/{title_style}]",
+            border_style=border,
+            padding=(1, 2),
         )
         self.console.print(panel)
 
@@ -293,12 +510,12 @@ class ActionHandler:
         """Run a specific action."""
         action_name = getattr(self.args, "action_name", None)
         if not action_name:
-            self.console.print("[red]Action name required for 'run' command[/red]")
+            self._print_error("Action name required for 'run' command")
             return
 
         action = self.action_manager.get_action(action_name)
         if not action:
-            self.console.print(f"[red]Action '{action_name}' not found[/red]")
+            self._print_error(f"Action '{action_name}' not found")
             return
 
         # Get parameters from command line
@@ -307,18 +524,23 @@ class ActionHandler:
         # Validate parameters
         validation_errors = self.action_manager.validate_parameters(action, params)
         if validation_errors:
-            self.console.print("[red]Parameter validation errors:[/red]")
-            for error in validation_errors:
-                self.console.print(f"  • {error}")
+            error_style = self._sem("error", "red")
+            desc_style = self._get_theme_styles().get("panel_styles", {}).get("description", "")
+            error_text = Text()
+            for i, err in enumerate(validation_errors):
+                error_text.append(f"  • {err}", style=desc_style)
+                if i < len(validation_errors) - 1:
+                    error_text.append("\n")
+            self.console.print(Panel(
+                error_text,
+                title=f"[{error_style}]❌ Parameter Validation Failed[/{error_style}]",
+                border_style=error_style,
+                padding=(0, 2),
+            ))
             return
 
         # Check for dry run
         dry_run = getattr(self.args, "dry_run", False)
-
-        if dry_run:
-            self.console.print(
-                f"[yellow]DRY RUN MODE - No commands will be executed[/yellow]"
-            )
 
         # Execute action
         self._execute_action(action, params, dry_run)
@@ -335,10 +557,95 @@ class ActionHandler:
 
         return params
 
+    def _execute_action_json(
+        self, action: Dict, params: Dict[str, str], dry_run: bool = False
+    ):
+        """Execute an action and emit a single JSON object with all steps to stdout."""
+        import sys
+
+        action_name = action["name"]
+        steps = action.get("steps", [])
+        step_variables: Dict[str, str] = {}
+        step_results = []
+
+        for i, step in enumerate(steps, 1):
+            step_name = step.get("name", f"Step {i}")
+            step_action = step.get("action", "")
+            step_desc = step.get("description", "")
+
+            record: Dict[str, Any] = {
+                "step": i,
+                "name": step_name,
+                "description": step_desc,
+            }
+
+            # Evaluate condition
+            condition = step.get("condition")
+            if condition:
+                try:
+                    condition_result = Template(condition).render(**{**params, **step_variables})
+                    if not self._evaluate_condition(condition_result):
+                        record["status"] = "skipped"
+                        record["reason"] = "condition not met"
+                        step_results.append(record)
+                        continue
+                except Exception as e:
+                    record["status"] = "error"
+                    record["error"] = f"condition evaluation failed: {e}"
+                    step_results.append(record)
+                    continue
+
+            # Render command
+            try:
+                rendered_command = Template(step_action).render(**{**params, **step_variables})
+            except Exception as e:
+                record["status"] = "error"
+                record["error"] = f"command render failed: {e}"
+                step_results.append(record)
+                continue
+
+            record["command"] = rendered_command
+
+            if dry_run:
+                record["status"] = "dry_run"
+                step_results.append(record)
+                continue
+
+            # Execute
+            success_flag, command_output = self._execute_command_with_output(rendered_command)
+
+            if success_flag and command_output:
+                self._process_step_output_capture(step, command_output, step_variables, i)
+
+            record["status"] = "success" if success_flag else "failed"
+            output = command_output.strip() if command_output else ""
+            try:
+                record["output"] = json.loads(output)
+            except (json.JSONDecodeError, ValueError):
+                record["output"] = output
+
+            step_results.append(record)
+
+        failed = [s for s in step_results if s.get("status") == "failed"]
+        result = {
+            "action": action_name,
+            "total_steps": len(steps),
+            "successful": len([s for s in step_results if s.get("status") == "success"]),
+            "failed": len(failed),
+            "status": "failed" if failed else ("dry_run" if dry_run else "success"),
+            "steps": step_results,
+        }
+        sys.stdout.write(json.dumps(result, indent=2) + "\n")
+
     def _execute_action(
         self, action: Dict, params: Dict[str, str], dry_run: bool = False
     ):
         """Execute an action with given parameters."""
+        # Delegate to JSON formatter when --format json is requested
+        if getattr(self.args, "output_format", None) == "json":
+            self._execute_action_json(action, params, dry_run)
+            return
+
         action_name = action["name"]
         steps = action.get("steps", [])
 
@@ -346,18 +653,39 @@ class ActionHandler:
         quiet_mode = getattr(self.args, "quiet", False)
         summary_only = getattr(self.args, "summary_only", False)
 
+        # Semantic styles
+        primary = self._sem("primary", "cyan")
+        success = self._sem("success", "green")
+        warning = self._sem("warning", "yellow")
+        error_style = self._sem("error", "red")
+        muted = self._sem("muted", "dim white")
+        info = self._sem("info", "blue")
+        border = self._get_theme_styles().get("border_style", "white")
+
         if not steps:
             if not summary_only:
-                self.console.print("[yellow]Action has no steps to execute[/yellow]")
+                self._print_warning("Action has no steps to execute")
             return
 
         if not summary_only:
-            self.console.print(
-                f"\n[bold blue]Executing action: {action_name}[/bold blue]"
-            )
+            description = action.get("description", "")
+            header_text = Text()
+            header_text.append(action_name, style=f"bold {primary}")
+            if description:
+                header_text.append(f"\n{description}", style=muted)
             if params:
-                param_str = ", ".join([f"{k}={v}" for k, v in params.items()])
-                self.console.print(f"[dim]Parameters: {param_str}[/dim]")
+                header_text.append("\n")
+                for k, v in params.items():
+                    header_text.append(f"  {k} ", style=muted)
+                    header_text.append(v, style=f"bold {info}")
+            if dry_run:
+                header_text.append(f"\n\n  ⚠ DRY RUN — no commands will be executed", style=f"bold {warning}")
+            self.console.print(Panel(
+                header_text,
+                title=f"[{primary}]⚡ Action[/{primary}]",
+                border_style=border,
+                padding=(0, 1),
+            ))
 
         # Execute each step
         failed_steps = []
@@ -376,112 +704,99 @@ class ActionHandler:
             if condition:
                 try:
                     template = Template(condition)
-                    # Merge params and step_variables for template rendering
                     template_vars = {**params, **step_variables}
                     condition_result = template.render(**template_vars)
-                    # Evaluate the condition (simple evaluation for now)
                     if not self._evaluate_condition(condition_result):
-                        self.console.print(
-                            f"[dim]Skipping step {i}: {step_name} (condition not met)[/dim]"
-                        )
+                        self._print_muted(f"  ↷ Skipping step {i}: {step_name} (condition not met)")
                         continue
                 except Exception as e:
-                    self.console.print(
-                        f"[red]Error evaluating condition for step {i}: {e}[/red]"
-                    )
+                    self._print_error(f"Error evaluating condition for step {i}: {e}")
                     failed_steps.append((i, step_name, str(e)))
                     continue
 
             # Render command with parameters and step variables
             try:
                 template = Template(step_action)
-                # Merge params and step_variables for template rendering
                 template_vars = {**params, **step_variables}
                 rendered_command = template.render(**template_vars)
             except Exception as e:
-                self.console.print(
-                    f"[red]Error rendering command for step {i}: {e}[/red]"
-                )
+                self._print_error(f"Error rendering command for step {i}: {e}")
                 failed_steps.append((i, step_name, str(e)))
                 continue
 
             # Create step header (unless in summary-only mode)
             if not summary_only:
                 if quiet_mode:
-                    self.console.print(f"[dim]Step {i}/{len(steps)}:[/dim] {step_name}")
+                    step_label = Text()
+                    step_label.append(f"Step {i}/{len(steps)}: ", style=muted)
+                    step_label.append(step_name, style=f"bold {primary}")
+                    self.console.print(step_label)
                 else:
+                    step_content = Text()
+                    step_content.append(step_name, style=f"bold {primary}")
+                    if step_desc:
+                        step_content.append(f"\n{step_desc}", style=muted)
+                    step_content.append("\n")
+                    step_content.append("Command: ", style=muted)
+                    step_content.append(rendered_command, style=info)
+
                     step_panel = Panel(
-                        f"[bold]{step_name}[/bold]\n"
-                        + (f"[dim]{step_desc}[/dim]\n" if step_desc else "")
-                        + f"[cyan]Command:[/cyan] {rendered_command}",
-                        title=f"Step {i}/{len(steps)}",
-                        border_style="blue",
+                        step_content,
+                        title=f"[{muted}]Step {i}/{len(steps)}[/{muted}]",
+                        border_style=border,
                         padding=(0, 1),
                     )
                     self.console.print(step_panel)
 
             if dry_run:
                 if not summary_only:
-                    if quiet_mode:
-                        self.console.print(
-                            "[yellow]  → Would execute (dry run)[/yellow]"
-                        )
-                    else:
-                        self.console.print(
-                            "[yellow]  → Would execute (dry run)[/yellow]"
-                        )
-                        self.console.print()  # Add space between steps
+                    self.console.print(f"  [{warning}]→ Would execute (dry run)[/{warning}]")
+                    if not quiet_mode:
+                        self.console.print()
                 continue
 
             # Check for confirmation if required
             if step.get("confirm", False):
-                # Skip confirmation if --yes flag is provided
                 if getattr(self.args, "yes", False):
-                    self.console.print("[dim]  → Auto-confirmed (--yes flag)[/dim]")
-                elif not Confirm.ask(f"Execute this step?", default=True):
-                    self.console.print("[yellow]  → Skipped by user[/yellow]")
-                    self.console.print()  # Add space between steps
+                    self._print_muted("  → Auto-confirmed (--yes flag)")
+                elif not Confirm.ask("Execute this step?", default=True):
+                    self._print_muted("  → Skipped by user")
+                    self.console.print()
                     continue
 
             # Execute the command
-            success, command_output = self._execute_command_with_output(
+            success_flag, command_output = self._execute_command_with_output(
                 rendered_command
             )
 
             # Process step output capture if specified
-            if success and command_output:
+            if success_flag and command_output:
                 self._process_step_output_capture(
                     step, command_output, step_variables, i
                 )
 
             # Display results (unless in summary-only mode)
             if not summary_only:
-                if success:
+                if success_flag:
                     if quiet_mode or getattr(self.args, "compact", False):
-                        self.console.print("[green]✓ Step completed[/green]")
+                        self._print_success("Step completed")
                     else:
-                        self.console.print(
-                            "[green]✓ Step completed successfully[/green]"
-                        )
+                        self._print_success("Step completed successfully")
                         if command_output:
-                            self._display_command_output(
-                                command_output, rendered_command
-                            )
+                            self._display_command_output(command_output, rendered_command)
                 else:
-                    self.console.print("[red]✗ Step failed[/red]")
+                    self.console.print(f"[{error_style}]✗ Step failed[/{error_style}]")
                     if command_output:
-                        # Show error output for failures, but format it nicely
                         self._display_text_output(command_output)
 
                 if not quiet_mode:
-                    self.console.print()  # Add space between steps
+                    self.console.print()
 
-            if not success:
+            if not success_flag:
                 failed_steps.append((i, step_name, "Command execution failed"))
 
-                # Ask if user wants to continue
                 if getattr(self.args, "yes", False):
-                    self.console.print("[dim]  → Auto-continuing (--yes flag)[/dim]")
+                    self._print_muted("  → Auto-continuing (--yes flag)")
                 elif not Confirm.ask(
                     "Step failed. Continue with remaining steps?", default=False
                 ):
@@ -492,26 +807,54 @@ class ActionHandler:
         failed_count = len(failed_steps)
         success_count = total_steps - failed_count
 
-        # Enhanced summary with better formatting
         if summary_only or quiet_mode or getattr(self.args, "compact", False):
-            status = (
-                "[green]✓[/green]"
-                if failed_count == 0
-                else f"[red]✗ ({failed_count} failed)[/red]"
-            )
+            if failed_count == 0:
+                status_icon = f"[{success}]✓[/{success}]"
+            else:
+                status_icon = f"[{error_style}]✗ ({failed_count} failed)[/{error_style}]"
             self.console.print(
-                f"\n{status} Action '{action_name}' completed: {success_count}/{total_steps} steps successful"
+                f"\n{status_icon} [{muted}]Action '{action_name}' completed:[/{muted}] "
+                f"[{success}]{success_count}[/{success}]/[{muted}]{total_steps}[/{muted}] steps successful"
             )
         else:
-            self.console.print(f"\n[bold]Action execution summary:[/bold]")
-            self.console.print(f"  • Total steps: {total_steps}")
-            self.console.print(f"  • [green]Successful: {success_count}[/green]")
-            self.console.print(f"  • [red]Failed: {failed_count}[/red]")
+            # Styled summary panel
+            summary_text = Text()
+            summary_text.append("Total steps:  ", style=muted)
+            summary_text.append(f"{total_steps}\n", style="bold white")
+            summary_text.append("Successful:   ", style=muted)
+            summary_text.append(f"{success_count}\n", style=f"bold {success}")
+            summary_text.append("Failed:       ", style=muted)
+            failed_style = error_style if failed_count > 0 else muted
+            summary_text.append(f"{failed_count}", style=f"bold {failed_style}")
+
+            panel_type = "success" if failed_count == 0 else "error"
+            icon = "✅" if failed_count == 0 else "❌"
+            ss = self._get_style_system()
+            if ss:
+                summary_panel = getattr(ss, f"create_{panel_type}_panel")(
+                    summary_text, f"{icon} Action Summary: {action_name}"
+                )
+            else:
+                summary_panel = Panel(
+                    summary_text,
+                    title=f"{icon} Action Summary: {action_name}",
+                    border_style=success if failed_count == 0 else error_style,
+                    padding=(1, 2),
+                )
+            self.console.print(summary_panel)
 
         if failed_steps and not summary_only:
-            self.console.print("\n[red]Failed steps:[/red]")
-            for step_num, step_name, error in failed_steps:
-                self.console.print(f"  • Step {step_num}: {step_name} - {error}")
+            failed_text = Text()
+            for step_num, step_name, err in failed_steps:
+                failed_text.append(f"  • Step {step_num}: ", style=muted)
+                failed_text.append(step_name, style=f"bold {error_style}")
+                failed_text.append(f" — {err}\n", style=error_style)
+            ss = self._get_style_system()
+            if ss:
+                self.console.print(ss.create_error_panel(failed_text, "Failed Steps"))
+            else:
+                self.console.print(f"\n[{error_style}]Failed steps:[/{error_style}]")
+                self.console.print(failed_text)
 
     def _evaluate_condition(self, condition: str) -> bool:
         """Evaluate a simple condition string."""
@@ -628,12 +971,16 @@ class ActionHandler:
                 json_data = json.loads(json_line)
                 if not getattr(self.args, "compact", False):
                     json_renderable = JSON(json.dumps(json_data, indent=2))
-                    result_panel = Panel(
-                        json_renderable,
-                        title="Configuration Applied",
-                        border_style="dim green",
-                        padding=(1, 1),
-                    )
+                    ss = self._get_style_system()
+                    if ss:
+                        result_panel = ss.create_success_panel(json_renderable, "Configuration Applied")
+                    else:
+                        result_panel = Panel(
+                            json_renderable,
+                            title="Configuration Applied",
+                            border_style="dim green",
+                            padding=(1, 1),
+                        )
                     self.console.print(result_panel)
             except json.JSONDecodeError:
                 pass
@@ -711,9 +1058,13 @@ class ActionHandler:
 
         if display_lines:
             output_text = "\n".join(display_lines)
-            result_panel = Panel(
-                output_text, title="Command Output", border_style="cyan", padding=(1, 1)
-            )
+            ss = self._get_style_system()
+            if ss:
+                result_panel = ss.create_info_panel(output_text, "Command Output")
+            else:
+                result_panel = Panel(
+                    output_text, title="Command Output", border_style="cyan", padding=(1, 1)
+                )
             self.console.print(result_panel)
 
     def _is_progress_line(self, line: str) -> bool:
@@ -890,7 +1241,7 @@ class ActionHandler:
             summary_lines = [f"📊 Data Type: {type(json_data).__name__}"]
 
         summary_lines.append(
-            "\n[dim]💡 Use --format table for detailed tabular view[/dim]"
+            f"\n[{self._sem('muted', 'dim white')}]💡 Use --format table for detailed tabular view[/{self._sem('muted', 'dim white')}]"
         )
         return "\n".join(summary_lines)
 
@@ -950,14 +1301,10 @@ class ActionHandler:
 
                     # Debug output in verbose mode
                     if not getattr(self.args, "quiet", False):
-                        self.console.print(
-                            f"[dim]  → Captured {var_name}: {extracted_value}[/dim]"
-                        )
+                        self._print_muted(f"  → Captured {var_name}: {extracted_value}")
 
         except Exception as e:
-            self.console.print(
-                f"[yellow]Warning: Failed to capture step output: {e}[/yellow]"
-            )
+            self._print_warning(f"Failed to capture step output: {e}")
 
     def _extract_json_path(self, output: str, jsonpath: str) -> str:
         """Extract value from JSON output using JSONPath-like syntax."""
@@ -1005,9 +1352,7 @@ class ActionHandler:
             return str(current)
 
         except Exception as e:
-            self.console.print(
-                f"[yellow]Warning: JSONPath extraction failed: {e}[/yellow]"
-            )
+            self._print_warning(f"JSONPath extraction failed: {e}")
             return ""
 
     def _extract_regex(self, output: str, pattern: str) -> str:
@@ -1019,9 +1364,7 @@ class ActionHandler:
                 return match.group(1) if match.groups() else match.group(0)
             return ""
         except Exception as e:
-            self.console.print(
-                f"[yellow]Warning: Regex extraction failed: {e}[/yellow]"
-            )
+            self._print_warning(f"Regex extraction failed: {e}")
             return ""
 
     def _apply_transform(self, value: str, transform: str) -> str:
@@ -1044,7 +1387,7 @@ class ActionHandler:
                 if len(parts) == 3:
                     return re.sub(parts[1], parts[2], value)
         except Exception as e:
-            self.console.print(f"[yellow]Warning: Transform failed: {e}[/yellow]")
+            self._print_warning(f"Transform failed: {e}")
 
         return value
 

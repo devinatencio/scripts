@@ -301,6 +301,18 @@ class SettingsDataCollector:
                 'description': 'Combined configuration file'
             })
 
+        # State file (JSON credential/state store)
+        if hasattr(configuration_manager, 'state_file_path'):
+            state_path = configuration_manager.state_file_path
+            state_exists = os.path.exists(state_path)
+            file_info['files'].append({
+                'type': 'State File',
+                'path': state_path,
+                'exists': state_exists,
+                'status': "✅ Found" if state_exists else "❌ Missing",
+                'description': 'JSON credential / state store'
+            })
+
         return file_info
 
     def _collect_environment_overrides(self):

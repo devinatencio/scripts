@@ -1,3 +1,231 @@
+## [Unreleased] - 2026-04-14
+
+### Visual improvements — zebra striping and header panels
+
+#### `./escmd.py shards`
+
+- **NEW**: Group-by-index zebra striping — rows are now visually grouped by index name. Each time the index changes, the group counter increments and odd groups receive the theme's `row_styles.zebra` background. Primary/Replica pairs for the same index share the same background, making it easy to scan across a row.
+- **NEW**: `UNASSIGNED` rows always render with an `on dark_red` background regardless of their index group, making problem shards immediately visible. The existing red bold text color is preserved on top of the background.
+- Both changes are implemented in `display/shard_renderer.py` — `_create_detailed_shards_table`.
+
+#### `./escmd.py indices`
+
+- **NEW**: Theme-aware zebra striping applied to the indices table. The existing health-based foreground color (`white`, `yellow`, `red`, `bright_red`, `bright_blue`) is preserved and combined with the zebra background — e.g. a yellow-health index on an odd row renders as `yellow on grey11` (or the equivalent for the active theme).
+- `get_zebra_style()` reads `row_styles.zebra` from the active theme, so the stripe color automatically matches whichever of the 11 themes is selected.
+- Change is in `commands/indices_commands.py` — `print_table_indices`.
+
+#### `./escmd.py template-usage`
+
+- **NEW**: Header panel added at the top of the screen, consistent with the shards/indices/storage pattern. Shows `📋 Elasticsearch Template Usage` as the title, a status message as the body (`✅ All Templates In Use`, `🔶 Some Templates Are Unused`, or `🔶 Warning — No Templates In Use`), and inline counts (`In Use: N  |  Unused: N`) as the subtitle. Border color is yellow when unused templates exist, theme default otherwise.
+- **Removed**: The old `📈 Usage Summary` panel that appeared at the bottom of the screen. The same information is now in the header subtitle.
+- **NEW**: Zebra striping applied to both the "Unused Templates" table and the "Templates In Use" table, using the same theme-aware `get_zebra_style()` approach.
+- Changes are in `display/template_renderer.py` — new `_create_usage_header_panel` method, updated `print_template_usage`, `_create_unused_templates_table`, and `_create_usage_table`.
+
+---
+
+## [3.12.0] - 2026-04-14
+
+### Visual overhaul — version screen, welcome screen, help system
+
+A comprehensive redesign of the three main informational screens (`version`, no-args welcome, and `--help` / `help`) to be visually consistent, theme-aware, and more useful as a reference.
+
+#### `./escmd.py version`
+
+- **NEW**: Gradient ASCII art `ESTERM` banner (cyan → blue → magenta) shared across version, welcome, and help screens for consistent branding.
+- **NEW**: Two-column layout — Info panel (tool name, version, date, purpose, team, Python, platform) alongside a Capabilities checklist panel.
+- **NEW**: Performance & System panel with inline progress bars for CPU, Memory, and Disk usage. Bars are colour-coded by threshold: green < 60%, yellow < 85%, red ≥ 85%.
+- **Removed**: Old single-column centered table layout. Removed the unused Command Arsenal and Core Capabilities panels (were commented out).
+- **Version bump**: Central `version.py` updated to `3.12.0`.
+
+#### `./escmd.py` (no-args welcome screen)
+
+- **NEW**: Same ESTERM ASCII banner as the version screen.
+- **NEW**: Active cluster status bar — shows the configured default cluster in green, or a yellow warning if none is set.
+- **NEW**: Uniform 3-column command grid — two rows of three equal-width panels, each colour-coded by category. All panels in a row are padded to the same height so borders align perfectly.
+- **NEW**: All 65 registered commands are now present, organized into six categories: Cluster & Health, Index Management, Storage & Shards, ILM & Lifecycle, Settings & Config, Utilities.
+- **Removed**: The old Quick Start Commands panel, Categories Summary panel, and the 65-row "All Available Commands" scrolling table. The Pro Tips panel replaced by a single slim footer line.
+
+#### `./escmd.py --help`
+
+- **NEW**: Same ESTERM banner, subtitle reads "Command Reference" instead of "Elasticsearch CLI Management & Monitoring".
+- **NEW**: Single full-width zebra-striped table with four columns: Category, Command, Description, Example. All 60 commands listed with a real usage example on every row.
+- **NEW**: Alternating category background blocks (Variation C) — every other category group gets a subtle dark background tint for visual separation without borders.
+- **NEW**: Compact two-column examples section replaced the old tall single-column list.
+- **Removed**: The old four-panel 2×2 grid layout (Cluster & Config, Nodes & Masters, Indices & Data, Operations). The Quick Start Examples panel replaced by the inline example column.
+
+#### `./escmd.py help` (topic index)
+
+- **NEW**: Full-width zebra table with coloured pill badges on every topic name (`bold black on <category-colour>`).
+- **NEW**: `detailed` badge on every topic — all 25 registered topics now have full help implementations so the badge is shown universally.
+- **NEW**: Topics sorted alphabetically within each category group.
+- **NEW**: Table header and borders pull from the active theme (`header_style`, `border_style`, `table_box`).
+- **Removed**: Old flat alphabetical list in a single panel with no grouping or visual hierarchy.
+
+#### `./escmd.py help <topic>` (detailed help screens)
+
+- **NEW**: Topic header bar — coloured pill with topic name, description, and breadcrumb (`./escmd.py help <topic>`). Border colour from theme.
+- **NEW**: Merged Commands + Examples into a single 3-column zebra table (Command | Description | Example) instead of two separate panels. Eliminates the redundancy of showing the same information twice.
+- **NEW**: Workflow scenarios rendered as full-width stacked panels (one per scenario) instead of a single flat indented grid. Each scenario has a coloured title and subtitle.
+- **NEW**: Slim footer bar with back-to-list link, `-l <cluster>`, and `--format json` hints.
+- **Removed**: Separate Commands panel + separate Examples panel pattern. The old flat usage/workflows panel.
+
+#### Theme integration — help system
+
+- **`handlers/help/base_help_content.py`** — `_get_theme_styles()` now reads from `help_styles` (priority) or `panel_styles` fallback, plus `border_style`, `header_style`, `row_styles.zebra`, and `table_box` from the flattened theme output. All hardcoded `"bold cyan"`, `"grey23"`, `"on grey7"` etc. replaced.
+- **`handlers/help_handler.py`** — `_get_theme_manager()` now correctly resolves the theme manager from `self.es_client.theme_manager` (the MockESClient path used for no-connection help commands). Previously always returned `None`, causing all help screens to render with the `rich` theme defaults regardless of the active theme.
+- **`cli/help_system.py`** — `show_custom_help()` (`--help`) fully rewritten. Theme `border_style`, `header_style`, `table_box`, and `row_styles.zebra` applied to the commands table.
+
+#### Help content migration
+
+All 13 help topic files that had custom `show_help()` implementations bypassing `_display_help_panels` were migrated to the new base class pattern:
+
+`freeze`, `unfreeze`, `indice-add-metadata`, `indices-analyze`, `indices-s3-estimate`, `indices-watch-collect`, `indices-watch-report`, `store-password`, `template-backup`, `template-modify`, `template-restore`, `security`, `estop` / `es-top`, `actions`.
+
+Every topic now uses the 3-column commands table, stacked workflow panels, themed borders, and the shared footer. No per-topic changes needed for future theme additions.
+
+---
+
+## [Unreleased] - 2026-04-14
+
+### Theme system improvements
+
+A series of fixes and improvements to make the theme system consistent and actually effective across all display renderers.
+
+#### Bug fixes
+
+- **`themes.yml`** — removed a copy-paste artifact that embedded `table_styles:` inside a comment on line 2, corrupting the file header.
+
+#### Cache / instantiation fixes
+
+- **`esclient.py`** — the two backward-compat functions `get_theme_styles()` and `get_full_theme_data()` were creating a fresh `ThemeManager` on every call, discarding its internal cache immediately. They now share a module-level `_theme_manager_cache` keyed by `id(configuration_manager)` so the same instance (and its warm cache) is reused across calls.
+- **`commands/indices_commands.py`** — was creating two `ThemeManager` instances back-to-back (one with no config, one with config). Now reuses `self.es_client.theme_manager` directly.
+- **`handlers/index_handler.py`** — same pattern; now reuses the client's existing `theme_manager` with a safe fallback.
+
+#### Duplicated `table_box` resolution removed
+
+- **`display/index_renderer.py`** — two identical 15-line `if/elif` chains that mapped `table_box` strings to Rich `box.*` constants were replaced with a single call to `StyleSystem.get_table_box()`. `StyleSystem` is now instantiated in `IndexRenderer.__init__`.
+- **`display/ilm_renderer.py`** — the same duplicated `box_mapping` dict in the `print_enhanced_ilm_policies` fallback branch was replaced with a `StyleSystem.get_table_box()` call.
+
+#### Hardcoded panel border/title fixes
+
+- **`display/health_renderer.py`** — five dashboard panels (`_create_cluster_overview_panel`, `_create_nodes_panel`, `_create_shards_panel`, `_create_performance_panel`, `_create_snapshots_panel`) had different hardcoded fallback colors in their title strings (`bold cyan`, `bold green`, `bold blue`, `bold yellow`, `bold magenta`). All now use a consistent `bold white` fallback via a local `title_style` variable. Three panels in `print_enhanced_current_master` had `border_style="cyan"` hardcoded; they now read from `theme_manager.get_theme_styles()`.
+- **`display/version_renderer.py`** — added `_border()` and `_title_style()` helpers. Main panel, performance panel, command stats panel, and capabilities panel borders now read from the theme instead of hardcoded `"cyan"`, `"yellow"`, `"green"`, `"magenta"`.
+- **`display/allocation_renderer.py`** — three remaining hardcoded panels (no-exclusions branch, config details, quick actions) now use `style_system.get_semantic_style()` with theme fallbacks. The actions column style routes through the theme's `secondary` semantic color.
+- **`display/snapshot_renderer.py`** — added `_border()` / `_title_style()` helpers. Legacy panel title no longer hardcodes `"bold cyan"`. All four panels in `display_snapshot_status` use the theme title style; the failures panel border routes through `style_system.get_semantic_style("error")`.
+- **`display/recovery_renderer.py`** — added `_border()`, `_title_style()`, and `_sem()` helpers. All 8 hardcoded `border_style="cyan"` panels now read from the theme. Hardcoded text styles (`"bold green"`, `"bold blue"`) route through `_sem()` and `_title_style()`. Recovery table `header_style` reads from the theme.
+- **`display/ilm_renderer.py`** — added `_border()`, `_title_style()`, and `_sem()` helpers. All hardcoded panel borders and title styles in `print_enhanced_ilm_status`, `print_enhanced_ilm_policy_detail`, `print_enhanced_ilm_explain`, and `print_enhanced_ilm_errors` now route through the theme. Unused `phase_colors` dict removed.
+
+#### Phantom style key fixes
+
+- **`display/health_renderer.py`** — `_create_nodes_panel` and `_create_performance_panel` were calling `styles.get('success_style', ...)`, `styles.get('warning_style', ...)`, etc. These keys do not exist in the `table_styles` dict returned by `get_theme_styles()`, so they always fell back to hardcoded defaults. All replaced with `style_system.get_semantic_style()` calls which correctly resolve through the theme.
+
+#### `ReplicaRenderer` theme wiring (new)
+
+- **`display/replica_renderer.py`** — had no theme wiring at all. Added `theme_manager` and `style_system` to `__init__`, plus `_border()`, `_title_style()`, `_sem()`, and `_table_box()` helpers. Every panel border, column style, and table box now routes through the theme with semantic fallbacks. `box.ROUNDED` hardcodes replaced by `_table_box()`.
+- **`commands/replica_commands.py`** — updated `ReplicaRenderer` instantiation to pass `es_client.theme_manager`.
+
+### Display improvements
+
+#### `./escmd.py ilm errors`
+
+- The title panel was always rendered in red regardless of whether errors existed, because it was built before the `if not errors` check. The two paths are now fully separated — no errors renders a single green `✅ ILM Errors Report` panel with the message inside the box; errors renders the red `🔶` panel as before.
+- Removed the redundant second panel that duplicated the "no errors" message.
+- The panel title is now `🔍 ILM Errors Report` as the box header with the status message as the body content.
+
+#### `./escmd.py templates`
+
+- The summary panel title was rendering as `🔵 📊 Template Summary` — the `🔵` icon from `create_info_panel` and the `📊` from the title string were both showing. Switched to `create_dashboard_panel` which uses `📊` once as the icon and applies the theme's `primary` color to the title instead of `info` blue.
+
+#### `./escmd.py datastreams`
+
+- Applied the same combined header pattern. The title panel body is now a stats table (total datastreams, total backing indices, ILM policy count, status breakdown) instead of a plain centered text string. The subtitle is tightened to cluster name, node count, and datastream count with health-status counts appended only when non-zero. Status values are normalized to handle both upper and lowercase from the API.
+
+#### `./escmd.py storage`
+
+- Merged the separate title panel (just a centered text string) and the "📈 Cluster Summary" panel into a single combined header panel titled `💾 Elasticsearch Storage Overview`. The summary stats (nodes, indices, shards, used/available/total, average usage) are now the panel body, with the colorized subtitle line unchanged. The alerts panel (when nodes are at elevated/high/critical usage) now sits directly below the header instead of beside a separate summary panel.
+
+#### `./escmd.py dangling`
+
+- Replaced the separate title panel and stats/info two-column layout with a single combined header panel. The panel title is `🔍 Dangling Indices Analysis`, stats are the body, and cluster name + node count appear in the subtitle — consistent with how `shards`, `storage`, and `ilm` commands present their headers.
+- The subtitle uses the same colorized `Text` append pattern as other commands: cluster name in `info` cyan, node count in `primary` magenta, dangling count in `warning` orange, affected nodes in `error` red.
+- The "About Dangling Indices" info panel (shown alongside the stats) has been removed from the errors path — it added noise when actual dangling indices are present.
+- Clean cluster path now also uses the combined panel with `🔍 Dangling Indices Analysis` as the title, status fields as the body (green checkmarks), and `Cluster | Nodes | Status: ✅ Clean` in the subtitle. Previously it used `show_message_box` which had no subtitle support.
+- Fixed incorrect style lookups in the clean path's "Related Commands" panel — was using `health_styles.green.text` as a column style (a health indicator color, not a label color). Now uses `style_system` semantic styles.
+
+#### `./escmd.py current-master`
+
+- Removed the redundant top title panel (just a centered text with node name in subtitle). The master details panel now carries the title `👑 Current Cluster Master` with node identity rows (name, hostname, node ID, roles) color-coded via semantic styles. Cluster status panel stacks below it.
+
+#### `./escmd.py cluster-check`
+
+- Merged the title panel and "📋 Summary" panel into one combined header. Summary rows (ILM status, replica status, shard size) are now centered in the panel body using a two-column grid — labels in primary color, status values colored green/yellow/red. Subtitle carries cluster name, timestamp, and overall status.
+- Fixed emoji double-width alignment issue in the panel title and subtitle status text by removing emoji from those positions.
+- Merged "💡 Recommendations" and "Found X errors and Y warnings" panels into one. Count line at top in error/warning color, bullet points below with contextual content.
+- Merged "Unmanaged Indices" and "Indices Without Replicas" panels into one "Issues Found" panel with `Rule` dividers between sections. Index names one per line, centered block, replica indices show name + creation date. `show_lines=False` on the issues table.
+- Recommendations now reference actual affected nodes and index counts from the results instead of generic static text.
+
+#### `./escmd.py ping`
+
+- Removed the dead `handle_ping` and `_get_cluster_connection_info` methods from `health_handler.py` — they were never called (routing goes through `cluster_handler.py`).
+- In `cluster_handler.py`: merged the title panel, connection details panel, and cluster overview panel into one combined header. Connection fields are the body, cluster context (name, status, nodes) is the colorized subtitle. Three panels → two.
+
+#### `./escmd.py shards`
+
+- Moved `📊 Elasticsearch Shards Overview` from the panel body (centered text) to the panel `title=` field. Status message (`✅ Good` / `🔶 Warning`) is now the body. Removed duplicate `title="📊 Elasticsearch Shards"` from the table below.
+
+#### `./escmd.py shard-colocation`
+
+- When no issues: merged the two-panel output (summary + results) into one green panel with the message as body and counts in the subtitle.
+- When issues exist: `show_lines=False` on the issues table, removed the static generic recommendations, replaced with contextual bullets referencing actual affected nodes and index count. Added `./escmd.py shards` as a follow-up action.
+
+#### `./escmd.py storage`
+
+- Merged the separate title panel and "📈 Cluster Summary" panel into one combined header. Stats (nodes, indices, shards, used/available/total, average usage) are the body; colorized subtitle unchanged. Alerts panel (when present) now sits directly below instead of beside a separate summary panel.
+
+#### `./escmd.py datastreams`
+
+- Applied the combined header pattern. Stats table (total datastreams, backing indices, ILM count, status breakdown) is the panel body; subtitle tightened to cluster/nodes/count with health status counts appended only when non-zero.
+- When no datastreams: single panel with icon+text grid body and cluster context in subtitle. Removed the redundant "🔶 No Data Found" second panel.
+
+#### `./escmd.py dangling`
+
+- Merged title panel + stats/info two-column layout into one combined header. Stats are the body, cluster name and node count in the subtitle.
+- Clean cluster path now uses the same combined panel with green border and `Status: Clean` in the subtitle instead of `show_message_box` which had no subtitle support.
+- Both paths use the colorized `subtitle_rich` pattern consistent with shards/storage/ILM.
+
+#### `./escmd.py ilm errors`
+
+- Title panel was always red regardless of whether errors existed. Now fully separated: no errors renders a single green panel with the message inside; errors renders the red panel.
+- Removed the redundant second "No ILM errors found" panel.
+
+#### `./escmd.py templates`
+
+- Summary panel title was rendering as `🔵 📊 Template Summary` (double icon). Switched to `create_dashboard_panel` which uses `📊` once as the icon in the theme's primary color.
+
+#### `./escmd.py snapshots` (no-subcommand help screen)
+
+- Replaced four panels (title, commands table wrapped in panel, options table wrapped in panel, quick start guide) with one header panel + one flat table.
+- Commands and options combined into a single table with a `── Options ──` separator row. `show_lines=False`. No nested panel borders around the table.
+- Removed the "Quick Start Guide" panel — it duplicated information already in the commands table.
+
+#### `./escmd.py list-backups`
+
+- No-backups path: replaced bare `console.print("[yellow]No backups found[/yellow]")` with a themed panel matching the empty-state style of other commands.
+- With backups: replaced bare `Table(title=...)` with a themed header panel (colorized subtitle with total count and type breakdown) + themed table using `header_style`, `border_style`, and `table_box` from the active theme.
+
+#### `./escmd.py list-stored-passwords`
+
+- `handlers/password_handler.py` had no theme wiring — `es_client=None` for password commands so `style_system` was unavailable. Fixed by building a `ThemeManager` + `StyleSystem` directly in `__init__` from the `config_manager` passed at the `escmd.py` call site.
+- `_show_no_passwords_panel`, `_show_passwords_table`, `_show_session_summary`, `_show_password_footer` all updated to use theme colors via the new `_theme()` helper. Hardcoded `border_style="yellow"`, `"bright_blue"`, `"bold white on blue"` etc. replaced throughout.
+
+### Zebra striping
+
+- **`display/style_system.py`** — added `get_zebra_style(row_index)` helper. Returns `None` for even rows and `"on <zebra_color>"` (background-only) for odd rows, preserving column text colors.
+- **`themes.yml`** — added `row_styles.zebra` to all 10 themes with a subtle dark background color appropriate for each theme's palette.
+- **`handlers/snapshot_handler.py`** — zebra striping applied to the snapshots help table as the first opt-in usage.
+
+---
+
 ## [3.11.0] - 2026-04-13
 
 ### `indices-watch-collect` / `indices-watch-report` — multi-session support per day

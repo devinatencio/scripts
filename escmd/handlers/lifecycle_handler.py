@@ -23,183 +23,111 @@ class LifecycleHandler(BaseHandler):
     def handle_rollover(self):
         """Enhanced rollover command for datastreams with Rich formatting."""
         console = self.console
+        ss = self.es_client.style_system
+        ts = ss._get_style('semantic', 'primary', 'bold cyan') if ss else 'bold cyan'
 
         if not self.args.datastream:
             if hasattr(self.args, "format") and self.args.format == "json":
                 import json
-
                 error_data = {
                     "error": "No datastream specified",
                     "message": "Please provide a datastream name for rollover operation",
                 }
                 print(json.dumps(error_data, indent=2))
             else:
-                error_panel = Panel(
-                    Text(
-                        "❌ No datastream specified", style="bold red", justify="center"
-                    ),
-                    subtitle="Please provide a datastream name for rollover operation",
-                    border_style="red",
-                    padding=(1, 2),
-                )
-                console.print(error_panel)
+                self._show_rollover_help()
             exit(1)
 
         try:
-            # Perform rollover operation
             if hasattr(self.args, "format") and self.args.format == "json":
-                rollover_stats = self.es_client.rollover_datastream(
-                    self.args.datastream
-                )
+                rollover_stats = self.es_client.rollover_datastream(self.args.datastream)
                 self.es_client.pretty_print_json(rollover_stats)
                 return
 
-            # Get cluster information for context
+            # Get cluster context
             try:
                 health_data = self.es_client.get_cluster_health()
                 cluster_name = health_data.get("cluster_name", "Unknown")
-            except:
+            except Exception:
                 cluster_name = "Unknown"
 
-            # Create title panel
+            # Perform rollover
+            with console.status(f"Rolling over datastream '{self.args.datastream}'..."):
+                rollover_stats = self.es_client.rollover_datastream(self.args.datastream)
+
+            rolled_over = rollover_stats.get("rolled_over", False)
+            old_index = rollover_stats.get("old_index", "Unknown")
+            new_index = rollover_stats.get("new_index", "Unknown")
+            dry_run = rollover_stats.get("dry_run", False)
+
+            # Subtitle bar
+            subtitle_rich = Text()
+            subtitle_rich.append("Target: ", style="default")
+            subtitle_rich.append(self.args.datastream, style=ss._get_style('semantic', 'info', 'cyan') if ss else "cyan")
+            subtitle_rich.append(" | Cluster: ", style="default")
+            subtitle_rich.append(cluster_name, style=ss._get_style('semantic', 'primary', 'bright_magenta') if ss else "bright_magenta")
+            subtitle_rich.append(" | Old: ", style="default")
+            subtitle_rich.append(old_index, style=ss._get_style('semantic', 'muted', 'dim') if ss else "dim")
+            if rolled_over:
+                subtitle_rich.append(" | New: ", style="default")
+                subtitle_rich.append(new_index, style=ss._get_style('semantic', 'success', 'green') if ss else "green")
+            if dry_run:
+                subtitle_rich.append(" | Mode: ", style="default")
+                subtitle_rich.append("Dry Run", style=ss._get_style('semantic', 'warning', 'yellow') if ss else "yellow")
+
+            if rolled_over:
+                status_text = f"✅ Rollover Successful - {new_index}"
+                body_style = "bold green"
+                border = ss._get_style('table_styles', 'border_style', 'cyan') if ss else "cyan"
+            else:
+                status_text = "🔵 Rollover Not Required - Conditions Not Met"
+                body_style = "bold yellow"
+                border = "yellow"
+
             title_panel = Panel(
-                Text(
-                    f"🔄 Datastream Rollover Operation",
-                    style="bold cyan",
-                    justify="center",
-                ),
-                subtitle=f"Target: {self.args.datastream} | Cluster: {cluster_name}",
-                border_style="cyan",
+                Text(status_text, style=body_style, justify="center"),
+                title=f"[{ts}]🔄 Datastream Rollover[/{ts}]",
+                subtitle=subtitle_rich,
+                border_style=border,
+                padding=(1, 2),
+            )
+
+            # Results table
+            results_table = InnerTable(show_header=False, box=None, padding=(0, 1))
+            results_table.add_column("Label", style="bold", no_wrap=True)
+            results_table.add_column("Icon", justify="left", width=3)
+            results_table.add_column("Value", no_wrap=True)
+
+            for key, value in rollover_stats.items():
+                if key == "rolled_over":
+                    icon = "✅" if value else "🔵"
+                    results_table.add_row("Rolled Over:", icon, str(value))
+                elif key == "old_index":
+                    results_table.add_row("Old Index:", "📂", str(value))
+                elif key == "new_index":
+                    results_table.add_row("New Index:", "🆕", str(value))
+                elif key == "dry_run":
+                    results_table.add_row("Dry Run:", "🧪", str(value))
+                else:
+                    results_table.add_row(f"{key.replace('_', ' ').title()}:", "📋", str(value))
+
+            _title = self.es_client.theme_manager.get_themed_style("panel_styles", "title", "bold white") if hasattr(self.es_client, 'theme_manager') else "bold white"
+            results_panel = Panel(
+                results_table,
+                title=f"[{_title}]📊 Operation Results[/{_title}]",
+                border_style=ss._get_style('table_styles', 'border_style', 'cyan') if ss else "cyan",
                 padding=(1, 2),
             )
 
             print()
             console.print(title_panel)
             print()
-
-            # Perform rollover operation
-            with console.status(f"Rolling over datastream '{self.args.datastream}'..."):
-                rollover_stats = self.es_client.rollover_datastream(
-                    self.args.datastream
-                )
-
-            # Check if rollover was successful
-            rolled_over = rollover_stats.get("rolled_over", False)
-            old_index = rollover_stats.get("old_index", "Unknown")
-            new_index = rollover_stats.get("new_index", "Unknown")
-            dry_run = rollover_stats.get("dry_run", False)
-
-            if rolled_over:
-                # Success panel
-                success_text = f"🎉 Datastream '{self.args.datastream}' rolled over successfully!\n\n"
-                success_text += f"Operation Details:\n"
-                success_text += f"• 📂 Old Index: {old_index}\n"
-                success_text += f"• 🆕 New Index: {new_index}\n"
-                success_text += f"• 🔄 Status: Completed\n"
-                if dry_run:
-                    success_text += f"• 🧪 Mode: Dry Run (simulation only)"
-                else:
-                    success_text += f"• ✅ Mode: Executed"
-
-                success_panel = Panel(
-                    success_text,
-                    title="✅ Rollover Successful",
-                    border_style="green",
-                    padding=(1, 2),
-                )
-
-                # Create detailed results table
-                results_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-                results_table.add_column("Property", style="bold cyan", no_wrap=True)
-                results_table.add_column("Value", style="white")
-
-                for key, value in rollover_stats.items():
-                    if key == "rolled_over":
-                        icon = "✅" if value else "❌"
-                        results_table.add_row(
-                            f"{key.replace('_', ' ').title()}:", f"{icon} {value}"
-                        )
-                    else:
-                        results_table.add_row(
-                            f"{key.replace('_', ' ').title()}:", str(value)
-                        )
-
-                results_panel = Panel(
-                    results_table,
-                    title="📊 Operation Results",
-                    border_style="blue",
-                    padding=(1, 2),
-                )
-
-                console.print(success_panel)
-                print()
-                console.print(results_panel)
-                print()
-
-            else:
-                # Rollover was not performed
-                info_text = f"🔵 Rollover was not performed for datastream '{self.args.datastream}'\n\n"
-                info_text += (
-                    "This typically means the rollover conditions were not met.\n"
-                )
-                info_text += f"Current Index: {old_index}\n\n"
-                info_text += "Common reasons:\n"
-                info_text += "• Index size hasn't reached rollover threshold\n"
-                info_text += "• Document count hasn't reached rollover threshold\n"
-                info_text += "• Index age hasn't reached rollover threshold"
-
-                info_panel = Panel(
-                    info_text,
-                    title="🔵 Rollover Not Required",
-                    border_style="yellow",
-                    padding=(1, 2),
-                )
-
-                # Still show the results for transparency
-                results_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-                results_table.add_column("Property", style="bold cyan", no_wrap=True)
-                results_table.add_column("Value", style="white")
-
-                for key, value in rollover_stats.items():
-                    results_table.add_row(
-                        f"{key.replace('_', ' ').title()}:", str(value)
-                    )
-
-                results_panel = Panel(
-                    results_table,
-                    title="📊 Check Results",
-                    border_style="blue",
-                    padding=(1, 2),
-                )
-
-                console.print(info_panel)
-                print()
-                console.print(results_panel)
-                print()
-
-            # Create next steps panel
-            actions_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-            actions_table.add_column("Action", style="bold cyan", no_wrap=True)
-            actions_table.add_column("Command", style="dim white")
-
-            actions_table.add_row("Check datastreams:", "./escmd.py datastreams")
-            actions_table.add_row("View indices:", "./escmd.py indices")
-            actions_table.add_row("Check ILM status:", "./escmd.py ilm status")
-            actions_table.add_row("Monitor health:", "./escmd.py health")
-
-            actions_panel = Panel(
-                actions_table,
-                title="🚀 Next Steps",
-                border_style="magenta",
-                padding=(1, 2),
-            )
-            console.print(actions_panel)
+            console.print(results_panel)
             print()
 
         except Exception as e:
             if hasattr(self.args, "format") and self.args.format == "json":
                 import json
-
                 error_data = {
                     "error": f"Rollover operation failed: {str(e)}",
                     "datastream": self.args.datastream,
@@ -207,19 +135,83 @@ class LifecycleHandler(BaseHandler):
                 }
                 print(json.dumps(error_data, indent=2))
             else:
-                error_panel = Panel(
-                    Text(
-                        f"❌ Rollover operation failed: {str(e)}",
-                        style="bold red",
-                        justify="center",
-                    ),
-                    subtitle=f"Failed to rollover datastream: {self.args.datastream}",
+                panel = Panel(
+                    Text(f"❌ Rollover failed: {str(e)}", style="bold red", justify="center"),
+                    title=f"[{ts}]🔄 Datastream Rollover[/{ts}]",
+                    subtitle=f"Target: {self.args.datastream}",
                     border_style="red",
                     padding=(1, 2),
                 )
                 print()
-                console.print(error_panel)
+                console.print(panel)
                 print()
+
+    def _show_rollover_help(self):
+        """Display help screen for rollover commands."""
+        from rich.table import Table
+
+        console = self.console
+        ss = self.es_client.style_system
+        tm = self.es_client.theme_manager
+
+        primary_style = ss.get_semantic_style("primary")
+        success_style = ss.get_semantic_style("success")
+        muted_style = ss._get_style('semantic', 'muted', 'dim')
+        border_style = ss._get_style('table_styles', 'border_style', 'white')
+        header_style = tm.get_theme_styles().get('header_style', 'bold white') if tm else 'bold white'
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        box_style = ss.get_table_box()
+
+        header_panel = Panel(
+            Text("Run ./escmd.py rollover <datastream> [options]", style="bold white"),
+            title=f"[{title_style}]🔄 Datastream Rollover[/{title_style}]",
+            subtitle=Text.from_markup("[dim]Use[/dim] [cyan]--help[/cyan] [dim]for full options[/dim]"),
+            border_style=border_style,
+            padding=(1, 2),
+            expand=True,
+        )
+
+        table = Table(
+            show_header=True,
+            header_style=header_style,
+            border_style=border_style,
+            box=box_style,
+            show_lines=False,
+            expand=True,
+        )
+        table.add_column("Command / Option", style=primary_style, ratio=2)
+        table.add_column("Description", style="white", ratio=3)
+        table.add_column("Example", style=success_style, ratio=3)
+
+        rows = [
+            ("rollover <datastream>", "Rollover a specific datastream", "rollover my-datastream"),
+            ("auto-rollover <host>", "Rollover largest shard on a host", "auto-rollover ess01"),
+        ]
+        for i, (cmd, desc, ex) in enumerate(rows):
+            table.add_row(cmd, desc, f"./escmd.py {ex}", style=ss.get_zebra_style(i) if ss else None)
+
+        table.add_row(
+            Text("── Options ──", style=muted_style),
+            Text("", style=muted_style),
+            Text("", style=muted_style),
+        )
+
+        options = [
+            ("--format json", "JSON output instead of table", "rollover my-ds --format json"),
+        ]
+        for i, (opt, desc, ex) in enumerate(options):
+            table.add_row(
+                Text(opt, style=ss._get_style('semantic', 'secondary', 'magenta')),
+                desc,
+                Text(f"./escmd.py {ex}", style=muted_style),
+                style=ss.get_zebra_style(i) if ss else None,
+            )
+
+        console.print()
+        console.print(header_panel)
+        console.print()
+        console.print(table)
+        console.print()
 
     def handle_auto_rollover(self):
         """Handle automatic rollover based on largest shard."""
@@ -1031,130 +1023,96 @@ class LifecycleHandler(BaseHandler):
         from rich.console import Console
         from rich.table import Table
         from rich.panel import Panel
+        from rich.text import Text
 
         console = Console()
+        ss = self.es_client.style_system
+        tm = self.es_client.theme_manager
 
-        # Get theme styles for consistent theming
-        from esclient import get_theme_styles
+        primary_style = ss.get_semantic_style("primary")
+        success_style = ss.get_semantic_style("success")
+        muted_style = ss._get_style('semantic', 'muted', 'dim')
+        border_style = ss._get_style('table_styles', 'border_style', 'white')
+        header_style = tm.get_theme_styles().get('header_style', 'bold white') if tm else 'bold white'
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        box_style = ss.get_table_box()
 
-        styles = get_theme_styles(self.es_client.configuration_manager)
-
-        # Create command table
-        help_table = Table.grid(padding=(0, 3))
-        help_table.add_column(
-            style=styles.get("health_styles", {})
-            .get("green", {})
-            .get("text", "bold cyan"),
-            min_width=15,
-        )
-        help_table.add_column(style=styles.get("border_style", "white"))
-
-        help_table.add_row("📊 status", "Show comprehensive ILM status and statistics")
-        help_table.add_row(
-            "📋 policies", "List all ILM policies with phase configurations"
-        )
-        help_table.add_row(
-            "🔍 policy <name>", "Show detailed configuration for specific ILM policy"
-        )
-        help_table.add_row("🔎 explain <index>", "Show ILM status for specific index")
-        help_table.add_row("🔶 errors", "Show indices with ILM errors")
-        help_table.add_row(
-            "➕ set-policy <policy> …",
-            "Assign ILM policy (pattern, --file, or --from-policy)",
-        )
-        help_table.add_row(
-            "➖ remove-policy <pattern>",
-            "Remove ILM policy from indices matching pattern",
-        )
-        help_table.add_row(
-            "🆕 create-policy <name> <json>",
-            "Create new ILM policy from JSON definition or file",
-        )
-        help_table.add_row("🗑 delete-policy <name>", "Delete an existing ILM policy")
-        help_table.add_row(
-            "💾 backup-policies --input-file <file> --output-file <file>",
-            "Backup ILM policies for indices to JSON file",
-        )
-        help_table.add_row(
-            "🔄 restore-policies --input-file <file>",
-            "Restore ILM policies from backup JSON file",
-        )
-        help_table.add_row(
-            "📂 index-patterns <name>",
-            "Show unique index base patterns (date stripped) for a policy",
+        header_panel = Panel(
+            Text("Run ./escmd.py ilm <command> [options]", style="bold white"),
+            title=f"[{title_style}]🔄 Index Lifecycle Management (ILM)[/{title_style}]",
+            subtitle=Text.from_markup("[dim]Use[/dim] [cyan]--help[/cyan] [dim]on any subcommand for full options[/dim]"),
+            border_style=border_style,
+            padding=(1, 2),
+            expand=True,
         )
 
-        # Create examples table
-        examples_table = Table.grid(padding=(0, 3))
-        examples_table.add_column(
-            style=styles.get("health_styles", {})
-            .get("green", {})
-            .get("text", "bold green"),
-            min_width=15,
+        table = Table(
+            show_header=True,
+            header_style=header_style,
+            border_style=border_style,
+            box=box_style,
+            show_lines=False,
+            expand=True,
         )
-        examples_table.add_column(style=styles.get("border_style", "white"))
+        table.add_column("Command / Option", style=primary_style, ratio=2)
+        table.add_column("Description", style="white", ratio=3)
+        table.add_column("Example", style=success_style, ratio=3)
 
-        examples_table.add_row("Basic Status:", "./escmd.py ilm status")
-        examples_table.add_row("List Policies:", "./escmd.py ilm policies")
-        examples_table.add_row("Policy Details:", "./escmd.py ilm policy logs")
-        examples_table.add_row("Check Index:", "./escmd.py ilm explain myindex-001")
-        examples_table.add_row(
-            "Set Policy:", "./escmd.py ilm set-policy 30-days-default 'logs-*'"
-        )
-        examples_table.add_row(
-            "Migrate by policy:",
-            "./escmd.py ilm set-policy new-policy --from-policy old-policy --dry-run",
-        )
-        examples_table.add_row(
-            "Remove Policy:", "./escmd.py ilm remove-policy 'temp-*'"
-        )
-        examples_table.add_row(
-            "Create Policy:", "./escmd.py ilm create-policy my-policy policy.json"
-        )
-        examples_table.add_row(
-            "Delete Policy:", "./escmd.py ilm delete-policy old-policy"
-        )
-        examples_table.add_row(
-            "Inline JSON:", "./escmd.py ilm create-policy test '{\"policy\":{...}}'"
-        )
-        examples_table.add_row("JSON Output:", "./escmd.py ilm status --format json")
-        examples_table.add_row(
-            "Backup Policies:", "./escmd.py ilm backup-policies --input-file indices.txt --output-file backup.json"
-        )
-        examples_table.add_row(
-            "Restore Policies:", "./escmd.py ilm restore-policies --input-file backup.json"
-        )
-        examples_table.add_row(
-            "Restore (Dry Run):", "./escmd.py ilm restore-policies --input-file backup.json --dry-run"
-        )
-        examples_table.add_row(
-            "Index Patterns:", "./escmd.py ilm index-patterns my-policy"
-        )
-        examples_table.add_row(
-            "Patterns (all):", "./escmd.py ilm index-patterns my-policy --show-all"
+        rows = [
+            ("status", "Show comprehensive ILM status and statistics", "ilm status"),
+            ("policies", "List all ILM policies with phase configurations", "ilm policies"),
+            ("policy <name>", "Show detailed config for specific policy", "ilm policy logs"),
+            ("explain <index>", "Show ILM status for specific index", "ilm explain myindex-001"),
+            ("errors", "Show indices with ILM errors", "ilm errors"),
+            ("index-patterns <name>", "Show unique index base patterns for a policy", "ilm index-patterns my-policy"),
+        ]
+        for i, (cmd, desc, ex) in enumerate(rows):
+            table.add_row(cmd, desc, f"./escmd.py {ex}", style=ss.get_zebra_style(i) if ss else None)
+
+        table.add_row(
+            Text("── Policy Management ──", style=muted_style),
+            Text("", style=muted_style),
+            Text("", style=muted_style),
         )
 
-        # Display help
-        print()
-        console.print(
-            Panel(
-                help_table,
-                title="🔄 Index Lifecycle Management (ILM) Commands",
-                border_style="blue",
-                padding=(1, 2),
+        mgmt = [
+            ("set-policy <policy> <pattern>", "Assign ILM policy to matching indices", "ilm set-policy 30d-default 'logs-*'"),
+            ("set-policy <p> --from-policy <p>", "Migrate indices from one policy to another", "ilm set-policy new-pol --from-policy old-pol"),
+            ("remove-policy <pattern>", "Remove ILM policy from matching indices", "ilm remove-policy 'temp-*'"),
+            ("create-policy <name> <json>", "Create new ILM policy from JSON or file", "ilm create-policy my-policy policy.json"),
+            ("delete-policy <name>", "Delete an existing ILM policy", "ilm delete-policy old-policy"),
+        ]
+        for i, (cmd, desc, ex) in enumerate(mgmt):
+            table.add_row(
+                Text(cmd, style=ss._get_style('semantic', 'secondary', 'magenta')),
+                desc,
+                Text(f"./escmd.py {ex}", style=muted_style),
+                style=ss.get_zebra_style(i) if ss else None,
             )
+
+        table.add_row(
+            Text("── Backup & Restore ──", style=muted_style),
+            Text("", style=muted_style),
+            Text("", style=muted_style),
         )
 
-        print()
-        console.print(
-            Panel(
-                examples_table,
-                title="🚀 Usage Examples",
-                border_style="green",
-                padding=(1, 2),
+        backup = [
+            ("backup-policies --input-file <f>", "Backup ILM policies to JSON file", "ilm backup-policies --input-file idx.txt --output-file bk.json"),
+            ("restore-policies --input-file <f>", "Restore ILM policies from backup", "ilm restore-policies --input-file bk.json"),
+        ]
+        for i, (cmd, desc, ex) in enumerate(backup):
+            table.add_row(
+                Text(cmd, style=ss._get_style('semantic', 'secondary', 'magenta')),
+                desc,
+                Text(f"./escmd.py {ex}", style=muted_style),
+                style=ss.get_zebra_style(i) if ss else None,
             )
-        )
-        print()
+
+        console.print()
+        console.print(header_panel)
+        console.print()
+        console.print(table)
+        console.print()
 
     def _handle_ilm_create_policy(self):
         """

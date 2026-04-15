@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/display/json_formatter.py
-# hypothesis_version: 6.151.12
-
-[',', ':', 'JSON Data', 'Key', 'Value', 'bold magenta', 'cyan', 'green', 'json', 'left', 'monokai']

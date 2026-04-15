@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/indices_watch_collect_help.py
-# hypothesis_version: 6.151.12
-
-['--duration SEC', '--interval SEC', '--output-dir PATH', '--retries N', '--retry-delay SEC', 'bold cyan', 'command', 'description', 'dim white', 'example', 'green', 'regex (positional)', 'white']

@@ -77,66 +77,97 @@ class DatastreamHandler(BaseHandler):
             if datastream.get('ilm_policy') and datastream.get('ilm_policy') != 'N/A':
                 ilm_policy_count += 1
 
-        # Create colorized subtitle with theme-based styling for statistics
+        # Colorized subtitle — cluster context
         from rich.text import Text
         subtitle_rich = Text()
         subtitle_rich.append("Cluster: ", style="default")
         subtitle_rich.append(cluster_name, style=self.es_client.style_system._get_style('semantic', 'info', 'cyan'))
-        subtitle_rich.append(" | Total: ", style="default")
-        subtitle_rich.append(str(total_datastreams), style=self.es_client.style_system._get_style('semantic', 'info', 'cyan'))
+        subtitle_rich.append(" | Nodes: ", style="default")
+        subtitle_rich.append(str(total_nodes), style=self.es_client.style_system._get_style('semantic', 'primary', 'bright_magenta'))
 
-        if status_counts.get('open', 0) > 0:
-            subtitle_rich.append(" | Open: ", style="default")
-            subtitle_rich.append(str(status_counts.get('open', 0)), style=self.es_client.style_system._get_style('semantic', 'success', 'green'))
-
-        if status_counts.get('closed', 0) > 0:
-            subtitle_rich.append(" | Closed: ", style="default")
-            subtitle_rich.append(str(status_counts.get('closed', 0)), style=self.es_client.style_system._get_style('semantic', 'warning', 'yellow'))
-
-        if total_indices > 0:
-            subtitle_rich.append(" | Total Indices: ", style="default")
-            subtitle_rich.append(f"{total_indices:,}", style=self.es_client.style_system._get_style('semantic', 'primary', 'bright_magenta'))
-
-        if ilm_policy_count > 0:
-            subtitle_rich.append(" | With ILM: ", style="default")
-            subtitle_rich.append(str(ilm_policy_count), style=self.es_client.style_system._get_style('semantic', 'secondary', 'bright_blue'))
-
-        # Create title panel with cluster context
-        title_panel = Panel(
-            self.es_client.style_system.create_semantic_text(
-                "📊 Elasticsearch Datastreams",
-                "info",
-                justify="center"
-            ),
-            subtitle=subtitle_rich,
-            border_style=self.es_client.style_system._get_style('table_styles', 'border_style', 'white'),
-            padding=(1, 2),
-            expand=True  # Use full width
-        )
-
-        print("\n")  # Force newlines
-        console.print(title_panel)
-        print("\n")
-
+        # No datastreams — single panel, no stats header
         if not datastreams_list:
-            # Create a nice panel showing no datastreams found
-            no_data_panel = Panel(
-                self.es_client.style_system.create_semantic_text(
-                    "🔍 No datastreams found in this cluster\n\n"
-                    "💡 Datastreams store time-series data (logs, metrics).\n"
-                    "   Create using index templates with 'data_stream' config.",
-                    "warning",
-                    justify="center"
-                ),
-                title="🔶 No Data Found",
-                border_style=self.es_client.style_system.get_semantic_style("warning"),
-                padding=(1, 2),
-                expand=True  # Use full width
-            )
+            ss = self.es_client.style_system
+            from rich.table import Table as InnerTable
+            msg_table = InnerTable(show_header=False, box=None, padding=(0, 1))
+            msg_table.add_column("Icon", justify="center", width=3)
+            msg_table.add_column("Text")
 
-            console.print(no_data_panel)
+            msg_table.add_row("🔍", Text("No datastreams found in this cluster", style=ss._get_style('semantic', 'warning', 'yellow')))
+            msg_table.add_row("", Text(""))
+            msg_table.add_row("💡", Text("Datastreams store time-series data such as logs and metrics.", style="dim"))
+            msg_table.add_row("📋", Text("Create one using an index template with a 'data_stream' configuration.", style="dim"))
+
+            print()
+            console.print(Panel(
+                msg_table,
+                title=f"[bold {ss._get_style('semantic', 'primary', 'cyan')}]📊 Elasticsearch Datastreams[/bold {ss._get_style('semantic', 'primary', 'cyan')}]",
+                subtitle=subtitle_rich,
+                border_style=ss.get_semantic_style("warning"),
+                padding=(1, 2),
+                expand=True
+            ))
             print()
             return
+
+        subtitle_rich.append(" | Datastreams: ", style="default")
+        subtitle_rich.append(str(total_datastreams), style=self.es_client.style_system._get_style('semantic', 'info', 'cyan'))
+        subtitle_rich.append(" | Backing Indices: ", style="default")
+        subtitle_rich.append(str(total_indices), style=self.es_client.style_system._get_style('semantic', 'primary', 'bright_magenta'))
+
+        if status_counts.get('GREEN', 0) > 0 or status_counts.get('green', 0) > 0:
+            green_count = status_counts.get('GREEN', 0) + status_counts.get('green', 0)
+            subtitle_rich.append(" | Healthy: ", style="default")
+            subtitle_rich.append(str(green_count), style=self.es_client.style_system._get_style('semantic', 'success', 'green'))
+
+        if status_counts.get('YELLOW', 0) > 0 or status_counts.get('yellow', 0) > 0:
+            yellow_count = status_counts.get('YELLOW', 0) + status_counts.get('yellow', 0)
+            subtitle_rich.append(" | Warning: ", style="default")
+            subtitle_rich.append(str(yellow_count), style=self.es_client.style_system._get_style('semantic', 'warning', 'yellow'))
+
+        if status_counts.get('RED', 0) > 0 or status_counts.get('red', 0) > 0:
+            red_count = status_counts.get('RED', 0) + status_counts.get('red', 0)
+            subtitle_rich.append(" | Critical: ", style="default")
+            subtitle_rich.append(str(red_count), style=self.es_client.style_system._get_style('semantic', 'error', 'red'))
+
+        if ilm_policy_count > 0:
+            subtitle_rich.append(" | ILM: ", style="default")
+            subtitle_rich.append(str(ilm_policy_count), style=self.es_client.style_system._get_style('semantic', 'info', 'cyan'))
+
+        # Body: status centered
+        ss = self.es_client.style_system
+        yellow_count = status_counts.get('YELLOW', 0) + status_counts.get('yellow', 0)
+        red_count = status_counts.get('RED', 0) + status_counts.get('red', 0)
+
+        if red_count > 0:
+            status_text = f"🔴 {red_count} Datastream{'s' if red_count != 1 else ''} Critical"
+            body_style = "bold red"
+            border = "red"
+        elif yellow_count > 0:
+            status_text = f"🟡 {yellow_count} Datastream{'s' if yellow_count != 1 else ''} Warning"
+            body_style = "bold yellow"
+            border = "yellow"
+        else:
+            ds_word = "Datastream" if total_datastreams == 1 else "Datastreams"
+            status_text = f"✅ {total_datastreams} {ds_word} Healthy"
+            body_style = "bold green"
+            border = ss._get_style('table_styles', 'border_style', 'cyan') if ss else 'cyan'
+
+        ts = ss._get_style('semantic', 'primary', 'bold cyan') if ss else 'bold cyan'
+
+        # Combined header panel
+        title_panel = Panel(
+            Text(status_text, style=body_style, justify="center"),
+            title=f"[{ts}]📊 Elasticsearch Datastreams[/{ts}]",
+            subtitle=subtitle_rich,
+            border_style=border,
+            padding=(1, 2),
+            expand=True
+        )
+
+        print()
+        console.print(title_panel)
+        print()
 
         # Create themed table with full width
         table = Table(
@@ -155,7 +186,8 @@ class DatastreamHandler(BaseHandler):
         table.add_column("Generation", style=self.es_client.style_system.get_semantic_style("secondary"), justify="right", min_width=10)
         table.add_column("Indices Count", style=self.es_client.style_system.get_semantic_style("secondary"), justify="right", min_width=12)
 
-        for datastream in datastreams_list:
+        ss = self.es_client.style_system
+        for i, datastream in enumerate(datastreams_list):
             name = datastream.get('name', 'N/A')
             status = datastream.get('status', 'N/A')
             template = datastream.get('template', 'N/A')
@@ -163,7 +195,7 @@ class DatastreamHandler(BaseHandler):
             generation = str(datastream.get('generation', 0))
             indices_count = str(len(datastream.get('indices', [])))
 
-            table.add_row(name, status, template, ilm_policy, generation, indices_count)
+            table.add_row(name, status, template, ilm_policy, generation, indices_count, style=ss.get_zebra_style(i) if ss else None)
 
         console.print(table)
         print("\n")  # Extra spacing

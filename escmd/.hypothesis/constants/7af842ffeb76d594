@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/store_password_help.py
-# hypothesis_version: 6.151.12
-
-['   1. env.username', '   2. env', '   4. global', '   5. config file', '   6. env variable', '   Decrypt fails:', '   Encryption:', '   Key lost:', '   Master key:', '   Never on disk:', '   Session cache:', '   Storage:', '   Store staging:', 'Generate master key:', 'Remove a password:', 'Rotate master key:', 'Store for lab env:', 'Store for prod env:', 'Store global user:', 'bold cyan', 'bold green', 'bold magenta', 'command', 'description', 'dim white', 'example', 'generate-master-key', 'global.elastic', 'prod', 'rotate-master-key', 'section_header', 'store-password', 'white', '🔐 Security Details:', '🔧 Troubleshooting:', '🚀 First-Time Setup:']

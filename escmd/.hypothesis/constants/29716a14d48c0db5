@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/performance.py
-# hypothesis_version: 6.151.12
-
-[0.0, 300, 'active_items', 'args', 'avg_time', 'client_context', 'connection_pool', 'count', 'created', 'elastic_host', 'elastic_port', 'es_client', 'expired_items', 'expires', 'host1', 'hostname', 'hosts', 'inf', 'kwargs', 'max_time', 'method', 'methods', 'min_time', 'port', 'total_calls', 'total_items', 'total_methods', 'total_time', 'transport', 'value']

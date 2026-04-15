@@ -92,6 +92,17 @@ except (ImportError, AttributeError, ValueError, IndexError):
     ES_VERSION_MAJOR = 7
 
 
+_theme_manager_cache: dict = {}
+
+
+def _get_or_create_theme_manager(configuration_manager) -> ThemeManager:
+    """Return a cached ThemeManager for the given configuration_manager instance."""
+    key = id(configuration_manager)
+    if key not in _theme_manager_cache:
+        _theme_manager_cache[key] = ThemeManager(configuration_manager)
+    return _theme_manager_cache[key]
+
+
 def get_theme_styles(configuration_manager):
     """
     Backward compatibility function that uses the new ThemeManager.
@@ -99,8 +110,7 @@ def get_theme_styles(configuration_manager):
     Returns:
         dict: Style configuration with 'header_style', 'health_styles', 'status_styles', etc.
     """
-    theme_manager = ThemeManager(configuration_manager)
-    return theme_manager.get_theme_styles()
+    return _get_or_create_theme_manager(configuration_manager).get_theme_styles()
 
 
 def get_full_theme_data(configuration_manager):
@@ -110,8 +120,7 @@ def get_full_theme_data(configuration_manager):
     Returns:
         dict: Complete theme configuration with all categories
     """
-    theme_manager = ThemeManager(configuration_manager)
-    return theme_manager.get_full_theme_data()
+    return _get_or_create_theme_manager(configuration_manager).get_full_theme_data()
 
 
 class ElasticsearchClient:

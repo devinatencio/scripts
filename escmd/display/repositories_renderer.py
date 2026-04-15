@@ -38,7 +38,7 @@ class RepositoriesRenderer:
 
     def print_enhanced_repositories_table(self, repositories_data: Dict[str, Any], console=None) -> None:
         """
-        Print enhanced repositories table with Rich formatting and statistics
+        Print enhanced repositories table with Rich formatting and statistics.
 
         Args:
             repositories_data: Dictionary containing repository information
@@ -47,164 +47,106 @@ class RepositoriesRenderer:
         if console is None:
             console = Console()
 
+        ss = self.style_system
+        ts = ss._get_style('semantic', 'primary', 'bold cyan') if ss else 'bold cyan'
+
         if not repositories_data:
-            # Create informative empty state panel consistent with other components
-            empty_state_panel = Panel(
+            panel = Panel(
                 Text.from_markup(
-                    "💡 No snapshot repositories are currently configured.\n\n"
-                    "Repositories are required for creating backups of your Elasticsearch data.\n"
-                    "Common repository types include:\n"
-                    "• [cyan]S3[/cyan] - Amazon S3 storage\n"
-                    "• [cyan]GCS[/cyan] - Google Cloud Storage\n"
-                    "• [cyan]Azure[/cyan] - Azure Blob Storage\n"
-                    "• [cyan]FS[/cyan] - Local filesystem\n\n"
-                    "[bold green]💡 Quick Start:[/bold green]\n"
-                    "Create a repository using: [cyan]./escmd.py repositories create <name> --type <type>[/cyan]\n"
-                    "Example: [cyan]./escmd.py repositories create my-s3-repo --type s3 --bucket my-backups[/cyan]\n\n"
-                    "[dim]You can also use your cluster management tools or Elasticsearch API to configure repositories.[/dim]",
+                    "No snapshot repositories are currently configured.\n\n"
+                    "[bold]Common repository types:[/bold]\n"
+                    "  • [cyan]S3[/cyan] - Amazon S3    • [cyan]GCS[/cyan] - Google Cloud    • [cyan]Azure[/cyan] - Azure Blob    • [cyan]FS[/cyan] - Local filesystem\n\n"
+                    "[bold]Quick Start:[/bold]\n"
+                    "  [cyan]./escmd.py repositories create my-repo --type s3 --bucket my-backups[/cyan]",
                     justify="left"
                 ),
-                title="📦 Snapshot Repositories",
-                title_align="left",
-                border_style=self.style_system._get_style('semantic', 'warning', 'yellow') if self.style_system else "yellow",
+                title=f"[{ts}]📦 Snapshot Repositories[/{ts}]",
+                border_style="yellow",
                 padding=(1, 2),
-                expand=False
             )
-            console.print(empty_state_panel)
+            print()
+            console.print(panel)
+            print()
             return
 
         # Calculate statistics
         total_repos = len(repositories_data)
         repo_types = {}
-        locations_by_type = {}
 
-        # Analyze repository data
         for repo_name, repo_info in repositories_data.items():
             repo_type = repo_info.get('type', 'unknown')
             repo_types[repo_type] = repo_types.get(repo_type, 0) + 1
 
-            # Track locations by type
-            if repo_type not in locations_by_type:
-                locations_by_type[repo_type] = []
-
-            settings = repo_info.get('settings', {})
-            location = self._extract_repository_location(repo_type, settings)
-            locations_by_type[repo_type].append(location)
-
         # Get theme styles
         full_theme = self.theme_manager.get_full_theme_data() if self.theme_manager else {}
         table_styles = full_theme.get('table_styles', {})
-
-        # Theme colors
-        title_color = self.get_themed_style('panel_styles', 'title', 'bright_cyan')
         border_color = table_styles.get('border_style', 'bright_magenta')
         header_style = table_styles.get('header_style', 'bold bright_white on dark_magenta')
 
-        # Create colorized subtitle with repository statistics
+        # --- Title panel (standard pattern) ---
+        # Body: status centered
+        repo_word = "Repository" if total_repos == 1 else "Repositories"
+        status_text = f"✅ {total_repos} {repo_word} Configured"
+        body_style = "bold green"
+        border = border_color
+
+        # Subtitle bar
         subtitle_rich = Text()
-        subtitle_rich.append("Total Repositories: ", style="default")
-        subtitle_rich.append(str(total_repos), style=self.style_system._get_style('semantic', 'info', 'cyan') if self.style_system else "cyan")
+        subtitle_rich.append("Total: ", style="default")
+        subtitle_rich.append(str(total_repos), style=ss._get_style('semantic', 'info', 'cyan') if ss else "cyan")
 
-        # Add repository type breakdown
-        if repo_types:
-            type_parts = []
-            for repo_type, count in repo_types.items():
-                type_parts.append(f"{repo_type.upper()}: {count}")
+        for repo_type, count in repo_types.items():
+            subtitle_rich.append(f" | {repo_type.upper()}: ", style="default")
+            subtitle_rich.append(str(count), style=ss._get_style('semantic', 'primary', 'bright_magenta') if ss else "bright_magenta")
 
-            subtitle_rich.append(" | Types: ", style="default")
-            subtitle_rich.append(" • ".join(type_parts), style=self.style_system._get_style('semantic', 'primary', 'bright_magenta') if self.style_system else "bright_magenta")
-
-        # Determine overall health status
-        if total_repos == 0:
-            health_status = "No repositories configured"
-            health_style = self.style_system._get_style('semantic', 'warning', 'yellow') if self.style_system else "yellow"
-        elif total_repos < 2:
-            health_status = "Limited backup redundancy"
-            health_style = self.style_system._get_style('semantic', 'warning', 'yellow') if self.style_system else "yellow"
-        else:
-            health_status = "Good backup coverage"
-            health_style = self.style_system._get_style('semantic', 'success', 'green') if self.style_system else "green"
-
-        subtitle_rich.append(" | Status: ", style="default")
-        subtitle_rich.append(health_status, style=health_style)
-
-        # Create title panel with statistics
         title_panel = Panel(
-            Text("📦 Elasticsearch Snapshot Repositories", style=f"bold {title_color}", justify="center"),
+            Text(status_text, style=body_style, justify="center"),
+            title=f"[{ts}]📦 Snapshot Repositories[/{ts}]",
             subtitle=subtitle_rich,
-            border_style=border_color,
+            border_style=border,
             padding=(1, 2)
         )
 
-        # Create enhanced repositories table
+        # --- Repository table (no redundant title) ---
         table = Table(
             show_header=True,
             header_style=header_style,
-            title="📦 Repository Details",
-            title_style=f"bold {title_color}",
             border_style=border_color,
-            box=self.style_system.get_table_box() if self.style_system else None,
+            box=ss.get_table_box() if ss else None,
             expand=True
         )
 
-        table.add_column("📦 Repository Name", justify="left", width=20)
-        table.add_column("🔧 Type", justify="center", width=12)
-        table.add_column("📍 Location/Bucket", justify="left", width=30)
-        table.add_column("🔩 Settings", justify="left", width=35)
-        table.add_column("🎯 Status", justify="center", width=12)
+        table.add_column("Repository Name", justify="left", width=20)
+        table.add_column("Type", justify="center", width=12)
+        table.add_column("Location/Bucket", justify="left", width=30)
+        table.add_column("Settings", justify="left", width=35)
+        table.add_column("Status", justify="center", width=12)
 
-        # Sort repositories by type then by name for consistent display
         sorted_repos = sorted(repositories_data.items(), key=lambda x: (x[1].get('type', 'unknown'), x[0]))
 
         for repo_name, repo_info in sorted_repos:
             repo_type = repo_info.get('type', 'unknown')
             settings = repo_info.get('settings', {})
 
-            # Extract location information based on repository type
             location = self._extract_repository_location(repo_type, settings)
-
-            # Format settings for display (exclude sensitive information)
             settings_display = self._format_repository_settings(settings)
-
-            # Determine status based on repository type and configuration
-            status_icon, status_text, row_style = self._get_repository_status(repo_type, settings)
+            status_icon, status_text_val, row_style = self._get_repository_status(repo_type, settings)
 
             table.add_row(
                 repo_name,
                 repo_type.upper(),
                 location,
                 settings_display,
-                f"{status_icon} {status_text}",
+                f"{status_icon} {status_text_val}",
                 style=row_style
             )
 
-        # Create summary statistics panel
-        from rich.table import Table as InnerTable
-        summary_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-        summary_table.add_column("Metric", style="bold", no_wrap=True)
-        summary_table.add_column("Icon", justify="center", width=4)
-        summary_table.add_column("Value", style=title_color)
-
-        summary_table.add_row("Total Repositories:", "📦", f"{total_repos}")
-
-        # Add breakdown by type
-        for repo_type, count in repo_types.items():
-            type_icon = self._get_type_icon(repo_type)
-            summary_table.add_row(f"{repo_type.upper()} Repositories:", type_icon, f"{count}")
-
-        summary_panel = Panel(
-            summary_table,
-            title="📈 Repository Summary",
-            border_style=self.get_themed_style('panel_styles', 'secondary', 'magenta'),
-            padding=(1, 2)
-        )
-
-        # Print all panels and table
+        # --- Render layout ---
+        print()
         console.print(title_panel)
         console.print()
         console.print(table)
         console.print()
-        console.print(summary_panel)
 
     def _extract_repository_location(self, repo_type: str, settings: Dict[str, Any]) -> str:
         """

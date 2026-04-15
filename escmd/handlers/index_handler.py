@@ -9,6 +9,7 @@ from rich import box
 from rich.panel import Panel
 from rich.text import Text
 from rich.columns import Columns
+from rich.align import Align
 from rich.table import Table as InnerTable
 from rich.prompt import Confirm
 
@@ -30,25 +31,8 @@ class IndexHandler(BaseHandler):
                 cluster_name = "Unknown"
                 total_nodes = 0
 
-            # Create title panel
-            title_panel = Panel(
-                self.es_client.style_system.create_semantic_text(
-                    "🔄 Elasticsearch Flush Operation", "info", justify="center"
-                ),
-                subtitle=f"Synced flush across cluster: {cluster_name} | Nodes: {total_nodes}",
-                border_style=self.es_client.style_system._get_style(
-                    "table_styles", "border_style", "white"
-                ),
-                padding=(1, 2),
-            )
-
-            # Show operation in progress
-            print()
-            console.print(title_panel)
-            print()
-
             # Enhanced flush with retry logic
-            max_retries = 10  # Maximum number of retry attempts
+            max_retries = 10
             retry_count = 0
             failed_shards = 1  # Initialize to enter the loop
 
@@ -264,13 +248,13 @@ class IndexHandler(BaseHandler):
                     # Success message
                     if retry_count > 1:
                         success_text = self.es_client.style_system.create_semantic_text(
-                            f"🎉 All shards flushed successfully after {retry_count} attempts!\n\nThe synced flush operation completed successfully with automatic retry recovery.",
+                            f"🎉 All shards flushed successfully after {retry_count} attempts!\nThe synced flush operation completed successfully with automatic retry recovery.",
                             "success",
                         )
                         title = "🎉 Success with Auto-Retry"
                     else:
                         success_text = self.es_client.style_system.create_semantic_text(
-                            "🎉 All shards flushed successfully!\n\nThe synced flush operation completed without errors.",
+                            "🎉 All shards flushed successfully!\nThe synced flush operation completed without errors.",
                             "success",
                         )
                         title = "✅ Success"
@@ -310,13 +294,52 @@ class IndexHandler(BaseHandler):
                     padding=(1, 2),
                 )
 
-                # Display results
+                # Build a single header panel — stats in subtitle, status as body
+                ss = self.es_client.style_system
+                rate_style = ss.get_semantic_style("success" if failed_shards == 0 else "warning")
+                border     = ss.get_semantic_style("success" if failed_shards == 0 else "warning")
+
+                # Stats line as subtitle
+                subtitle = Text()
+                subtitle.append("Cluster: ", style="default")
+                subtitle.append(cluster_name, style=ss.get_semantic_style("primary"))
+                subtitle.append("  |  Total: ", style="default")
+                subtitle.append(str(total_shards), style=ss.get_semantic_style("info"))
+                subtitle.append("  |  Successful: ", style="default")
+                subtitle.append(str(successful_shards), style=ss.get_semantic_style("success"))
+                if failed_shards > 0:
+                    subtitle.append("  |  Failed: ", style="default")
+                    subtitle.append(str(failed_shards), style=ss.get_semantic_style("error"))
+                if skipped_shards > 0:
+                    subtitle.append("  |  Skipped: ", style="default")
+                    subtitle.append(str(skipped_shards), style=ss.get_semantic_style("warning"))
+                subtitle.append("  |  Rate: ", style="default")
+                subtitle.append(f"{success_rate:.1f}%", style=rate_style)
+                if retry_count > 1:
+                    subtitle.append(f"  |  Retries: {retry_count}", style="default")
+
+                # Related commands folded into the title bar
+                ts = ss._get_style("semantic", "primary", "bold cyan")
+                cmd = ss.get_semantic_style("secondary")
+                title = (
+                    f"[{ts}]🔄 Elasticsearch Flush Operation[/{ts}]"
+                    f"  [{cmd}]health[/{cmd}]"
+                    f" [dim]·[/dim]"
+                    f" [{cmd}]shards[/{cmd}]"
+                    f" [dim]·[/dim]"
+                    f" [{cmd}]recovery[/{cmd}]"
+                    f" [dim]·[/dim]"
+                    f" [{cmd}]indices[/{cmd}]"
+                )
+
                 print()
-                console.print(Columns([summary_panel, details_panel], expand=True))
-                print()
-                console.print(failures_panel)
-                print()
-                console.print(actions_panel)
+                console.print(Panel(
+                    Align.center(failures_panel.renderable, vertical="middle"),
+                    title=title,
+                    subtitle=subtitle,
+                    border_style=border,
+                    padding=(1, 2),
+                ))
                 print()
 
             else:
@@ -415,6 +438,10 @@ class IndexHandler(BaseHandler):
         import re
 
         console = self.console
+
+        if not getattr(self.args, 'pattern', None):
+            self._show_freeze_help("freeze", "🧊 Freeze Index")
+            return
 
         # Handle --exact flag to disable auto-detection
         if hasattr(self.args, "exact") and self.args.exact:
@@ -774,6 +801,10 @@ class IndexHandler(BaseHandler):
 
         console = self.console
 
+        if not getattr(self.args, 'pattern', None):
+            self._show_freeze_help("unfreeze", "🔥 Unfreeze Index")
+            return
+
         # Handle --exact flag to disable auto-detection
         if hasattr(self.args, "exact") and self.args.exact:
             self.args.regex = False
@@ -1129,81 +1160,85 @@ class IndexHandler(BaseHandler):
 
     def handle_indice(self):
         """Display detailed information about a specific index."""
-        indice = self.args.indice
+        indice = getattr(self.args, 'indice', None)
 
-        # Check if index name was provided
         if not indice:
-            from rich.syntax import Syntax
-            from rich.console import Console
-            from rich.panel import Panel
-            from rich.text import Text
-
-            console = Console()
-
-            # Create syntax-highlighted examples
-            usage_code = """# Show details for a specific index
-./escmd.py indice myindex-001
-
-# Show details for a datastream index
-./escmd.py indice .ds-logs-app-2025.08.28-000001
-
-# To list ALL indices instead:
-./escmd.py indices
-
-# To search indices with patterns:
-./escmd.py indices "logs-*" """
-
-            syntax = Syntax(
-                usage_code,
-                "bash",
-                theme="monokai",
-                line_numbers=False,
-                background_color="default",
-            )
-
-            # Create the error message
-            error_text = Text()
-            error_text.append(
-                "❌ Index name is required.\n\n",
-                style=self.es_client.style_system.get_semantic_style("error"),
-            )
-            error_text.append(
-                "Usage: ",
-                style=self.es_client.style_system.get_semantic_style("primary"),
-            )
-            error_text.append(
-                "./escmd.py indice <index_name>",
-                style=self.es_client.style_system.get_semantic_style("info"),
-            )
-
-            # Print error message
-            console.print("\n")
-            console.print(
-                Panel(
-                    error_text,
-                    title="Missing Index Name",
-                    border_style=self.es_client.style_system.get_semantic_style(
-                        "error"
-                    ),
-                    padding=(1, 2),
-                )
-            )
-
-            # Print syntax-highlighted examples
-            console.print(
-                Panel(
-                    syntax,
-                    title="🚀 Command Examples",
-                    border_style=self.es_client.style_system.get_semantic_style(
-                        "success"
-                    ),
-                    padding=(1, 2),
-                )
-            )
-            console.print("\n")
+            self._show_indice_help()
             return
 
         self.es_client.print_detailed_indice_info(indice)
+
+    def _show_indice_help(self):
+        """Display help screen for indice command."""
+        from rich.panel import Panel
+        from rich.table import Table
+        from rich.text import Text
+
+        console = self.console
+        ss = self.es_client.style_system
+        tm = self.es_client.theme_manager
+
+        primary_style = ss.get_semantic_style("primary")
+        success_style = ss.get_semantic_style("success")
+        muted_style = ss._get_style('semantic', 'muted', 'dim')
+        border_style = ss._get_style('table_styles', 'border_style', 'white')
+        header_style = tm.get_theme_styles().get('header_style', 'bold white') if tm else 'bold white'
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        box_style = ss.get_table_box()
+
+        header_panel = Panel(
+            Text("Run ./escmd.py indice <index-name>", style="bold white"),
+            title=f"[{title_style}]📋 Index Details[/{title_style}]",
+            subtitle=Text.from_markup("[dim]Use[/dim] [cyan]--help[/cyan] [dim]for full options[/dim]"),
+            border_style=border_style,
+            padding=(1, 2),
+            expand=True,
+        )
+
+        table = Table(
+            show_header=True,
+            header_style=header_style,
+            border_style=border_style,
+            box=box_style,
+            show_lines=False,
+            expand=True,
+        )
+        table.add_column("Command", style=primary_style, ratio=2)
+        table.add_column("Description", style="white", ratio=3)
+        table.add_column("Example", style=success_style, ratio=3)
+
+        rows = [
+            ("indice <name>", "Show detailed info for a specific index", "indice myindex-001"),
+            ("indice <datastream>", "Show details for a datastream index", "indice .ds-logs-app-2025.08.28-000001"),
+        ]
+        for i, (cmd, desc, ex) in enumerate(rows):
+            table.add_row(cmd, desc, f"./escmd.py {ex}", style=ss.get_zebra_style(i) if ss else None)
+
+        table.add_row(
+            Text("── Related ──", style=muted_style),
+            Text("", style=muted_style),
+            Text("", style=muted_style),
+        )
+
+        related = [
+            ("indices", "List all indices", "indices"),
+            ("indices '<pattern>'", "Search indices with pattern", "indices 'logs-*'"),
+            ("indices --status yellow", "Filter by health status", "indices --status yellow"),
+            ("indice-add-metadata <n> '<json>'", "Add metadata to an index", "indice-add-metadata my-idx '{\"team\": \"sre\"}'"),
+        ]
+        for i, (opt, desc, ex) in enumerate(related):
+            table.add_row(
+                Text(opt, style=ss._get_style('semantic', 'secondary', 'magenta')),
+                desc,
+                Text(f"./escmd.py {ex}", style=muted_style),
+                style=ss.get_zebra_style(i) if ss else None,
+            )
+
+        console.print()
+        console.print(header_panel)
+        console.print()
+        console.print(table)
+        console.print()
 
     def handle_indices(self):
         """List and manage indices with filtering options."""
@@ -1463,8 +1498,12 @@ class IndexHandler(BaseHandler):
         from rich.panel import Panel
         from rich.text import Text
 
-        indice_name = self.args.indice_name
-        metadata_json = self.args.metadata_json
+        indice_name = getattr(self.args, 'indice_name', None)
+        metadata_json = getattr(self.args, 'metadata_json', None)
+
+        if not indice_name or not metadata_json:
+            self._show_indice_add_metadata_help()
+            return
 
         # Validate JSON input
         try:
@@ -1645,13 +1684,14 @@ class IndexHandler(BaseHandler):
 
     def _display_no_matching_status_message(self, status_filter, total_indices_count):
         """Display a themed message when no indices match the status filter."""
-        from rich.panel import Panel
         from display.style_system import StyleSystem
-        from display.theme_manager import ThemeManager
 
-        # Get theme manager for styling
-        config_manager = getattr(self.es_client, "config_manager", None)
-        theme_manager = ThemeManager(config_manager)
+        # Reuse the client's existing theme manager
+        theme_manager = getattr(self.es_client, 'theme_manager', None)
+        if theme_manager is None:
+            from display.theme_manager import ThemeManager
+            config_manager = getattr(self.es_client, "config_manager", None)
+            theme_manager = ThemeManager(config_manager)
         style_system = StyleSystem(theme_manager)
 
         # Create the message content
@@ -1676,6 +1716,76 @@ class IndexHandler(BaseHandler):
 
         self.console.print(panel)
 
+    def _show_indice_add_metadata_help(self):
+        """Display help screen for indice-add-metadata command."""
+        from rich.panel import Panel
+        from rich.table import Table
+        from rich.text import Text
+
+        console = self.console
+        ss = self.es_client.style_system
+        tm = self.es_client.theme_manager
+
+        primary_style = ss.get_semantic_style("primary")
+        success_style = ss.get_semantic_style("success")
+        muted_style = ss._get_style('semantic', 'muted', 'dim')
+        border_style = ss._get_style('table_styles', 'border_style', 'white')
+        header_style = tm.get_theme_styles().get('header_style', 'bold white') if tm else 'bold white'
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        box_style = ss.get_table_box()
+
+        header_panel = Panel(
+            Text("Run ./escmd.py indice-add-metadata <index> '<json>'", style="bold white"),
+            title=f"[{title_style}]📝 Add Index Metadata[/{title_style}]",
+            subtitle=Text.from_markup("[dim]Use[/dim] [cyan]--help[/cyan] [dim]for full options[/dim]"),
+            border_style=border_style,
+            padding=(1, 2),
+            expand=True,
+        )
+
+        table = Table(
+            show_header=True,
+            header_style=header_style,
+            border_style=border_style,
+            box=box_style,
+            show_lines=False,
+            expand=True,
+        )
+        table.add_column("Usage / Option", style=primary_style, ratio=2)
+        table.add_column("Description", style="white", ratio=3)
+        table.add_column("Example", style=success_style, ratio=3)
+
+        rows = [
+            ("<index> '<json>'", "Add metadata key-value pairs to an index", "indice-add-metadata my-idx '{\"team\": \"platform\"}'"),
+            ("<index> '<json>'", "Tag with environment and owner", "indice-add-metadata my-idx '{\"env\": \"prod\", \"owner\": \"sre\"}'"),
+            ("<index> '<json>'", "Set retention policy metadata", "indice-add-metadata my-idx '{\"retention_days\": 30}'"),
+        ]
+        for i, (cmd, desc, ex) in enumerate(rows):
+            table.add_row(cmd, desc, f"./escmd.py {ex}", style=ss.get_zebra_style(i) if ss else None)
+
+        table.add_row(
+            Text("── Related ──", style=muted_style),
+            Text("", style=muted_style),
+            Text("", style=muted_style),
+        )
+
+        related = [
+            ("indice <name>", "View index details including metadata", "indice my-index"),
+        ]
+        for i, (opt, desc, ex) in enumerate(related):
+            table.add_row(
+                Text(opt, style=ss._get_style('semantic', 'secondary', 'magenta')),
+                desc,
+                Text(f"./escmd.py {ex}", style=muted_style),
+                style=ss.get_zebra_style(i) if ss else None,
+            )
+
+        console.print()
+        console.print(header_panel)
+        console.print()
+        console.print(table)
+        console.print()
+
     def handle_create_index(self):
         """Create a new empty index with optional settings and mappings."""
         import json
@@ -1683,9 +1793,9 @@ class IndexHandler(BaseHandler):
         # Get index name
         index_name = self.args.index_name
 
-        # Validate index name
+        # Show help table if no index name provided
         if not index_name or not index_name.strip():
-            self.console.print("[red]❌ Error: Index name is required[/red]")
+            self._show_create_index_help()
             return
 
         # Build settings
@@ -1761,6 +1871,150 @@ class IndexHandler(BaseHandler):
         except Exception as e:
             self.console.print(f"\n[red]❌ Unexpected error creating index: {e}[/red]")
 
+    def _show_create_index_help(self):
+        """Display help screen for create-index command."""
+        from rich.console import Console
+        from rich.panel import Panel
+        from rich.table import Table
+        from rich.text import Text
+
+        console = self.console
+        ss = self.es_client.style_system
+        tm = self.es_client.theme_manager
+
+        primary_style = ss.get_semantic_style("primary")
+        success_style = ss.get_semantic_style("success")
+        muted_style = ss._get_style('semantic', 'muted', 'dim')
+        border_style = ss._get_style('table_styles', 'border_style', 'white')
+        header_style = tm.get_theme_styles().get('header_style', 'bold white') if tm else 'bold white'
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        box_style = ss.get_table_box()
+
+        header_panel = Panel(
+            Text("Run ./escmd.py create-index <name> [options]", style="bold white"),
+            title=f"[{title_style}]📝 Create Index[/{title_style}]",
+            subtitle=Text.from_markup("[dim]Use[/dim] [cyan]--help[/cyan] [dim]for full options[/dim]"),
+            border_style=border_style,
+            padding=(1, 2),
+            expand=True,
+        )
+
+        table = Table(
+            show_header=True,
+            header_style=header_style,
+            border_style=border_style,
+            box=box_style,
+            show_lines=False,
+            expand=True,
+        )
+        table.add_column("Usage / Option", style=primary_style, ratio=2)
+        table.add_column("Description", style="white", ratio=3)
+        table.add_column("Example", style=success_style, ratio=3)
+
+        rows = [
+            ("create-index <name>", "Create index with default settings (1p/1r)", "create-index my-new-index"),
+            ("-s, --shards <n>", "Number of primary shards (default: 1)", "create-index logs-2026 -s 3"),
+            ("-r, --replicas <n>", "Number of replicas (default: 1)", "create-index logs-2026 -r 0"),
+        ]
+        for i, (cmd, desc, ex) in enumerate(rows):
+            table.add_row(cmd, desc, f"./escmd.py {ex}", style=ss.get_zebra_style(i) if ss else None)
+
+        table.add_row(
+            Text("── Advanced ──", style=muted_style),
+            Text("", style=muted_style),
+            Text("", style=muted_style),
+        )
+
+        advanced = [
+            ("--settings '<json>'", "Custom index settings as JSON", 'create-index my-idx --settings \'{"analysis": {}}\''),
+            ("--mappings '<json>'", "Custom index mappings as JSON", 'create-index my-idx --mappings \'{"properties": {}}\''),
+            ("--format json", "JSON output instead of table", "create-index my-idx --format json"),
+        ]
+        for i, (opt, desc, ex) in enumerate(advanced):
+            table.add_row(
+                Text(opt, style=ss._get_style('semantic', 'secondary', 'magenta')),
+                desc,
+                Text(f"./escmd.py {ex}", style=muted_style),
+                style=ss.get_zebra_style(i) if ss else None,
+            )
+
+        console.print()
+        console.print(header_panel)
+        console.print()
+        console.print(table)
+        console.print()
+
+    def _show_freeze_help(self, command, title_text):
+        """Display help screen for freeze/unfreeze commands."""
+        from rich.panel import Panel
+        from rich.table import Table
+        from rich.text import Text
+
+        console = self.console
+        ss = self.es_client.style_system
+        tm = self.es_client.theme_manager
+
+        primary_style = ss.get_semantic_style("primary")
+        success_style = ss.get_semantic_style("success")
+        muted_style = ss._get_style('semantic', 'muted', 'dim')
+        border_style = ss._get_style('table_styles', 'border_style', 'white')
+        header_style = tm.get_theme_styles().get('header_style', 'bold white') if tm else 'bold white'
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        box_style = ss.get_table_box()
+
+        header_panel = Panel(
+            Text(f"Run ./escmd.py {command} <index-or-pattern>", style="bold white"),
+            title=f"[{title_style}]{title_text}[/{title_style}]",
+            subtitle=Text.from_markup("[dim]Use[/dim] [cyan]--help[/cyan] [dim]for full options[/dim]"),
+            border_style=border_style,
+            padding=(1, 2),
+            expand=True,
+        )
+
+        table = Table(
+            show_header=True,
+            header_style=header_style,
+            border_style=border_style,
+            box=box_style,
+            show_lines=False,
+            expand=True,
+        )
+        table.add_column("Usage / Option", style=primary_style, ratio=2)
+        table.add_column("Description", style="white", ratio=3)
+        table.add_column("Example", style=success_style, ratio=3)
+
+        rows = [
+            (f"{command} <index>", f"{command.capitalize()} a specific index", f"{command} my-index-001"),
+            (f"{command} '<pattern>'", f"{command.capitalize()} indices matching pattern", f"{command} 'logs-2025.*'"),
+        ]
+        for i, (cmd, desc, ex) in enumerate(rows):
+            table.add_row(cmd, desc, f"./escmd.py {ex}", style=ss.get_zebra_style(i) if ss else None)
+
+        table.add_row(
+            Text("── Options ──", style=muted_style),
+            Text("", style=muted_style),
+            Text("", style=muted_style),
+        )
+
+        options = [
+            ("--regex, -r", "Force treat pattern as regex", f"{command} 'logs-.*' --regex"),
+            ("--exact, -e", "Force exact match (no auto-detect)", f"{command} my-index --exact"),
+            ("--yes, -y", "Skip confirmation prompt", f"{command} my-index --yes"),
+        ]
+        for i, (opt, desc, ex) in enumerate(options):
+            table.add_row(
+                Text(opt, style=ss._get_style('semantic', 'secondary', 'magenta')),
+                desc,
+                Text(f"./escmd.py {ex}", style=muted_style),
+                style=ss.get_zebra_style(i) if ss else None,
+            )
+
+        console.print()
+        console.print(header_panel)
+        console.print()
+        console.print(table)
+        console.print()
+
     def handle_recovery(self):
         """Monitor index recovery status."""
         if self.args.format == "json":
@@ -1769,8 +2023,6 @@ class IndexHandler(BaseHandler):
         else:
             with self.console.status("Retrieving recovery data..."):
                 es_recovery = self.es_client.get_recovery_status()
-            # Clear any remaining status display and add space
-            print("\n")
             self.es_client.health_commands.print_enhanced_recovery_status(es_recovery)
 
     def _handle_cold_indices(self):

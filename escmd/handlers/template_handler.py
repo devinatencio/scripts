@@ -19,7 +19,12 @@ class TemplateHandler(BaseHandler):
 
     def handle_template(self):
         """Handle single template detail command."""
-        template_name = self.args.name
+        template_name = getattr(self.args, 'name', None)
+
+        if not template_name:
+            self._show_template_help()
+            return
+
         template_type = getattr(self.args, 'type', 'auto')
 
         if self.args.format == 'json':
@@ -35,6 +40,81 @@ class TemplateHandler(BaseHandler):
             self.es_client.pretty_print_json(usage_data)
         else:
             self._print_template_usage()
+
+    def _show_template_help(self):
+        """Display help screen for template commands."""
+        from rich.panel import Panel
+        from rich.text import Text
+
+        console = self.console
+        ss = self.es_client.style_system
+        tm = self.es_client.theme_manager
+
+        primary_style = ss.get_semantic_style("primary")
+        success_style = ss.get_semantic_style("success")
+        muted_style = ss._get_style('semantic', 'muted', 'dim')
+        border_style = ss._get_style('table_styles', 'border_style', 'white')
+        header_style = tm.get_theme_styles().get('header_style', 'bold white') if tm else 'bold white'
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        box_style = ss.get_table_box()
+
+        header_panel = Panel(
+            Text("Run ./escmd.py template <name> [options]", style="bold white"),
+            title=f"[{title_style}]📋 Elasticsearch Templates[/{title_style}]",
+            subtitle=Text.from_markup("[dim]Use[/dim] [cyan]--help[/cyan] [dim]on any command for full options[/dim]"),
+            border_style=border_style,
+            padding=(1, 2),
+            expand=True,
+        )
+
+        table = Table(
+            show_header=True,
+            header_style=header_style,
+            border_style=border_style,
+            box=box_style,
+            show_lines=False,
+            expand=True,
+        )
+        table.add_column("Command / Option", style=primary_style, ratio=2)
+        table.add_column("Description", style="white", ratio=3)
+        table.add_column("Example", style=success_style, ratio=3)
+
+        rows = [
+            ("templates", "List all templates (legacy, composable, component)", "templates"),
+            ("templates --type composable", "List only composable templates", "templates --type composable"),
+            ("template <name>", "Show detailed info for a specific template", "template my-template"),
+            ("template <name> --type legacy", "Specify template type", "template my-template --type legacy"),
+            ("template-usage", "Analyze template usage across indices", "template-usage"),
+        ]
+        for i, (cmd, desc, ex) in enumerate(rows):
+            table.add_row(cmd, desc, f"./escmd.py {ex}", style=ss.get_zebra_style(i) if ss else None)
+
+        table.add_row(
+            Text("── Management ──", style=muted_style),
+            Text("", style=muted_style),
+            Text("", style=muted_style),
+        )
+
+        mgmt = [
+            ("template-backup <name>", "Backup a template to JSON file", "template-backup my-template"),
+            ("template-restore <file>", "Restore a template from backup", "template-restore backup.json"),
+            ("template-modify <name>", "Modify template fields", "template-modify my-template --set field value"),
+            ("template-create --file <f>", "Create template from JSON file", "template-create --file template.json"),
+            ("list-backups", "List available template backups", "list-backups"),
+        ]
+        for i, (opt, desc, ex) in enumerate(mgmt):
+            table.add_row(
+                Text(opt, style=ss._get_style('semantic', 'secondary', 'magenta')),
+                desc,
+                Text(f"./escmd.py {ex}", style=muted_style),
+                style=ss.get_zebra_style(i) if ss else None,
+            )
+
+        console.print()
+        console.print(header_panel)
+        console.print()
+        console.print(table)
+        console.print()
 
     def _print_templates_table(self, template_type='all'):
         """Print formatted table of templates using the template renderer."""
@@ -86,7 +166,12 @@ class TemplateHandler(BaseHandler):
 
     def handle_template_modify(self):
         """Handle template modification command."""
-        template_name = self.args.name
+        template_name = getattr(self.args, 'name', None)
+
+        if not template_name:
+            self._show_template_modify_help()
+            return
+
         template_type = getattr(self.args, 'type', 'auto')
         field_path = getattr(self.args, 'field', None)
         operation = getattr(self.args, 'operation', 'set')
@@ -96,7 +181,7 @@ class TemplateHandler(BaseHandler):
         dry_run = getattr(self.args, 'dry_run', False)
 
         if not field_path:
-            self.console.print("[red]Error: Field path is required for template modification[/red]")
+            self._show_template_modify_help()
             return
 
         if not value and operation != 'delete':
@@ -112,9 +197,87 @@ class TemplateHandler(BaseHandler):
         except Exception as e:
             self.console.print(f"[red]Template modification failed: {str(e)}[/red]")
 
+    def _show_template_modify_help(self):
+        """Display help screen for template-modify command."""
+        from rich.panel import Panel
+        from rich.table import Table
+        from rich.text import Text
+
+        console = self.console
+        ss = self.es_client.style_system
+        tm = self.es_client.theme_manager
+
+        primary_style = ss.get_semantic_style("primary")
+        success_style = ss.get_semantic_style("success")
+        muted_style = ss._get_style('semantic', 'muted', 'dim')
+        border_style = ss._get_style('table_styles', 'border_style', 'white')
+        header_style = tm.get_theme_styles().get('header_style', 'bold white') if tm else 'bold white'
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        box_style = ss.get_table_box()
+
+        header_panel = Panel(
+            Text("Run ./escmd.py template-modify <name> --field <path> [options]", style="bold white"),
+            title=f"[{title_style}]🔧 Modify Template[/{title_style}]",
+            subtitle=Text.from_markup("[dim]Use[/dim] [cyan]--help[/cyan] [dim]for full options[/dim]"),
+            border_style=border_style,
+            padding=(1, 2),
+            expand=True,
+        )
+
+        table = Table(
+            show_header=True,
+            header_style=header_style,
+            border_style=border_style,
+            box=box_style,
+            show_lines=False,
+            expand=True,
+        )
+        table.add_column("Option", style=primary_style, ratio=2)
+        table.add_column("Description", style="white", ratio=3)
+        table.add_column("Example", style=success_style, ratio=3)
+
+        rows = [
+            ("--field <path>", "Dot-notation path to the field", "template-modify my-tpl --field template.settings.index.number_of_replicas --value 2"),
+            ("--value <val>", "New value to set", "template-modify my-tpl --field some.field --value newval"),
+            ("--operation set", "Set field value (default)", "template-modify my-tpl --field f --value v"),
+            ("--operation append", "Append value to a list", "template-modify my-tpl --field some.list --operation append --value node1"),
+            ("--operation delete", "Delete a field entirely", "template-modify my-tpl --field some.field --operation delete"),
+        ]
+        for i, (cmd, desc, ex) in enumerate(rows):
+            table.add_row(cmd, desc, f"./escmd.py {ex}", style=ss.get_zebra_style(i) if ss else None)
+
+        table.add_row(
+            Text("── Safety ──", style=muted_style),
+            Text("", style=muted_style),
+            Text("", style=muted_style),
+        )
+
+        safety = [
+            ("--dry-run", "Preview changes without applying", "template-modify my-tpl --field f --value v --dry-run"),
+            ("--no-backup", "Skip automatic backup", "template-modify my-tpl --field f --value v --no-backup"),
+        ]
+        for i, (opt, desc, ex) in enumerate(safety):
+            table.add_row(
+                Text(opt, style=ss._get_style('semantic', 'secondary', 'magenta')),
+                desc,
+                Text(f"./escmd.py {ex}", style=muted_style),
+                style=ss.get_zebra_style(i) if ss else None,
+            )
+
+        console.print()
+        console.print(header_panel)
+        console.print()
+        console.print(table)
+        console.print()
+
     def handle_template_backup(self):
         """Handle template backup command."""
-        template_name = self.args.name
+        template_name = getattr(self.args, 'name', None)
+
+        if not template_name:
+            self._show_template_backup_help()
+            return
+
         template_type = getattr(self.args, 'type', 'auto')
         backup_dir = getattr(self.args, 'backup_dir', None)
         cluster_name = getattr(self.args, 'cluster', None)
@@ -134,12 +297,84 @@ class TemplateHandler(BaseHandler):
         except Exception as e:
             self.console.print(f"[red]Template backup failed: {str(e)}[/red]")
 
+    def _show_template_backup_help(self):
+        """Display help screen for template-backup command."""
+        from rich.panel import Panel
+        from rich.table import Table
+        from rich.text import Text
+
+        console = self.console
+        ss = self.es_client.style_system
+        tm = self.es_client.theme_manager
+
+        primary_style = ss.get_semantic_style("primary")
+        success_style = ss.get_semantic_style("success")
+        muted_style = ss._get_style('semantic', 'muted', 'dim')
+        border_style = ss._get_style('table_styles', 'border_style', 'white')
+        header_style = tm.get_theme_styles().get('header_style', 'bold white') if tm else 'bold white'
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        box_style = ss.get_table_box()
+
+        header_panel = Panel(
+            Text("Run ./escmd.py template-backup <name> [options]", style="bold white"),
+            title=f"[{title_style}]💾 Backup Template[/{title_style}]",
+            subtitle=Text.from_markup("[dim]Use[/dim] [cyan]--help[/cyan] [dim]for full options[/dim]"),
+            border_style=border_style,
+            padding=(1, 2),
+            expand=True,
+        )
+
+        table = Table(
+            show_header=True,
+            header_style=header_style,
+            border_style=border_style,
+            box=box_style,
+            show_lines=False,
+            expand=True,
+        )
+        table.add_column("Usage / Option", style=primary_style, ratio=2)
+        table.add_column("Description", style="white", ratio=3)
+        table.add_column("Example", style=success_style, ratio=3)
+
+        rows = [
+            ("template-backup <name>", "Backup a template (auto-detect type)", "template-backup my-template"),
+            ("--type <type>", "Specify template type", "template-backup my-tpl --type legacy"),
+            ("--backup-dir <path>", "Custom backup directory", "template-backup my-tpl --backup-dir /tmp"),
+            ("--cluster <name>", "Cluster name for metadata", "template-backup my-tpl --cluster prod"),
+        ]
+        for i, (cmd, desc, ex) in enumerate(rows):
+            table.add_row(cmd, desc, f"./escmd.py {ex}", style=ss.get_zebra_style(i) if ss else None)
+
+        table.add_row(
+            Text("── Related ──", style=muted_style),
+            Text("", style=muted_style),
+            Text("", style=muted_style),
+        )
+
+        related = [
+            ("template-restore", "Restore a template from backup", "template-restore --backup-file backup.json"),
+            ("list-backups", "List available backup files", "list-backups"),
+        ]
+        for i, (opt, desc, ex) in enumerate(related):
+            table.add_row(
+                Text(opt, style=ss._get_style('semantic', 'secondary', 'magenta')),
+                desc,
+                Text(f"./escmd.py {ex}", style=muted_style),
+                style=ss.get_zebra_style(i) if ss else None,
+            )
+
+        console.print()
+        console.print(header_panel)
+        console.print()
+        console.print(table)
+        console.print()
+
     def handle_template_restore(self):
         """Handle template restore command."""
         backup_file = getattr(self.args, 'backup_file', None)
 
         if not backup_file:
-            self.console.print("[red]Error: Backup file path is required[/red]")
+            self._show_template_restore_help()
             return
 
         try:
@@ -154,6 +389,59 @@ class TemplateHandler(BaseHandler):
 
         except Exception as e:
             self.console.print(f"[red]Template restore failed: {str(e)}[/red]")
+
+    def _show_template_restore_help(self):
+        """Display help screen for template-restore command."""
+        from rich.panel import Panel
+        from rich.table import Table
+        from rich.text import Text
+
+        console = self.console
+        ss = self.es_client.style_system
+        tm = self.es_client.theme_manager
+
+        primary_style = ss.get_semantic_style("primary")
+        success_style = ss.get_semantic_style("success")
+        muted_style = ss._get_style('semantic', 'muted', 'dim')
+        border_style = ss._get_style('table_styles', 'border_style', 'white')
+        header_style = tm.get_theme_styles().get('header_style', 'bold white') if tm else 'bold white'
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        box_style = ss.get_table_box()
+
+        header_panel = Panel(
+            Text("Run ./escmd.py template-restore --backup-file <path>", style="bold white"),
+            title=f"[{title_style}]🔄 Restore Template[/{title_style}]",
+            subtitle=Text.from_markup("[dim]Use[/dim] [cyan]--help[/cyan] [dim]for full options[/dim]"),
+            border_style=border_style,
+            padding=(1, 2),
+            expand=True,
+        )
+
+        table = Table(
+            show_header=True,
+            header_style=header_style,
+            border_style=border_style,
+            box=box_style,
+            show_lines=False,
+            expand=True,
+        )
+        table.add_column("Option", style=primary_style, ratio=2)
+        table.add_column("Description", style="white", ratio=3)
+        table.add_column("Example", style=success_style, ratio=3)
+
+        rows = [
+            ("--backup-file <path>", "Path to backup JSON file", "template-restore --backup-file backup.json"),
+            ("list-backups", "List available backup files", "list-backups"),
+            ("list-backups --name <n>", "Filter backups by template name", "list-backups --name my-template"),
+        ]
+        for i, (cmd, desc, ex) in enumerate(rows):
+            table.add_row(cmd, desc, f"./escmd.py {ex}", style=ss.get_zebra_style(i) if ss else None)
+
+        console.print()
+        console.print(header_panel)
+        console.print()
+        console.print(table)
+        console.print()
 
     def handle_list_backups(self):
         """Handle list backups command."""
@@ -255,23 +543,80 @@ class TemplateHandler(BaseHandler):
 
     def _print_backups_table(self, backups):
         """Print formatted table of backups."""
+        from rich.panel import Panel
+        from rich.text import Text
+        from rich.table import Table as InnerTable
+
+        ss = getattr(self.es_client, 'style_system', None)
+        tm = getattr(self.es_client, 'theme_manager', None)
+        border = tm.get_theme_styles().get('border_style', 'cyan') if tm else 'cyan'
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        warning_style = ss._get_style('semantic', 'warning', 'yellow') if ss else 'yellow'
+        muted_style = ss._get_style('semantic', 'muted', 'dim') if ss else 'dim'
+        primary_style = ss._get_style('semantic', 'primary', 'cyan') if ss else 'cyan'
+
         if not backups:
-            self.console.print("[yellow]No backups found[/yellow]")
+            from rich.align import Align
+            msg_table = InnerTable(show_header=False, box=None, padding=(0, 1))
+            msg_table.add_column("Icon", justify="center", width=3)
+            msg_table.add_column("Text")
+            msg_table.add_row("📭", Text("No backups found", style=warning_style))
+            msg_table.add_row("", Text(""))
+            msg_table.add_row("💡", Text("Create a backup with: ./escmd.py template-backup <name>", style=muted_style))
+            self.console.print()
+            self.console.print(Panel(
+                msg_table,
+                title=f"[{title_style}]Template Backups[/{title_style}]",
+                border_style=warning_style,
+                padding=(1, 2)
+            ))
+            self.console.print()
             return
 
-        table = Table(title="Template Backups")
-        table.add_column("Template Name", style="cyan")
-        table.add_column("Type", style="magenta")
-        table.add_column("Cluster", style="blue")
-        table.add_column("Backup Date", style="green")
-        table.add_column("File Size", style="yellow")
-        table.add_column("File Name", style="white")
+        # Build colorized subtitle
+        from rich.text import Text as SubText
+        total = len(backups)
+        subtitle_rich = SubText()
+        subtitle_rich.append("Total: ", style="default")
+        subtitle_rich.append(str(total), style=primary_style)
+        types = {}
+        for b in backups:
+            t = b.get('template_type', 'unknown')
+            types[t] = types.get(t, 0) + 1
+        for t, count in sorted(types.items()):
+            subtitle_rich.append(f" | {t.title()}: ", style="default")
+            subtitle_rich.append(str(count), style=primary_style)
+
+        header_panel = Panel(
+            SubText(""),
+            title=f"[{title_style}]Template Backups[/{title_style}]",
+            subtitle=subtitle_rich,
+            border_style=border,
+            padding=(0, 2)
+        )
+
+        full_theme = tm.get_full_theme_data() if tm else {}
+        table_styles = full_theme.get('table_styles', {})
+        header_style = table_styles.get('header_style', 'bold white')
+
+        table = Table(
+            show_header=True,
+            header_style=header_style,
+            border_style=border,
+            box=ss.get_table_box() if ss else None,
+            expand=True
+        )
+        table.add_column("Template Name", style=primary_style)
+        table.add_column("Type", style=ss._get_style('semantic', 'secondary', 'magenta') if ss else 'magenta')
+        table.add_column("Cluster", style=ss._get_style('semantic', 'info', 'blue') if ss else 'blue')
+        table.add_column("Backup Date", style=ss._get_style('semantic', 'success', 'green') if ss else 'green')
+        table.add_column("File Size", style=ss._get_style('semantic', 'warning', 'yellow') if ss else 'yellow', justify="right")
+        table.add_column("File Name", style=muted_style)
 
         for backup in backups:
             file_size = self._format_file_size(backup.get('file_size', 0))
             backup_date = backup.get('backup_timestamp', 'Unknown')
             if backup_date and backup_date != 'Unknown':
-                # Format the timestamp for display
                 try:
                     from datetime import datetime
                     dt = datetime.fromisoformat(backup_date.replace('Z', '+00:00'))
@@ -288,7 +633,11 @@ class TemplateHandler(BaseHandler):
                 backup.get('file_name', 'Unknown')
             )
 
+        self.console.print()
+        self.console.print(header_panel)
+        self.console.print()
         self.console.print(table)
+        self.console.print()
 
     def handle_template_create(self):
         """Handle template creation from JSON file or inline definition."""
@@ -310,7 +659,7 @@ class TemplateHandler(BaseHandler):
                     template_name, template_type, inline_definition, dry_run
                 )
             else:
-                self.console.print("[red]Error: Either --file or both --name and --definition must be provided[/red]")
+                self._show_template_create_help()
                 return
 
             # Display results
@@ -321,6 +670,77 @@ class TemplateHandler(BaseHandler):
 
         except Exception as e:
             self.console.print(f"[red]Template creation failed: {str(e)}[/red]")
+
+    def _show_template_create_help(self):
+        """Display help screen for template-create command."""
+        from rich.panel import Panel
+        from rich.table import Table
+        from rich.text import Text
+
+        console = self.console
+        ss = self.es_client.style_system
+        tm = self.es_client.theme_manager
+
+        primary_style = ss.get_semantic_style("primary")
+        success_style = ss.get_semantic_style("success")
+        muted_style = ss._get_style('semantic', 'muted', 'dim')
+        border_style = ss._get_style('table_styles', 'border_style', 'white')
+        header_style = tm.get_theme_styles().get('header_style', 'bold white') if tm else 'bold white'
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        box_style = ss.get_table_box()
+
+        header_panel = Panel(
+            Text("Run ./escmd.py template-create --file <path> or --name <n> --definition <json>", style="bold white"),
+            title=f"[{title_style}]📝 Create Template[/{title_style}]",
+            subtitle=Text.from_markup("[dim]Use[/dim] [cyan]--help[/cyan] [dim]for full options[/dim]"),
+            border_style=border_style,
+            padding=(1, 2),
+            expand=True,
+        )
+
+        table = Table(
+            show_header=True,
+            header_style=header_style,
+            border_style=border_style,
+            box=box_style,
+            show_lines=False,
+            expand=True,
+        )
+        table.add_column("Option", style=primary_style, ratio=2)
+        table.add_column("Description", style="white", ratio=3)
+        table.add_column("Example", style=success_style, ratio=3)
+
+        rows = [
+            ("--file <path>", "Create template(s) from JSON file", "template-create --file my-template.json"),
+            ("--name <n> --definition <json>", "Create single template inline", "template-create --name my-tpl --definition '{...}'"),
+            ("--type <type>", "Template type (default: component)", "template-create --file t.json --type composable"),
+        ]
+        for i, (cmd, desc, ex) in enumerate(rows):
+            table.add_row(cmd, desc, f"./escmd.py {ex}", style=ss.get_zebra_style(i) if ss else None)
+
+        table.add_row(
+            Text("── Options ──", style=muted_style),
+            Text("", style=muted_style),
+            Text("", style=muted_style),
+        )
+
+        options = [
+            ("--dry-run", "Preview without creating", "template-create --file t.json --dry-run"),
+            ("--format json", "JSON output", "template-create --file t.json --format json"),
+        ]
+        for i, (opt, desc, ex) in enumerate(options):
+            table.add_row(
+                Text(opt, style=ss._get_style('semantic', 'secondary', 'magenta')),
+                desc,
+                Text(f"./escmd.py {ex}", style=muted_style),
+                style=ss.get_zebra_style(i) if ss else None,
+            )
+
+        console.print()
+        console.print(header_panel)
+        console.print()
+        console.print(table)
+        console.print()
 
     def _print_template_creation_result(self, result, dry_run=False):
         """Print formatted template creation results."""

@@ -1,199 +1,174 @@
 """
 Help system module for escmd.
-Provides beautiful Rich-formatted help display with theme support.
+Provides a full-width zebra table with alternating category background blocks.
 """
 
-import sys
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.columns import Columns
+from rich.align import Align
 from rich.text import Text
 
 
+# Alternating dark background tints — every other category gets a subtle shade
+_CAT_BG = [
+    "",          # cat 0 — default terminal bg
+    "on grey7",  # cat 1 — very subtle dark
+    "",
+    "on grey7",
+    "",
+    "on grey7",
+    "",
+    "on grey7",
+    "",
+    "on grey7",
+]
+
+_COMMANDS = [
+    # (category, colour, command, description, example)
+    ("🏥 Cluster & Health",  "green",        "health",                  "Cluster health status",                          "./escmd.py health"),
+    ("🏥 Cluster & Health",  "green",        "health-detail",           "Full health dashboard",                          "./escmd.py health-detail"),
+    ("🏥 Cluster & Health",  "green",        "cluster-check",           "Comprehensive cluster checks",                   "./escmd.py cluster-check"),
+    ("🏥 Cluster & Health",  "green",        "ping",                    "Test connectivity",                              "./escmd.py ping"),
+    ("🏥 Cluster & Health",  "green",        "nodes",                   "List all nodes",                                 "./escmd.py nodes"),
+    ("🏥 Cluster & Health",  "green",        "masters",                 "Master-eligible nodes",                          "./escmd.py masters"),
+    ("🏥 Cluster & Health",  "green",        "current-master",          "Show active master node",                        "./escmd.py current-master"),
+    ("🏥 Cluster & Health",  "green",        "recovery",                "Monitor shard recovery jobs",                    "./escmd.py recovery"),
+
+    ("📑 Index Management",  "blue",         "indices",                 "List & manage indices",                          "./escmd.py indices"),
+    ("📑 Index Management",  "blue",         "indice",                  "Single index detail",                            "./escmd.py indice <name>"),
+    ("📑 Index Management",  "blue",         "create-index",            "Create a new index",                             "./escmd.py create-index <name>"),
+    ("📑 Index Management",  "blue",         "freeze / unfreeze",       "Freeze or unfreeze an index",                    "./escmd.py freeze <name>"),
+    ("📑 Index Management",  "blue",         "flush",                   "Flush index",                                    "./escmd.py flush <name>"),
+    ("📑 Index Management",  "blue",         "set-replicas",            "Set replica count",                              "./escmd.py set-replicas <name> 1"),
+    ("📑 Index Management",  "blue",         "dangling",                "List/manage dangling indices",                   "./escmd.py dangling"),
+    ("📑 Index Management",  "blue",         "indice-add-metadata",     "Add metadata to an index",                       "./escmd.py indice-add-metadata <name>"),
+
+    ("📋 Templates",         "cyan",         "templates",               "List all index templates",                       "./escmd.py templates"),
+    ("📋 Templates",         "cyan",         "template",                "Show template detail",                           "./escmd.py template <name>"),
+    ("📋 Templates",         "cyan",         "template-create",         "Create template from JSON",                      "./escmd.py template-create <file>"),
+    ("📋 Templates",         "cyan",         "template-modify",         "Modify a template field",                        "./escmd.py template-modify <name>"),
+    ("📋 Templates",         "cyan",         "template-backup",         "Backup a template",                              "./escmd.py template-backup <name>"),
+    ("📋 Templates",         "cyan",         "template-restore",        "Restore template from backup",                   "./escmd.py template-restore <name>"),
+    ("📋 Templates",         "cyan",         "template-usage",          "Analyse template usage across indices",          "./escmd.py template-usage"),
+    ("📋 Templates",         "cyan",         "list-backups",            "List available template backups",                "./escmd.py list-backups"),
+
+    ("💾 Storage & Shards",  "cyan",         "storage",                 "Disk usage per node",                            "./escmd.py storage"),
+    ("💾 Storage & Shards",  "cyan",         "shards",                  "Shard distribution",                             "./escmd.py shards"),
+    ("💾 Storage & Shards",  "cyan",         "shard-colocation",        "Primary/replica on same host",                   "./escmd.py shard-colocation"),
+    ("💾 Storage & Shards",  "cyan",         "allocation",              "Allocation settings & explain",                  "./escmd.py allocation explain <index>"),
+    ("💾 Storage & Shards",  "cyan",         "exclude / exclude-reset", "Exclude or reset index from host",               "./escmd.py exclude <index> <host>"),
+    ("💾 Storage & Shards",  "cyan",         "snapshots",               "Manage snapshots",                               "./escmd.py snapshots"),
+    ("💾 Storage & Shards",  "cyan",         "repositories",            "Snapshot repositories",                          "./escmd.py repositories"),
+
+    ("📊 Analytics",         "yellow",       "indices-analyze",         "Rollover series outlier analysis",               "./escmd.py indices-analyze"),
+    ("📊 Analytics",         "yellow",       "indices-s3-estimate",     "S3 monthly cost estimate",                       "./escmd.py indices-s3-estimate"),
+    ("📊 Analytics",         "yellow",       "indices-watch-collect",   "Sample index stats to JSON on interval",         "./escmd.py indices-watch-collect"),
+    ("📊 Analytics",         "yellow",       "indices-watch-report",    "Summarize collected watch samples",              "./escmd.py indices-watch-report"),
+    ("📊 Analytics",         "yellow",       "es-top",                  "Live auto-refreshing cluster dashboard",         "./escmd.py es-top"),
+
+    ("🔄 ILM & Lifecycle",   "yellow",       "ilm",                     "ILM policies & status",                          "./escmd.py ilm"),
+    ("🔄 ILM & Lifecycle",   "yellow",       "datastreams",             "Datastream list & detail",                       "./escmd.py datastreams"),
+    ("🔄 ILM & Lifecycle",   "yellow",       "rollover",                "Rollover a datastream",                          "./escmd.py rollover <name>"),
+    ("🔄 ILM & Lifecycle",   "yellow",       "auto-rollover",           "Rollover the biggest shard",                     "./escmd.py auto-rollover"),
+    ("🔄 ILM & Lifecycle",   "yellow",       "action",                  "Run action sequences",                           "./escmd.py action run <name>"),
+
+    ("🔩 Settings & Config", "white",        "cluster-settings",        "View/manage cluster settings",                   "./escmd.py cluster-settings"),
+    ("🔩 Settings & Config", "white",        "set",                     "Set a setting via dot notation",                 "./escmd.py set cluster.routing.allocation.enable all"),
+    ("🔩 Settings & Config", "white",        "show-settings",           "Show current tool config",                       "./escmd.py show-settings"),
+    ("🔩 Settings & Config", "white",        "locations",               "All configured clusters",                        "./escmd.py locations"),
+    ("🔩 Settings & Config", "white",        "get-default / set-default","Show or change default cluster",                "./escmd.py set-default sjc01"),
+    ("🔩 Settings & Config", "white",        "cluster-groups",          "Display cluster groups",                         "./escmd.py cluster-groups"),
+    ("🔩 Settings & Config", "white",        "set-username",            "Set default username",                           "./escmd.py set-username admin"),
+    ("🔩 Settings & Config", "white",        "set-theme / themes",      "Change or browse colour themes",                 "./escmd.py set-theme dark"),
+
+    ("🛠  Utilities",        "bright_black", "version",                 "Version & system info",                          "./escmd.py version"),
+    ("🛠  Utilities",        "bright_black", "help",                    "Detailed help for a command",                    "./escmd.py help <command>"),
+
+    ("🔐 Security",          "red",          "store-password",          "Store encrypted password",                       "./escmd.py store-password"),
+    ("🔐 Security",          "red",          "list-stored-passwords",   "List stored password environments",              "./escmd.py list-stored-passwords"),
+    ("🔐 Security",          "red",          "remove-stored-password",  "Remove a stored password",                       "./escmd.py remove-stored-password <env>"),
+    ("🔐 Security",          "red",          "generate-master-key",     "Generate a new master key",                      "./escmd.py generate-master-key"),
+    ("🔐 Security",          "red",          "rotate-master-key",       "Rotate master key & re-encrypt",                 "./escmd.py rotate-master-key"),
+    ("🔐 Security",          "red",          "migrate-to-env-key",      "Migrate to environment variable key",            "./escmd.py migrate-to-env-key"),
+    ("🔐 Security",          "red",          "clear-session",           "Clear session cache",                            "./escmd.py clear-session"),
+    ("🔐 Security",          "red",          "session-info",            "Show session cache info",                        "./escmd.py session-info"),
+    ("🔐 Security",          "red",          "set-session-timeout",     "Set session timeout (minutes)",                  "./escmd.py set-session-timeout 30"),
+]
+
+
 def show_custom_help(config_manager=None):
-    """Display the beautiful custom help interface with theme support."""
+    """Display full-width command reference table with alternating category blocks."""
     console = Console()
+    total = len(_COMMANDS)
 
-    # Get theme styles
-    theme_styles = {}
-    if config_manager:
-        try:
-            from esclient import get_theme_styles
-            theme_styles = get_theme_styles(config_manager)
-        except:
-            # Fallback to default if theme loading fails
-            theme_styles = {
-                'help_styles': {
-                    'title': 'bold cyan',
-                    'section_header': 'bold yellow',
-                    'command': 'bold yellow',
-                    'description': 'white',
-                    'example': 'cyan',
-                    'footer': 'dim white'
-                },
-                'border_style': 'white'
-            }
-    else:
-        # Default theme if no config manager
-        theme_styles = {
-            'help_styles': {
-                'title': 'bold cyan',
-                'section_header': 'bold yellow',
-                'command': 'bold yellow',
-                'description': 'white',
-                'example': 'cyan',
-                'footer': 'dim white'
-            },
-            'border_style': 'white'
-        }
+    # ── header ────────────────────────────────────────────────────────────────
+    try:
+        from version import VERSION
+    except ImportError:
+        VERSION = "3.12.0"
 
-    help_styles = theme_styles.get('help_styles', {})
-    border_style = theme_styles.get('border_style', 'white')
+    header = Text(justify="center")
+    header.append("ESCMD ", style="bold white")
+    header.append(f"v{VERSION}", style="bold cyan")
+    header.append("  ·  Elasticsearch Command Reference", style="dim")
 
-    # Create title panel with theme
-    title_panel = Panel(
-        Text("🧰 Elasticsearch Command-Line Tool",
-             style=help_styles.get('title', 'bold cyan'),
-             justify="center"),
-        subtitle="Advanced cluster management and monitoring",
-        border_style=border_style,
-        padding=(1, 2)
+    console.print()
+    console.print(Panel(Align.center(header), border_style="dim", padding=(0, 2)))
+    console.print()
+
+    # ── build category index for background assignment ────────────────────────
+    cat_order = []
+    for cat, *_ in _COMMANDS:
+        if cat not in cat_order:
+            cat_order.append(cat)
+
+    # ── table ─────────────────────────────────────────────────────────────────
+    tbl = Table(
+        expand=True,
+        show_header=True,
+        header_style="bold white on grey23",
+        border_style="grey23",
+        show_lines=False,
+        pad_edge=True,
+        padding=(0, 1),
     )
+    tbl.add_column("Category",    no_wrap=True, min_width=22)
+    tbl.add_column("Command",     no_wrap=True, min_width=26)
+    tbl.add_column("Description")
+    tbl.add_column("Example",     no_wrap=True)
 
-    # Create command categories with theme colors
-    cluster_table = Table.grid(padding=(0, 3))
-    cluster_table.add_column(style=help_styles.get('command', 'bold yellow'), no_wrap=True)
-    cluster_table.add_column(style=help_styles.get('description', 'white'))
-    cluster_table.add_row("🎯 get-default", "Show current default cluster configuration")
-    cluster_table.add_row("🔍 health", "Cluster health monitoring (dashboard/classic/comparison/groups)")
-    cluster_table.add_row("📍 locations", "List all configured clusters")
-    cluster_table.add_row("🏓 ping", "Test connectivity with cluster details and health overview")
-    cluster_table.add_row("📌 set-default", "Set default cluster for commands")
-    cluster_table.add_row("🔩 cluster-settings", "View and manage cluster settings")
-    cluster_table.add_row("🔧 show-settings", "Show current configuration settings")
-    cluster_table.add_row("🎨 themes", "Display available color themes with previews")
+    prev_cat = None
+    for cat, colour, cmd, desc, example in _COMMANDS:
+        cat_idx = cat_order.index(cat)
+        bg = _CAT_BG[cat_idx % len(_CAT_BG)]
 
-    node_table = Table.grid(padding=(0, 3))
-    node_table.add_column(style=help_styles.get('command', 'bold green'), no_wrap=True)
-    node_table.add_column(style=help_styles.get('description', 'white'))
-    node_table.add_row("🎯 current-master", "Show current master node")
-    node_table.add_row("👑 masters", "List master-eligible nodes")
-    node_table.add_row("💻 nodes", "List all cluster nodes")
+        cat_cell = Text(cat,     style=f"bold {colour} {bg}") if cat != prev_cat else Text("", style=bg)
+        cmd_cell = Text(cmd,     style=f"bold {colour} {bg}")
+        dsc_cell = Text(desc,    style=f"white {bg}")
+        ex_cell  = Text(example, style=f"dim cyan {bg}")
 
-    index_table = Table.grid(padding=(0, 3))
-    index_table.add_column(style=help_styles.get('command', 'bold blue'), no_wrap=True)
-    index_table.add_column(style=help_styles.get('description', 'white'))
-    index_table.add_row("❌ dangling", "Manage dangling indices")
-    index_table.add_row("📂 datastreams", "Manage datastreams")
-    index_table.add_row("💧 flush", "Flush indices")
-    index_table.add_row("🧊 freeze", "Freeze indices")
-    index_table.add_row("📄 indice", "Show single index details")
-    index_table.add_row("📊 indices", "List and manage indices")
-    index_table.add_row("📈 indices-analyze", "Rollover-series doc/size outliers vs peers")
-    index_table.add_row("💰 indices-s3-estimate", "Rough S3 $/mo from primary sizes in a date window")
-    index_table.add_row("📡 indices-watch-collect", "Sample _cat stats on an interval → JSON")
-    index_table.add_row("📉 indices-watch-report", "Summarize samples (no ES); docs/s & HOT")
-    index_table.add_row("🔗 shard-colocation", "Find primary/replica shards on same host")
-    index_table.add_row("🔄 shards", "View shard distribution")
-    index_table.add_row("📋 template", "Show detailed template information")
-    index_table.add_row("📝 templates", "List all index templates")
-    index_table.add_row("🔥 unfreeze", "Unfreeze indices")
+        tbl.add_row(cat_cell, cmd_cell, dsc_cell, ex_cell)
+        prev_cat = cat
 
-    ops_table = Table.grid(padding=(0, 3))
-    ops_table.add_column(style=help_styles.get('command', 'bold magenta'), no_wrap=True)
-    ops_table.add_column(style=help_styles.get('description', 'white'))
-    ops_table.add_row("🔀 allocation", "Manage shard allocation and explain allocation decisions")
-    ops_table.add_row("🏥 cluster-check", "Comprehensive cluster health checks (ILM errors, replicas, shard sizes)")
-    ops_table.add_row("📊 es-top", "Live auto-refreshing cluster dashboard (nodes, indices, health)")
-    ops_table.add_row("📆 ilm", "Index Lifecycle Management")
-    ops_table.add_row("🔄 recovery", "Monitor recovery operations")
-    ops_table.add_row("📦 repositories", "List snapshot repositories")
-    ops_table.add_row("🔄 rollover", "Rollover operations")
-    ops_table.add_row("🔢 set-replicas", "Set replica count for indices")
-    ops_table.add_row("📸 snapshots", "Manage snapshots")
-    ops_table.add_row("💾 storage", "View disk usage")
-    ops_table.add_row("📊 version", "Show version information")
+    console.print(Panel(
+        tbl,
+        title=f"[bold white]📖 All Commands[/bold white]  [dim]({total} total)[/dim]",
+        border_style="dim",
+        padding=(0, 0),
+    ))
+    console.print()
 
-    # Create panels for each category with theme colors
-    cluster_panel = Panel(cluster_table,
-                         title=f"[{help_styles.get('section_header', 'bold yellow')}]🏢 Cluster & Config[/{help_styles.get('section_header', 'bold yellow')}]",
-                         border_style=border_style, padding=(1, 1))
-    node_panel = Panel(node_table,
-                      title=f"[{help_styles.get('section_header', 'bold green')}]💻 Nodes & Masters[/{help_styles.get('section_header', 'bold green')}]",
-                      border_style=border_style, padding=(1, 1))
-    index_panel = Panel(index_table,
-                       title=f"[{help_styles.get('section_header', 'bold blue')}]📊 Indices & Data[/{help_styles.get('section_header', 'bold blue')}]",
-                       border_style=border_style, padding=(1, 1))
-    ops_panel = Panel(ops_table,
-                     title=f"[{help_styles.get('section_header', 'bold magenta')}]⚡ Operations[/{help_styles.get('section_header', 'bold magenta')}]",
-                     border_style=border_style, padding=(1, 1))
+    # ── footer ────────────────────────────────────────────────────────────────
+    footer = Text(justify="center")
+    footer.append("-l <cluster>", style="bold yellow")
+    footer.append("  target a specific cluster  ·  ", style="dim")
+    footer.append("--format json", style="bold yellow")
+    footer.append("  machine-readable output  ·  ", style="dim")
+    footer.append("--pager", style="bold yellow")
+    footer.append("  page long output  ·  ", style="dim")
+    footer.append("./escmd.py help <cmd>", style="bold yellow")
+    footer.append("  detailed per-command help", style="dim")
 
-    # Usage examples with theme colors
-    usage_content = Text()
-    usage_content.append("Quick Health Check:        ", style=help_styles.get('description', 'bold white'))
-    usage_content.append("./escmd.py health\n", style=help_styles.get('example', 'cyan'))
-    usage_content.append("Detailed Health Dashboard: ", style=help_styles.get('description', 'bold white'))
-    usage_content.append("./escmd.py health-detail\n", style=help_styles.get('example', 'cyan'))
-    usage_content.append("Compare Clusters:          ", style=help_styles.get('description', 'bold white'))
-    usage_content.append("./escmd.py health-detail --compare iad41\n", style=help_styles.get('example', 'cyan'))
-    usage_content.append("Group Health:              ", style=help_styles.get('description', 'bold white'))
-    usage_content.append("./escmd.py health-detail --group att\n", style=help_styles.get('example', 'cyan'))
-    usage_content.append("Allocation Explain:        ", style=help_styles.get('description', 'bold white'))
-    usage_content.append("./escmd.py allocation explain my-index\n", style=help_styles.get('example', 'cyan'))
-    usage_content.append("Cluster with Location:     ", style=help_styles.get('description', 'bold white'))
-    usage_content.append("./escmd.py -l sjc01 health\n", style=help_styles.get('example', 'cyan'))
-    usage_content.append("JSON Output:               ", style=help_styles.get('description', 'bold white'))
-    usage_content.append("./escmd.py indices --format json\n", style=help_styles.get('example', 'cyan'))
-    usage_content.append("Topic help (indices):      ", style=help_styles.get('description', 'bold white'))
-    usage_content.append("./escmd.py help indices\n", style=help_styles.get('example', 'cyan'))
-    usage_content.append("Topic help (analyze):      ", style=help_styles.get('description', 'bold white'))
-    usage_content.append("./escmd.py help indices-analyze\n", style=help_styles.get('example', 'cyan'))
-    usage_content.append("Topic help (S3 estimate):  ", style=help_styles.get('description', 'bold white'))
-    usage_content.append("./escmd.py help indices-s3-estimate\n", style=help_styles.get('example', 'cyan'))
-    usage_content.append("Topic help (watch collect): ", style=help_styles.get('description', 'bold white'))
-    usage_content.append("./escmd.py help indices-watch-collect\n", style=help_styles.get('example', 'cyan'))
-    usage_content.append("Topic help (watch report): ", style=help_styles.get('description', 'bold white'))
-    usage_content.append("./escmd.py help indices-watch-report\n", style=help_styles.get('example', 'cyan'))
-    usage_content.append("Topic help (es-top):       ", style=help_styles.get('description', 'bold white'))
-    usage_content.append("./escmd.py help es-top\n", style=help_styles.get('example', 'cyan'))
-
-    usage_panel = Panel(usage_content,
-                       title=f"[{help_styles.get('section_header', 'bold cyan')}]🚀 Quick Start Examples[/{help_styles.get('section_header', 'bold cyan')}]",
-                       border_style=border_style, padding=(1, 2))
-
-    # Create layout
-    print()
-    console.print(title_panel)
-    print()
-
-    # Create a grid for perfect alignment
-    grid_table = Table.grid()
-    grid_table.add_column(style="", ratio=1)  # Column 1 - 50% width
-    grid_table.add_column(style="", ratio=1)  # Column 2 - 50% width
-
-    # Add rows with panels
-    grid_table.add_row(cluster_panel, node_panel)   # Row 1
-    grid_table.add_row(index_panel, ops_panel)      # Row 2
-
-    # Display the perfect grid
-    console.print(grid_table)
-    print()
-    console.print(usage_panel)
-    print()
-
-    # Footer with global options using theme colors
-    footer_text = Text("Global Options: ", style=help_styles.get('description', 'bold white'))
-    footer_text.append("-l <cluster>", style=help_styles.get('command', 'bold yellow'))
-    footer_text.append(" (specify cluster)  ", style=help_styles.get('description', 'white'))
-    footer_text.append("--help", style=help_styles.get('command', 'bold yellow'))
-    footer_text.append(" (this screen)  ", style=help_styles.get('description', 'white'))
-    footer_text.append("help <topic>", style=help_styles.get('command', 'bold yellow'))
-    footer_text.append(
-        " (e.g. ./escmd.py help indices-analyze)",
-        style=help_styles.get('description', 'white'),
-    )
-
-    footer_panel = Panel(footer_text, border_style=help_styles.get('footer', border_style))
-    console.print(footer_panel)
-    print()
+    console.print(Panel(Align.center(footer), border_style="dim", padding=(0, 1)))
+    console.print()

@@ -2,9 +2,6 @@
 Help content for indices-watch-report.
 """
 
-from rich.panel import Panel
-from rich.table import Table
-
 from .base_help_content import BaseHelpContent
 
 
@@ -18,90 +15,39 @@ class IndicesWatchReportHelpContent(BaseHelpContent):
         return "Summarize watch JSON samples (docs/s, HOT) without Elasticsearch"
 
     def show_help(self) -> None:
-        help_styles, border_style = self._get_theme_styles()
+        commands_table = self._create_commands_table()
+        examples_table = self._create_examples_table()
+        usage_table    = self._create_usage_table()
 
-        overview = Table.grid(padding=(0, 2))
-        overview.add_column(style=help_styles.get("description", "white"))
-        overview.add_row(
-            "Reads JSON snapshots produced by indices-watch-collect, compares the first and "
-            "last sample for Δ docs and full-window span docs/s, and (with ≥3 samples, "
-            "default --rate-stats auto) summarizes per-interval docs/s as median, p90, and max "
-            "between adjacent snapshots. Shows last-sample doc count vs leave-one-out median "
-            "sibling doc count (docs/med, like indices-analyze) plus ingest rate vs peers "
-            "(rate/med; still based on span docs/s). ⚠ marks indices whose doc count is ≥ "
-            "--docs-peer-ratio times the peer median (default 5). No Elasticsearch connection."
-        )
+        # Flags as the commands table (flag | description | example)
+        commands_table.add_row("--dir PATH",                    "Explicit sample directory",                                          "")
+        commands_table.add_row("--cluster NAME",                "Slug for default path if -l is not used",                           "")
+        commands_table.add_row("--date YYYY-MM-DD",             "UTC date folder (default: today UTC)",                              "")
+        commands_table.add_row("--format json|table",           "Machine or human output",                                           "")
+        commands_table.add_row("--min-docs-delta N",            "Minimum doc increase (Δ docs = 0 always hidden)",                   "")
+        commands_table.add_row("--hot-ratio R",                 "HOT when docs/s ≥ R × peer median (default: 2)",                   "")
+        commands_table.add_row("--min-peers N",                 "Minimum siblings for rate/med, docs/med, HOT/⚠ (default: 1)",      "")
+        commands_table.add_row("--docs-peer-ratio R",           "⚠ when doc count ≥ R × median peer docs; 0 disables (default: 5)", "")
+        commands_table.add_row("--top N",                       "Limit to top N rows by sort key",                                   "")
+        commands_table.add_row("--rate-stats auto|span|intervals",
+                               "auto: interval med/p90/max when ≥3 samples (default); span: full-window only",                      "")
 
-        flags = Table.grid(padding=(0, 3))
-        flags.add_column(style=help_styles.get("command", "bold cyan"), min_width=26)
-        flags.add_column(style=help_styles.get("description", "white"))
-        flags.add_row("--dir PATH", "Explicit sample directory")
-        flags.add_row("--cluster NAME", "Slug for default path if -l is not used")
-        flags.add_row("--date YYYY-MM-DD", "UTC date folder (default: today UTC)")
-        flags.add_row("--format json|table", "Machine or human output")
-        flags.add_row("--min-docs-delta N", "Minimum doc increase (Δ docs = 0 always hidden)")
-        flags.add_row("--hot-ratio R", "HOT when docs/s ≥ R × peer median (default: 2)")
-        flags.add_row("--min-peers N", "Minimum siblings for rate/med, docs/med, HOT/⚠ (default: 1)")
-        flags.add_row(
-            "--docs-peer-ratio R",
-            "⚠ when doc count ≥ R × median peer docs (last sample); 0 disables ⚠ (default: 5)",
-        )
-        flags.add_row(
-            "--top N",
-            "Limit to top N rows by sort key (median interval docs/s or span docs/s)",
-        )
-        flags.add_row(
-            "--rate-stats auto|span|intervals",
-            "auto: interval med/p90/max when ≥3 samples (default); span: full-window only; "
-            "intervals: always interval distribution (+ span column in table)",
-        )
+        # Workflow scenarios
+        usage_table.add_row("📋 Overview:", "Reads JSON snapshots from indices-watch-collect")
+        usage_table.add_row("   What it does:",  "Compares first/last sample for Δ docs and span docs/s")
+        usage_table.add_row("   Rate stats:",    "With ≥3 samples: median, p90, max between adjacent snapshots")
+        usage_table.add_row("   Peer compare:",  "docs/med and rate/med vs leave-one-out sibling median")
+        usage_table.add_row("   ⚠ flag:",        "Marks indices whose doc count ≥ --docs-peer-ratio × peer median")
+        usage_table.add_row("   No ES needed:",  "Runs entirely offline from collected JSON files")
+        usage_table.add_row("", "")
+        usage_table.add_row("🚀 Quick Start:", "Typical usage workflow")
+        usage_table.add_row("   Step 1 — collect:", "./escmd.py -l iad41-c03 indices-watch-collect")
+        usage_table.add_row("   Step 2 — report:",  "./escmd.py -l iad41-c03 indices-watch-report")
+        usage_table.add_row("   Offline:",           "./escmd.py indices-watch-report --cluster iad41-c03 --date 2026-03-29")
+        usage_table.add_row("   Custom dir:",        "./escmd.py indices-watch-report --dir /path/to/samples --format json")
 
-        examples = Table.grid(padding=(0, 3))
-        examples.add_column(style=help_styles.get("example", "green"), min_width=46)
-        examples.add_column(style=help_styles.get("description", "dim white"))
-        examples.add_row(
-            "./escmd.py -l iad41-c03 indices-watch-report",
-            "Today’s UTC folder for that location’s default path",
+        self._display_help_panels(
+            commands_table, examples_table,
+            "📊 indices-watch-report  Flags", "Examples",
+            usage_table, "Workflows",
         )
-        examples.add_row(
-            "./escmd.py indices-watch-report --cluster iad41-c03 --date 2026-03-29",
-            "No -l: use slug + date (offline-friendly)",
-        )
-        examples.add_row(
-            "./escmd.py indices-watch-report --dir /path/to/samples --format json",
-            "Arbitrary directory, JSON for scripts",
-        )
-        examples.add_row(
-            "./escmd.py help indices-watch-collect",
-            "How to record samples first",
-        )
-
-        self.console.print()
-        self.console.print(
-            Panel(
-                overview,
-                title=f"[{help_styles.get('header', 'bold magenta')}]indices-watch-report[/{help_styles.get('header', 'bold magenta')}]",
-                subtitle="No ES connection; pair with indices-watch-collect",
-                border_style=border_style,
-                padding=(1, 2),
-            )
-        )
-        self.console.print()
-        self.console.print(
-            Panel(
-                flags,
-                title=f"[{help_styles.get('subheader', 'bold blue')}]Flags[/{help_styles.get('subheader', 'bold blue')}]",
-                border_style=border_style,
-                padding=(1, 2),
-            )
-        )
-        self.console.print()
-        self.console.print(
-            Panel(
-                examples,
-                title=f"[{help_styles.get('subheader', 'bold blue')}]Examples[/{help_styles.get('subheader', 'bold blue')}]",
-                border_style=border_style,
-                padding=(1, 2),
-            )
-        )
-        self.console.print()

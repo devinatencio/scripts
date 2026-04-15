@@ -53,187 +53,115 @@ class SettingsCommands(BaseCommand):
     def print_enhanced_cluster_settings(self):
         """
         Print enhanced cluster settings display with dot notation table format.
-
-        This method provides a formatted table display of cluster settings
-        in dot notation format for better readability.
         """
         try:
             settings = self.get_cluster_settings()
 
             from rich.table import Table
             from rich.panel import Panel
-            from rich.console import Console
+            from rich.console import Console, Group
             from rich.text import Text
 
             console = Console()
+            ss = self.es_client.style_system
+            tm = self.es_client.theme_manager
+            ts = ss._get_style('semantic', 'primary', 'bold cyan') if ss else 'bold cyan'
+            border = ss._get_style('table_styles', 'border_style', 'cyan') if ss else 'cyan'
+            _title = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
 
-            # Check if settings contain data
-            if not settings or ('persistent' not in settings and 'transient' not in settings):
-                # Show default message when no custom settings are configured
-                no_settings_text = Text()
-                no_settings_text.append("No custom cluster settings are currently configured.\n\n", style="dim italic")
-                no_settings_text.append("All cluster settings are using their default values.\n", style="dim")
-                no_settings_text.append("Use ", style="dim")
-                no_settings_text.append("set transient|persistent <setting> <value>", style="bold cyan")
-                no_settings_text.append(" to configure cluster settings.", style="dim")
+            persistent = settings.get('persistent') or {}
+            transient = settings.get('transient') or {}
 
-                no_settings_panel = Panel(
-                    no_settings_text,
-                    title="🔧 Cluster Settings",
-                    border_style="yellow",
-                    padding=(1, 2)
-                )
-                console.print(no_settings_panel)
+            # Count settings
+            flat_persistent = self._flatten_settings_to_dot_notation(persistent) if persistent else {}
+            flat_transient = self._flatten_settings_to_dot_notation(transient) if transient else {}
+            total_settings = len(flat_persistent) + len(flat_transient)
+
+            # --- Title panel ---
+            subtitle_rich = Text()
+            subtitle_rich.append("Persistent: ", style="default")
+            subtitle_rich.append(str(len(flat_persistent)), style=ss._get_style('semantic', 'success', 'green') if ss else "green")
+            subtitle_rich.append(" | Transient: ", style="default")
+            subtitle_rich.append(str(len(flat_transient)), style=ss._get_style('semantic', 'info', 'blue') if ss else "blue")
+
+            if total_settings == 0:
+                status_text = "✅ All Settings at Default Values"
+                body_style = "bold green"
+            else:
+                status_text = f"🔧 {total_settings} Custom Setting{'s' if total_settings != 1 else ''} Configured"
+                body_style = "bold white"
+
+            title_panel = Panel(
+                Text(status_text, style=body_style, justify="center"),
+                title=f"[{ts}]🔧 Cluster Settings[/{ts}]",
+                subtitle=subtitle_rich,
+                border_style=border,
+                padding=(1, 2)
+            )
+
+            print()
+            console.print(title_panel)
+            print()
+
+            if total_settings == 0:
                 return
 
-            # Build content for the main configuration panel
-            panel_content = Text()
-            panel_content.append("🔧 ", style="bold cyan")
-            panel_content.append("Cluster Settings Overview", style="bold white")
-            panel_content.append("\n\nDisplaying custom cluster settings in dot notation format.\n\n", style="dim")
+            # --- Settings tables ---
+            full_theme = tm.get_full_theme_data() if tm else {}
+            table_styles = full_theme.get('table_styles', {})
+            header_style = table_styles.get('header_style', 'bold white')
+            tbl_border = table_styles.get('border_style', 'bright_magenta')
+            box_style = ss.get_table_box() if ss else None
 
-            # Create tables for persistent and transient settings
-            has_settings = False
+            for settings_type, flat_settings, icon, type_style in [
+                ('persistent', flat_persistent, '📌', 'green'),
+                ('transient', flat_transient, '⚡', 'blue'),
+            ]:
+                if not flat_settings:
+                    continue
 
-            for settings_type in ['persistent', 'transient']:
-                if settings_type in settings and settings[settings_type]:
-                    # Flatten the nested settings to dot notation
-                    flat_settings = self._flatten_settings_to_dot_notation(settings[settings_type])
+                table = Table(
+                    show_header=True,
+                    header_style=header_style,
+                    border_style=tbl_border,
+                    box=box_style,
+                    expand=True,
+                )
+                table.add_column("Setting", style=ss.get_semantic_style("primary") if ss else "bold", no_wrap=False)
+                table.add_column("Value", style="white", no_wrap=False)
 
-                    if flat_settings:
-                        has_settings = True
+                for i, (key, value) in enumerate(sorted(flat_settings.items())):
+                    if value is None:
+                        display_value = Text("null", style="dim italic")
+                    elif isinstance(value, bool):
+                        display_value = Text(str(value).lower(), style="green")
+                    elif isinstance(value, (int, float)):
+                        display_value = Text(str(value), style="cyan")
+                    else:
+                        display_value = Text(str(value))
 
-                        # Add section header
-                        title_style = "green" if settings_type == "persistent" else "blue"
-                        icon = "📌" if settings_type == "persistent" else "⚡"
+                    table.add_row(key, display_value, style=ss.get_zebra_style(i) if ss else None)
 
-                        panel_content.append(f"{icon} ", style=f"bold {title_style}")
-                        panel_content.append(f"{settings_type.capitalize()} Settings", style=f"bold {title_style}")
-                        panel_content.append("\n")
-
-                        # Create table for this settings type
-                        table = Table(show_header=True, header_style="bold cyan", expand=True, box=None)
-                        table.add_column("Setting", style="yellow", no_wrap=False)
-                        table.add_column("Value", style="white", no_wrap=False)
-
-                        # Add rows to table
-                        for setting_key, setting_value in sorted(flat_settings.items()):
-                            # Format the value for display
-                            if setting_value is None:
-                                display_value = "[dim italic]null[/dim italic]"
-                            elif isinstance(setting_value, bool):
-                                display_value = f"[green]{str(setting_value).lower()}[/green]"
-                            elif isinstance(setting_value, (int, float)):
-                                display_value = f"[cyan]{setting_value}[/cyan]"
-                            else:
-                                display_value = str(setting_value)
-
-                            table.add_row(
-                                setting_key,
-                                display_value
-                            )
-
-                        # Add the table to panel content (we'll need to render it separately)
-                        console.print(table)
-                        panel_content.append("\n\n")
-
-            # Only show the panel if we have settings
-            if has_settings:
-                # Create the main configuration panel with embedded content
-                main_panel = Panel(
-                    panel_content,
-                    title="[bold cyan]🔧 Configuration Status[/bold cyan]",
-                    border_style="cyan",
+                settings_panel = Panel(
+                    table,
+                    title=f"[{_title}]{icon} {settings_type.capitalize()} Settings[/{_title}]",
+                    border_style=type_style,
                     padding=(1, 2)
                 )
-
-                # We need to restructure this to properly embed tables
-                # Let's use a different approach with Group to combine elements
-                from rich.console import Group
-
-                # Create header
-                header = Text()
-                header.append("Displaying custom cluster settings in dot notation format.", style="dim")
-
-                # Create all table elements
-                elements = [header]
-
-                for settings_type in ['persistent', 'transient']:
-                    if settings_type in settings and settings[settings_type]:
-                        flat_settings = self._flatten_settings_to_dot_notation(settings[settings_type])
-
-                        if flat_settings:
-                            # Add spacing
-                            elements.append(Text())
-
-                            # Add section title
-                            title_style = "green" if settings_type == "persistent" else "blue"
-                            icon = "📌" if settings_type == "persistent" else "⚡"
-                            section_title = Text()
-                            section_title.append(f"{icon} ", style=f"bold {title_style}")
-                            section_title.append(f"{settings_type.capitalize()} Settings", style=f"bold {title_style}")
-                            elements.append(section_title)
-
-                            # Create and add table
-                            table = Table(show_header=True, header_style="bold cyan", expand=True)
-                            table.add_column("Setting", style="yellow", no_wrap=False)
-                            table.add_column("Value", style="white", no_wrap=False)
-
-                            for setting_key, setting_value in sorted(flat_settings.items()):
-                                if setting_value is None:
-                                    display_value = "[dim italic]null[/dim italic]"
-                                elif isinstance(setting_value, bool):
-                                    display_value = f"[green]{str(setting_value).lower()}[/green]"
-                                elif isinstance(setting_value, (int, float)):
-                                    display_value = f"[cyan]{setting_value}[/cyan]"
-                                else:
-                                    display_value = str(setting_value)
-
-                                table.add_row(setting_key, display_value)
-
-                            elements.append(table)
-
-                # Create the main panel with all elements grouped
-                content_group = Group(*elements)
-                main_panel = Panel(
-                    content_group,
-                    title="[bold cyan]🔧 Configuration Status[/bold cyan]",
-                    border_style="cyan",
-                    padding=(1, 2)
-                )
-                console.print(main_panel)
-                console.print()
-
-                # Add footer with helpful information
-                footer_text = Text()
-                footer_text.append("💡 ", style="bold yellow")
-                footer_text.append("Tips:", style="bold yellow")
-                footer_text.append("\n• Persistent settings survive cluster restarts", style="dim")
-                footer_text.append("\n• Transient settings are reset on cluster restart", style="dim")
-                footer_text.append("\n• Use ", style="dim")
-                footer_text.append("cluster-settings --format json", style="bold cyan")
-                footer_text.append(" for full JSON output", style="dim")
-
-                footer_panel = Panel(
-                    footer_text,
-                    border_style="dim",
-                    padding=(1, 2)
-                )
-                console.print(footer_panel)
+                console.print(settings_panel)
+                print()
 
         except Exception as e:
+            from rich.console import Console
+            from rich.panel import Panel
+            from rich.text import Text
             console = Console()
-            error_text = Text()
-            error_text.append("❌ Error displaying cluster settings:\n", style="bold red")
-            error_text.append(str(e), style="red")
-
-            error_panel = Panel(
-                error_text,
+            console.print(Panel(
+                Text(f"❌ Error displaying cluster settings: {str(e)}", style="bold red", justify="center"),
                 title="[bold red]Error[/bold red]",
                 border_style="red",
                 padding=(1, 2)
-            )
-            console.print(error_panel)
+            ))
 
     def _flatten_settings_to_dot_notation(self, settings_dict, prefix=""):
         """

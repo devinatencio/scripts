@@ -13,6 +13,7 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.align import Align
 from rich.text import Text
+from rich.columns import Columns  # noqa: F401  kept for potential future use
 
 
 class VersionRenderer:
@@ -40,105 +41,131 @@ class VersionRenderer:
                 - tool_name: Tool name (defaults to ESTERM)
         """
         self.console.print()
+        self._render_banner(version_data)
         self._render_main_version_panel(version_data)
-        self.console.print()
-        # self._render_command_stats_panel()
-        # self.console.print()
-        # self._render_capabilities_panel()
-        # self.console.print()
-        self._render_performance_panel()
         self.console.print()
         self._render_footer()
 
-    def _render_main_version_panel(self, version_data):
-        """Render the main version information panel."""
-        version = version_data.get("version", "3.7.4")
-        date = version_data.get("date", "03/25/2026")
+    def _border(self, fallback: str = "cyan") -> str:
+        """Return the theme border style, falling back to the given value."""
+        if self.theme_manager:
+            return self.theme_manager.get_theme_styles().get("border_style", fallback)
+        return fallback
+
+    def _title_style(self, fallback: str = "bold white") -> str:
+        """Return the theme panel title style."""
+        if self.theme_manager:
+            return self.theme_manager.get_themed_style("panel_styles", "title", fallback)
+        return fallback
+
+    def _render_banner(self, version_data):
+        """Render gradient ASCII art banner."""
         tool_name = version_data.get("tool_name", "ESTERM")
-
-        # Main version header
-        version_header = Text()
-        version_header.append("⚡ ", style="bold yellow")
-        version_header.append(tool_name, style="bold cyan")
-        version_header.append(" v", style="dim")
-        version_header.append(version, style="bold white")
-
-        # Create main version info table with better styling
-        version_table = Table.grid(padding=(0, 4))
-        version_table.add_column(style="bold blue", no_wrap=True, min_width=15)
-        version_table.add_column(style="white", no_wrap=False)
-
-        version_table.add_row("🚀 Tool:", "Elasticsearch Terminal (ESTERM)")
-        version_table.add_row("📦 Version:", f"[bold green]{version}[/bold green]")
-        version_table.add_row("📅 Released:", f"[bold cyan]{date}[/bold cyan]")
-        version_table.add_row(
-            "🎯 Purpose:", "Advanced Elasticsearch CLI Management & Monitoring"
+        letters = [
+            " ███████╗███████╗████████╗███████╗██████╗ ███╗   ███╗",
+            " ██╔════╝██╔════╝╚══██╔══╝██╔════╝██╔══██╗████╗ ████║",
+            " █████╗  ███████╗   ██║   █████╗  ██████╔╝██╔████╔██║",
+            " ██╔══╝  ╚════██║   ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║",
+            " ███████╗███████║   ██║   ███████╗██║  ██║██║ ╚═╝ ██║",
+            " ╚══════╝╚══════╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝",
+        ]
+        colours = [
+            "bold cyan", "bold cyan",
+            "bold blue", "bold blue",
+            "bold magenta", "bold magenta",
+        ]
+        banner = Text()
+        for line, colour in zip(letters, colours):
+            banner.append(line + "\n", style=colour)
+        self.console.print(Align.center(banner))
+        self.console.print(
+            Align.center(
+                Text("⚡  Elasticsearch Commander Terminal  ⚡", style="bold white on dark_blue")
+            )
         )
-        version_table.add_row("👥 Team:", "Monitoring Team US")
-        version_table.add_row("🐍 Python:", f"{sys.version.split()[0]}")
-        version_table.add_row(
-            "💻 Platform:", f"{platform.system()} {platform.machine()}"
-        )
+        self.console.print()
 
-        # Create elegant main panel
-        main_panel = Panel(
-            Align.center(version_table),
-            title=version_header,
-            subtitle="[dim]Interactive Elasticsearch Command Line Interface[/dim]",
-            border_style="cyan",
-            padding=(2, 3),
-        )
+    def _render_main_version_panel(self, version_data):
+        """Render centered info + performance in a single merged table."""
+        version = version_data.get("version", "3.12.0")
+        date = version_data.get("date", "04/14/2026")
+        commit_hash = version_data.get("hash", "")
 
-        self.console.print(main_panel)
+        info = Table.grid(padding=(0, 2))
+        info.add_column(style="bold cyan", no_wrap=True, min_width=14)
+        info.add_column(style="white")
+
+        version_cell = Text()
+        version_cell.append(version, style="bold green")
+        if commit_hash:
+            version_cell.append(f"  ({commit_hash})", style="dim")
+        info.add_row("📦 Version",  version_cell)
+        info.add_row("📅 Released", f"[bold cyan]{date}[/bold cyan]")
+        info.add_row("🎯 Purpose",  "Advanced ES CLI Management & Monitoring")
+        info.add_row("👥 Team",     "Monitoring Team US")
+        info.add_row("🐍 Python",   f"[dim]{sys.version.split()[0]}[/dim]")
+        info.add_row("💻 Platform", f"[dim]{platform.system()} v{platform.mac_ver()[0]} {platform.machine()}[/dim]")
+
+        # Merge performance rows
+        info.add_row("", "")  # spacer
+
+        def _bar(percent: float, width: int = 20) -> Text:
+            filled = int(percent / 100 * width)
+            empty  = width - filled
+            colour = "bold green" if percent < 60 else ("bold yellow" if percent < 85 else "bold red")
+            bar = Text()
+            bar.append("█" * filled, style=colour)
+            bar.append("░" * empty,  style="dim")
+            bar.append(f"  {percent:.1f}%", style=colour)
+            return bar
+
+        try:
+            import psutil
+            cpu  = psutil.cpu_percent(interval=0.1)
+            mem  = psutil.virtual_memory()
+            disk = psutil.disk_usage("/")
+            info.add_row("💻 CPU",    _bar(cpu))
+            info.add_row("🧠 Memory", Text.assemble(_bar(mem.percent),  (" ", ""), (f"{mem.available // (1024**3)} GB free", "dim")))
+            info.add_row("💾 Disk",   Text.assemble(_bar(disk.percent), (" ", ""), (f"{disk.free // (1024**3)} GB free", "dim")))
+        except ImportError:
+            info.add_row("📊 Metrics", Text("Install psutil for live system metrics", style="dim"))
+        except Exception:
+            info.add_row("📊 Status", Text("System monitoring temporarily unavailable", style="dim"))
+
+        info.add_row("🕐 Time", Text(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), style="bold white"))
+
+        self.console.print(Align.center(info))
 
     def _render_command_stats_panel(self):
-        """Render command statistics panel."""
-        stats_table = self._generate_enhanced_command_stats_table()
-        stats_panel = Panel(
-            stats_table,
-            title="[bold green]📊 Command Arsenal[/bold green]",
-            border_style="green",
-            padding=(1, 2),
-        )
-        self.console.print(stats_panel)
+        """Render command statistics panel (unused, kept for compatibility)."""
+        pass
 
     def _render_capabilities_panel(self):
-        """Render core capabilities panel."""
-        capabilities_table = self._generate_enhanced_capabilities_table()
-        capabilities_panel = Panel(
-            capabilities_table,
-            title="[bold magenta]🧰 Core Capabilities[/bold magenta]",
-            border_style="magenta",
-            padding=(1, 2),
-        )
-        self.console.print(capabilities_panel)
+        """Render core capabilities panel (unused, kept for compatibility)."""
+        pass
 
     def _render_performance_panel(self):
-        """Render performance and system information panel."""
+        """Render performance and system information panel with progress bars."""
         perf_table = self._generate_performance_info_table()
         perf_panel = Panel(
             Align.center(perf_table),
-            title="[bold yellow]⚡ Performance & System[/bold yellow]",
-            border_style="yellow",
+            title="[bold white]⚡ Performance & System[/bold white]",
+            border_style=self._border("green"),
             padding=(1, 2),
         )
         self.console.print(perf_panel)
 
     def _render_footer(self):
         """Render helpful footer with quick start information."""
-        footer_text = Text()
+        footer_text = Text(justify="center")
         footer_text.append("💡 ", style="bold yellow")
-        footer_text.append("Quick Start: ", style="bold")
-        footer_text.append("Run ", style="dim")
+        footer_text.append("Quick Start: ", style="bold white")
         footer_text.append("./esterm", style="bold cyan")
-        footer_text.append(" for interactive mode or ", style="dim")
+        footer_text.append("  for interactive mode  │  ", style="dim")
         footer_text.append("./escmd.py help", style="bold cyan")
-        footer_text.append(" for command reference", style="dim")
+        footer_text.append("  for command reference", style="dim")
 
-        footer_panel = Panel(
-            Align.center(footer_text), border_style="dim", padding=(1, 2)
-        )
-        self.console.print(footer_panel)
+        self.console.print(Panel(Align.center(footer_text), border_style="dim", padding=(0, 2)))
 
     def _generate_enhanced_command_stats_table(self):
         """Generate enhanced command statistics table with better presentation."""
@@ -228,57 +255,63 @@ class VersionRenderer:
         return capabilities_table
 
     def _generate_performance_info_table(self):
-        """Generate performance and system information table."""
-        perf_table = Table.grid(padding=(0, 3))
-        perf_table.add_column(style="bold yellow", min_width=20)
-        perf_table.add_column(style="white")
+        """Generate performance and system information table with colour-coded progress bars."""
 
-        # Try to import psutil for system metrics
+        def _bar(percent: float, width: int = 20) -> Text:
+            filled = int(percent / 100 * width)
+            empty  = width - filled
+            if percent < 60:
+                colour = "bold green"
+            elif percent < 85:
+                colour = "bold yellow"
+            else:
+                colour = "bold red"
+            bar = Text()
+            bar.append("█" * filled, style=colour)
+            bar.append("░" * empty,  style="dim")
+            bar.append(f"  {percent:.1f}%", style=colour)
+            return bar
+
+        perf_table = Table.grid(padding=(0, 2))
+        perf_table.add_column(style="bold white", no_wrap=True, min_width=12)
+        perf_table.add_column(min_width=28)
+        perf_table.add_column(style="dim")
+
         try:
             import psutil
 
-            # System metrics
-            cpu_percent = psutil.cpu_percent(interval=0.1)
-            memory = psutil.virtual_memory()
+            cpu  = psutil.cpu_percent(interval=0.1)
+            mem  = psutil.virtual_memory()
             disk = psutil.disk_usage("/")
 
-            perf_table.add_row("💻 CPU Usage:", f"{cpu_percent}%")
+            perf_table.add_row("💻 CPU",    _bar(cpu),          "")
+            perf_table.add_row("🧠 Memory", _bar(mem.percent),  f"{mem.available // (1024**3)} GB free")
+            perf_table.add_row("💾 Disk",   _bar(disk.percent), f"{disk.free // (1024**3)} GB free")
+            perf_table.add_row("", Text(""), "")
             perf_table.add_row(
-                "🧠 Memory:",
-                f"{memory.percent}% used ({memory.available // (1024**3)}GB available)",
-            )
-            perf_table.add_row(
-                "💾 Disk Space:",
-                f"{disk.percent}% used ({disk.free // (1024**3)}GB free)",
-            )
-            perf_table.add_row(
-                "🕐 System Time:", f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                "🕐 Time",
+                Text(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), style="bold white"),
+                "",
             )
 
         except ImportError:
-            # Fallback if psutil unavailable
             perf_table.add_row(
-                "📊 System Metrics:",
-                "[dim]Install psutil for detailed system info[/dim]",
+                "📊 Metrics",
+                Text("Install psutil for live system metrics", style="dim"),
+                "",
             )
             perf_table.add_row(
-                "🕐 Current Time:", f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                "🕐 Time",
+                Text(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), style="bold white"),
+                "",
             )
         except Exception:
-            # Fallback for any other psutil errors
+            perf_table.add_row("📊 Status", Text("System monitoring temporarily unavailable", style="dim"), "")
             perf_table.add_row(
-                "📊 System Status:", "System monitoring temporarily unavailable"
+                "🕐 Time",
+                Text(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), style="bold white"),
+                "",
             )
-            perf_table.add_row(
-                "🕐 Current Time:", f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-            )
-
-        perf_table.add_row(
-            "🚀 Optimization:", "Multi-threading, connection pooling, caching"
-        )
-        perf_table.add_row(
-            "🔄 API Efficiency:", "Bulk operations, batched requests, streaming"
-        )
 
         return perf_table
 

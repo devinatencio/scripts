@@ -158,8 +158,10 @@ class ShardRenderer:
             subtitle_rich.append(str(stats['frozen_count']), style=self.style_system._get_style('semantic', 'secondary', 'bright_blue') if self.style_system else "bright_blue")
 
         # Create title panel
+        ts = self.style_system._get_style('semantic', 'primary', 'bold cyan') if self.style_system else 'bold cyan'
         return Panel(
-            Text(f"📊 Elasticsearch Shards Overview \n {status_text}", style=title_style, justify="center"),
+            Text(status_text, style=title_style, justify="center"),
+            title=f"[{ts}]📊 Elasticsearch Shards Overview[/{ts}]",
             subtitle=subtitle_rich,
             border_style=border_style,
             padding=(1, 2)
@@ -174,7 +176,6 @@ class ShardRenderer:
         table = Table(
             show_header=True,
             header_style=styles.get('header_style', 'white'),
-            title="📊 Elasticsearch Shards",
             expand=True,
             box=self.style_system.get_table_box() if self.style_system else None
         )
@@ -187,10 +188,19 @@ class ShardRenderer:
         table.add_column("💾 Store", justify="right", width=10)
         table.add_column("💻 Node", no_wrap=True)
 
-        # Add rows to table
+        # Add rows to table — group-by-index zebra striping, UNASSIGNED rows get red background
+        current_index_group = None
+        group_counter = 0
+
         for shard_info in shards_info:
-            index_name = str(shard_info.get("index", "N/A"))
+            raw_index = str(shard_info.get("index", "N/A"))
+            index_name = raw_index
             shard_state = str(shard_info.get("state", "UNKNOWN"))
+
+            # Track index group changes for zebra striping
+            if raw_index != current_index_group:
+                current_index_group = raw_index
+                group_counter += 1
 
             # Add hot/frozen indicators
             if index_name in cluster_indices_hot_indexes:
@@ -233,8 +243,15 @@ class ShardRenderer:
             else:
                 node_name = "-"
 
-            # Apply styles to the row data
-            from rich.text import Text
+            # Determine row background:
+            # UNASSIGNED always gets a red background to stand out;
+            # otherwise alternate by index group for visual grouping.
+            if shard_state == "UNASSIGNED":
+                row_style = "on dark_red"
+            else:
+                zebra = self.style_system.get_zebra_style(group_counter) if self.style_system else None
+                row_style = zebra  # None = default background for even groups
+
             table.add_row(
                 Text(shard_state, style=state_style),
                 Text(shard_type, style=type_style),
@@ -242,7 +259,8 @@ class ShardRenderer:
                 str(shard_info.get("shard", "N/A")),
                 str(docs_count),
                 str(store_size),
-                str(node_name)
+                str(node_name),
+                style=row_style
             )
 
         return table
@@ -331,26 +349,37 @@ class ShardRenderer:
         self.console.print(panel)
 
     def _create_colocation_summary_panel(self, results: Dict[str, Any]) -> Panel:
-        """
-        Create summary panel for colocation analysis.
-
-        Args:
-            results: Colocation analysis results
-
-        Returns:
-            Panel with summary information
-        """
+        """Create summary panel for colocation analysis."""
+        ss = self.style_system
         total_issues = len(results.get('colocated_indices', []))
         total_indices = len(results.get('all_indices', [])) if 'all_indices' in results else 0
 
-        summary_text = f"Found {total_issues} indices with colocation issues"
-        if total_indices > 0:
-            summary_text += f" out of {total_indices} total indices analyzed"
+        # Subtitle bar with themed colors
+        from rich.text import Text as SubText
+        subtitle_rich = SubText()
+        subtitle_rich.append("Analyzed: ", style="default")
+        subtitle_rich.append(str(total_indices) if total_indices else "all", style=ss._get_style('semantic', 'info', 'cyan') if ss else 'cyan')
+        subtitle_rich.append(" | Issues: ", style="default")
+        if total_issues > 0:
+            subtitle_rich.append(str(total_issues), style=ss._get_style('semantic', 'error', 'red') if ss else 'red')
+        else:
+            subtitle_rich.append(str(total_issues), style=ss._get_style('semantic', 'success', 'green') if ss else 'green')
+
+        # Body: status centered
+        ts = ss._get_style('semantic', 'primary', 'bold cyan') if ss else 'bold cyan'
+        if total_issues == 0:
+            body = Text("✅ No Colocation Issues - All Shards Properly Distributed", style="bold green", justify="center")
+            border = ss._get_style('table_styles', 'border_style', 'cyan') if ss else 'cyan'
+        else:
+            issue_word = "Index" if total_issues == 1 else "Indices"
+            body = Text(f"🔶 {total_issues} {issue_word} With Colocation Issues", style="bold yellow", justify="center")
+            border = "yellow"
 
         return Panel(
-            Text(summary_text, style=self.style_system._get_style('semantic', 'neutral', 'white') if self.style_system else 'white'),
-            title=Text("Shard Colocation Analysis", style=self.style_system._get_style('semantic', 'primary', 'cyan') if self.style_system else 'cyan'),
-            border_style=self.style_system._get_style('semantic', 'info', 'blue') if self.style_system else 'blue',
+            body,
+            title=f"[{ts}]🔍 Shard Colocation Analysis[/{ts}]",
+            subtitle=subtitle_rich,
+            border_style=border,
             padding=(1, 2)
         )
 
@@ -368,55 +397,63 @@ class ShardRenderer:
         colocated_indices = results.get('colocated_indices', [])
 
         if not colocated_indices:
-            details.append(Panel(
-                Text("No colocation issues found. All primary and replica shards are properly distributed.",
-                     style=self.style_system._get_style('semantic', 'success', 'green') if self.style_system else 'green'),
-                title=Text("Results", style=self.style_system._get_style('semantic', 'primary', 'cyan') if self.style_system else 'cyan'),
-                border_style=self.style_system._get_style('semantic', 'success', 'green') if self.style_system else 'green',
-                padding=(1, 2)
-            ))
-            return details
+            return details  # summary panel already covers the no-issues case
 
         # Create table for colocation issues
+        ss = self.style_system
         table = Table(
             title="Indices with Colocation Issues",
-            title_style=self.style_system._get_style('semantic', 'primary', 'cyan') if self.style_system else 'cyan',
-            border_style=self.style_system._get_style('semantic', 'warning', 'yellow') if self.style_system else 'yellow',
-            header_style=self.style_system._get_style('semantic', 'primary', 'bold white') if self.style_system else 'bold white',
+            title_style=ss._get_style('semantic', 'primary', 'cyan') if ss else 'cyan',
+            border_style=ss._get_style('semantic', 'warning', 'yellow') if ss else 'yellow',
+            header_style=ss._get_style('semantic', 'primary', 'bold white') if ss else 'bold white',
             show_header=True,
-            show_lines=True
+            show_lines=False,
+            box=ss.get_table_box() if ss else None,
+            expand=True
         )
 
-        table.add_column("Index", style=self.style_system._get_style('semantic', 'info', 'cyan') if self.style_system else 'cyan', min_width=30)
-        table.add_column("Affected Shards", style=self.style_system._get_style('semantic', 'warning', 'yellow') if self.style_system else 'yellow', min_width=15)
-        table.add_column("Nodes with Issues", style=self.style_system._get_style('semantic', 'info', 'cyan') if self.style_system else 'cyan', min_width=20)
+        table.add_column("Index", style=ss._get_style('semantic', 'info', 'cyan') if ss else 'cyan', min_width=30)
+        table.add_column("Affected Shards", style=ss._get_style('semantic', 'warning', 'yellow') if ss else 'yellow', justify="center", min_width=15)
+        table.add_column("Nodes with Issues", style=ss._get_style('semantic', 'info', 'cyan') if ss else 'cyan', min_width=20)
 
+        affected_nodes_all = set()
         for index_info in colocated_indices:
             index_name = index_info.get('index', 'N/A')
             shard_count = str(len(index_info.get('colocated_shards', [])))
-            nodes = ', '.join(index_info.get('affected_nodes', []))
+            nodes = index_info.get('affected_nodes', [])
+            affected_nodes_all.update(nodes)
 
             table.add_row(
-                Text(index_name, style=self.style_system._get_style('semantic', 'info', 'cyan') if self.style_system else 'cyan'),
-                Text(shard_count, style=self.style_system._get_style('semantic', 'warning', 'yellow') if self.style_system else 'yellow'),
-                Text(nodes, style=self.style_system._get_style('semantic', 'info', 'cyan') if self.style_system else 'cyan')
+                Text(index_name, style=ss._get_style('semantic', 'info', 'cyan') if ss else 'cyan'),
+                Text(shard_count, style=ss._get_style('semantic', 'warning', 'yellow') if ss else 'yellow'),
+                Text(', '.join(nodes), style=ss._get_style('semantic', 'info', 'cyan') if ss else 'cyan')
             )
 
         details.append(table)
 
-        # Add recommendations panel
-        recommendations = Panel(
-            Text(
-                "Recommendations:\n"
-                "• Consider using allocation filters to separate primary and replica shards\n"
-                "• Review your cluster's allocation strategy\n"
-                "• Check if you have sufficient nodes for proper shard distribution",
-                style=self.style_system._get_style('semantic', 'neutral', 'white') if self.style_system else 'white'
-            ),
-            title=Text("Recommendations", style=self.style_system._get_style('semantic', 'primary', 'cyan') if self.style_system else 'cyan'),
-            border_style=self.style_system._get_style('semantic', 'info', 'blue') if self.style_system else 'blue',
+        # Contextual recommendations based on actual findings
+        ts = ss._get_style('semantic', 'primary', 'cyan') if ss else 'cyan'
+        border = ss._get_style('table_styles', 'border_style', 'blue') if ss else 'blue'
+        warning_style = ss._get_style('semantic', 'warning', 'yellow') if ss else 'yellow'
+        muted_style = ss._get_style('semantic', 'muted', 'dim') if ss else 'dim'
+
+        from rich.table import Table as InnerTable
+        from rich.align import Align
+        rec_grid = InnerTable(show_header=False, box=None, padding=(0, 2))
+        rec_grid.add_column(justify="center", width=3)
+        rec_grid.add_column(style=ss._get_style('semantic', 'primary', 'cyan') if ss else 'cyan')
+
+        rec_grid.add_row("•", f"Review allocation on {len(affected_nodes_all)} affected node{'s' if len(affected_nodes_all) != 1 else ''}: {', '.join(sorted(affected_nodes_all))}")
+        rec_grid.add_row("•", "Use allocation filters to separate primary and replica shards onto different nodes")
+        if len(colocated_indices) > 1:
+            rec_grid.add_row("•", f"Consider adding nodes — {len(colocated_indices)} indices are affected, suggesting insufficient node count for replication")
+        rec_grid.add_row("•", "Run ./escmd.py shards to inspect current shard placement in detail")
+
+        details.append(Panel(
+            Align.center(rec_grid),
+            title=f"[{ts}]Recommendations[/{ts}]",
+            border_style=border,
             padding=(1, 2)
-        )
-        details.append(recommendations)
+        ))
 
         return details

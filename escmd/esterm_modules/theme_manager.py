@@ -306,15 +306,32 @@ class EstermThemeManager:
         return None
 
     def _get_configured_theme(self) -> str:
-        """Get the configured theme name from config file or default."""
+        """Get the configured theme name, checking escmd.json first for shared theme state."""
+        available = self.get_available_themes()
+
+        # 1. Check escmd.json (shared state file used by escmd set-theme)
+        try:
+            import json
+            module_dir = os.path.dirname(os.path.abspath(__file__))
+            escmd_dir = os.path.dirname(module_dir)
+            escmd_json_path = os.path.join(escmd_dir, 'escmd.json')
+            if os.path.exists(escmd_json_path):
+                with open(escmd_json_path, 'r', encoding='utf-8') as f:
+                    state = json.load(f)
+                theme = state.get('display_theme')
+                if theme and theme in available:
+                    return theme
+        except Exception:
+            pass
+
+        # 2. Fall back to esterm_config.yml
         config_data = self._load_config_data()
         if config_data and 'theme' in config_data and 'current' in config_data['theme']:
             configured_theme = config_data['theme']['current']
-            # Validate that the theme exists
-            if configured_theme in self.get_available_themes():
+            if configured_theme in available:
                 return configured_theme
 
-        # Fallback to themes file default
+        # 3. Fall back to themes file default
         themes_data = self._load_themes_data()
         if themes_data:
             return themes_data.get('default_theme', 'rich')

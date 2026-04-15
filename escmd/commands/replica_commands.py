@@ -27,7 +27,7 @@ class ReplicaCommands(BaseCommand):
         """
         super().__init__(es_client, console)
         self.processor = ReplicaProcessor(es_client)
-        self.renderer = ReplicaRenderer(console)
+        self.renderer = ReplicaRenderer(console, theme_manager=getattr(es_client, 'theme_manager', None))
 
     def get_command_group(self) -> str:
         """Get the command group name."""

@@ -280,6 +280,15 @@ class ConfigurationManager:
         """
         return self.default_settings.get("ascii_mode", False)
 
+    def get_show_hidden_datastreams(self):
+        """
+        Get whether hidden/system datastreams should be shown.
+
+        Returns:
+            bool: True if hidden datastreams should be shown, False otherwise (defaults to False)
+        """
+        return self.default_settings.get("show_hidden_datastreams", False)
+
     def get_ilm_display_limit(self):
         """
         Get the ILM display limit from configuration.
@@ -726,170 +735,6 @@ class ConfigurationManager:
         except (json.JSONDecodeError, IOError, KeyError):
             pass
         return None
-
-    def show_locations(self):
-        """
-        Display an enhanced overview of all configured Elasticsearch locations with cluster groups.
-        """
-        from rich.panel import Panel
-        from rich.columns import Columns
-        from rich.text import Text
-
-        console = Console()
-
-        # Import theme system
-        from esclient import get_theme_styles
-
-        theme_styles = get_theme_styles(self)
-        border_style = theme_styles.get("border_style", "cyan")
-
-        # Create title panel
-        title_panel = Panel(
-            Text(
-                "🌍 Elasticsearch Cluster Directory",
-                style="bold cyan",
-                justify="center",
-            ),
-            subtitle="Configuration overview and cluster groups",
-            border_style=border_style,
-            padding=(1, 2),
-        )
-
-        # Create clusters table with enhanced styling
-        servers_list = [
-            {"name": name, **config} for name, config in self.servers_dict.items()
-        ]
-        sorted_data = sorted(servers_list, key=lambda x: x["name"])
-
-        # Clusters table with full width
-        clusters_table = Table(
-            show_header=True, header_style="bold white", expand=True, box=self.box_style
-        )
-        clusters_table.add_column(
-            "🔖  Cluster", style="bold yellow", no_wrap=True, min_width=20
-        )
-        clusters_table.add_column(
-            "💻  Primary Host", style="cyan", no_wrap=True, min_width=45
-        )
-        clusters_table.add_column(
-            "🔄 Backup Host", style="dim cyan", no_wrap=True, min_width=45
-        )
-        clusters_table.add_column("🔌 Port", style="white", justify="center", width=8)
-        clusters_table.add_column("🔐  SSL", style="white", justify="center", width=6)
-        clusters_table.add_column("🔑 Auth", style="white", justify="center", width=7)
-        clusters_table.add_column("📊 Style", style="white", justify="center", width=10)
-
-        # Add rows with enhanced formatting
-        for item in sorted_data:
-            ssl_status = "🔒" if item.get("use_ssl") else "🔓"
-            auth_status = "🔐" if item.get("elastic_authentication") else "🚪"
-            health_style = item.get("health_style", "dashboard")
-            health_icon = "📊" if health_style == "dashboard" else "📋"
-
-            backup_host = item.get("hostname2", "")
-            backup_display = backup_host if backup_host else "[dim]none[/dim]"
-
-            clusters_table.add_row(
-                item.get("name", ""),
-                item.get("hostname", ""),
-                backup_display,
-                str(item.get("port", 9200)),
-                ssl_status,
-                auth_status,
-                health_style,
-            )
-
-        clusters_panel = Panel(
-            clusters_table,
-            title="[bold white]🏢 Configured Clusters[/bold white]",
-            border_style=border_style,
-            padding=(1, 1),
-        )
-
-        # Create cluster groups panel if groups exist
-        if self.cluster_groups:
-            groups_table = Table(show_header=True, header_style="bold white", box=None)
-            groups_table.add_column("🔖  Group Name", style="bold green", no_wrap=True)
-            groups_table.add_column("📋 Clusters", style="cyan")
-            groups_table.add_column("📊 Count", style="white", justify="center")
-
-            for group_name, cluster_list in self.cluster_groups.items():
-                clusters_text = ", ".join(cluster_list)
-
-                groups_table.add_row(group_name, clusters_text, str(len(cluster_list)))
-
-            groups_panel = Panel(
-                groups_table,
-                title="[bold white]🏗️  Cluster Groups[/bold white]",
-                border_style=border_style,
-                padding=(1, 1),
-            )
-        else:
-            # No groups configured
-            no_groups_table = Table.grid(padding=(0, 1))
-            no_groups_table.add_column(style="dim white", justify="center")
-            no_groups_table.add_row("🔵  No cluster groups configured")
-            no_groups_table.add_row(
-                "Add 'cluster_groups' section to elastic_servers.yml"
-            )
-
-            groups_panel = Panel(
-                no_groups_table,
-                title="[bold white]🏗️  Cluster Groups[/bold white]",
-                border_style=border_style,
-                padding=(1, 1),
-            )
-
-        # Summary statistics
-        total_clusters = len(sorted_data)
-        ssl_enabled = sum(1 for item in sorted_data if item.get("use_ssl"))
-        auth_enabled = sum(
-            1 for item in sorted_data if item.get("elastic_authentication")
-        )
-
-        summary_table = Table.grid(padding=(0, 2))
-        summary_table.add_column(style="bold white", no_wrap=True)
-        summary_table.add_column(style="bold cyan")
-        summary_table.add_row("📊 Total Clusters:", str(total_clusters))
-        summary_table.add_row("🔒 SSL Enabled:", f"{ssl_enabled}/{total_clusters}")
-        summary_table.add_row("🔐 Auth Enabled:", f"{auth_enabled}/{total_clusters}")
-        summary_table.add_row("🏗️  Cluster Groups:", str(len(self.cluster_groups)))
-
-        summary_panel = Panel(
-            summary_table,
-            title="[bold white]📈 Summary[/bold white]",
-            border_style="cyan",
-            padding=(1, 1),
-            width=30,
-        )
-
-        # Usage examples
-        usage_table = Table.grid(padding=(0, 1))
-        usage_table.add_column(style="bold cyan", no_wrap=True)
-        usage_table.add_column(style="dim white")
-        usage_table.add_row("Set Default:", "./escmd.py set-default <cluster>")
-        usage_table.add_row("Health Check:", "./escmd.py -l <cluster> health")
-        usage_table.add_row("Group Health:", "./escmd.py health --group <group>")
-        usage_table.add_row("Compare:", "./escmd.py health --compare <cluster>")
-
-        usage_panel = Panel(
-            usage_table,
-            title="[bold white]🚀 Quick Commands[/bold white]",
-            border_style="magenta",
-            padding=(1, 1),
-            width=40,
-        )
-
-        # Display everything
-        print()
-        console.print(title_panel)
-        print()
-        console.print(clusters_panel)
-        print()
-        console.print(Columns([groups_panel], equal=False, expand=True))
-        print()
-        console.print(Columns([summary_panel, usage_panel], equal=False, expand=True))
-        print()
 
     def get_server_config_by_location(self, location):
         """

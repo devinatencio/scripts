@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/display/../template_utils/field_manipulation.py
-# hypothesis_version: 6.151.12
-
-[',', '.', 'append', 'delete', 'false', 'remove', 'set', 'true']

@@ -395,6 +395,18 @@ class AllocationCommands(BaseCommand):
         renderer = AllocationRenderer(self.es_client.theme_manager)
         return renderer.render_enhanced_allocation_settings(settings, health_data)
 
+    def print_allocation_explain_results(self, explain_result: Dict[str, Any]) -> None:
+        """
+        Display allocation explain results in themed multi-panel format.
+
+        Args:
+            explain_result: Enhanced allocation explanation data
+        """
+        from display.allocation_renderer import AllocationRenderer
+
+        renderer = AllocationRenderer(self.es_client.theme_manager)
+        renderer.render_allocation_explain_results(explain_result)
+
 
 # ================================
 # Backward Compatibility Functions

@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/display/locations_data.py
-# hypothesis_version: 6.151.12
-
-[100, 9200, 'N/A', 'Unknown', 'auth_profile', 'cluster_count', 'clusters', 'default_cluster', 'elastic_username', 'env', 'environment', 'environment_names', 'environments', 'error', 'found', 'has_locations', 'hostname', 'hostname2', 'is_default', 'is_valid', 'location', 'location_name', 'match_reason', 'missing_recommended', 'missing_required', 'name', 'port', 'raw_config', 'score', 'server_count', 'servers', 'ssl_enabled_count', 'total_clusters', 'total_environments', 'total_servers', 'unknown', 'use_ssl', 'username', 'username_raw', 'verify_certs', 'warnings']

@@ -12,178 +12,176 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.columns import Columns
 from rich.align import Align
+from rich.text import Text
 
 
 def show_welcome_screen(console, version=None, date=None):
-    """Display a beautiful welcome screen when no command is provided."""
+    """Display welcome screen when no command is provided."""
 
-    # Use provided version/date or fallback defaults
-    display_version = version or "3.7.4"
-    display_date = date or "02/26/2026"
+    display_version = version or "3.12.0"
 
-    # Create title panel
-    title_table = Table.grid(padding=(0, 2))
-    title_table.add_column(style="bold cyan", justify="center")
-    title_table.add_row("🔍 ESCMD - Elasticsearch Command Line Tool")
-    title_table.add_row(
-        f"[dim]Advanced Elasticsearch CLI Management Tool v{display_version}[/dim]"
-    )
+    # ── banner ────────────────────────────────────────────────────────────────
+    letters = [
+        " ███████╗███████╗████████╗███████╗██████╗ ███╗   ███╗",
+        " ██╔════╝██╔════╝╚══██╔══╝██╔════╝██╔══██╗████╗ ████║",
+        " █████╗  ███████╗   ██║   █████╗  ██████╔╝██╔████╔██║",
+        " ██╔══╝  ╚════██║   ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║",
+        " ███████╗███████║   ██║   ███████╗██║  ██║██║ ╚═╝ ██║",
+        " ╚══════╝╚══════╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝",
+    ]
+    colours = ["bold cyan","bold cyan","bold blue","bold blue","bold magenta","bold magenta"]
+    banner = Text()
+    for line, colour in zip(letters, colours):
+        banner.append(line + "\n", style=colour)
 
-    title_panel = Panel(
-        Align.center(title_table),
-        title="[bold green]Welcome to ESCMD[/bold green]",
-        border_style="green",
-        padding=(1, 2),
-    )
+    console.print()
+    console.print(Align.center(banner))
+    console.print(Align.center(Text(
+        f"v{display_version}  ·  Elasticsearch CLI Management & Monitoring", style="dim"
+    )))
+    console.print()
 
-    # Dynamically get all available commands
-    command_info = _get_dynamic_command_info()
+    # ── status bar ────────────────────────────────────────────────────────────
+    try:
+        from configuration_manager import ConfigurationManager
+        _cm = ConfigurationManager()
+        default_cluster = _cm.get_default_cluster()
+    except Exception:
+        default_cluster = None
 
-    # Quick start commands (still curated for best UX)
-    quick_start_table = Table(expand=True)
-    quick_start_table.add_column("Command", style="bold yellow", no_wrap=True)
-    quick_start_table.add_column("Description", style="white")
+    bar = Text()
+    if default_cluster:
+        bar.append("  🟢 Active cluster: ", style="bold green")
+        bar.append(default_cluster, style="bold white")
+        bar.append("   change with ", style="dim")
+        bar.append("./escmd.py set-default <name>", style="dim cyan")
+    else:
+        bar.append("  ⚠  No default cluster set — run ", style="bold yellow")
+        bar.append("./escmd.py set-default <name>", style="bold cyan")
+        bar.append(" to configure one", style="bold yellow")
+    console.print(Panel(bar, border_style="dim", padding=(0, 1)))
+    console.print()
 
-    # Keep curated quick commands for best user experience
-    quick_commands = [
-        ("./escmd.py health", "Show cluster health status"),
-        ("./escmd.py indices", "List all indices"),
-        ("./escmd.py nodes", "Show cluster nodes"),
-        ("./escmd.py version", "Show detailed version & statistics"),
-        ("./escmd.py locations", "Show configured clusters"),
-        ("./escmd.py help", "Show detailed help system"),
+    # ── category data ─────────────────────────────────────────────────────────
+    categories = [
+        # row 1
+        ("🏥 Cluster & Health", "green", [
+            ("health",          "Cluster health"),
+            ("health-detail",   "Full health dashboard"),
+            ("cluster-check",   "Comprehensive checks"),
+            ("ping",            "Test connectivity"),
+            ("nodes",           "List nodes"),
+            ("masters",         "Master nodes"),
+            ("current-master",  "Active master"),
+            ("recovery",        "Recovery jobs"),
+        ]),
+        ("📑 Index Management", "blue", [
+            ("indices",               "List indices"),
+            ("indice",                "Single index detail"),
+            ("create-index",          "Create index"),
+            ("freeze/unfreeze",       "Freeze or unfreeze"),
+            ("flush",                 "Flush index"),
+            ("set-replicas",          "Set replica count"),
+            ("templates",             "List templates"),
+            ("template",              "Template detail"),
+            ("template-usage",        "Template usage analysis"),
+            ("template-create",       "Create template"),
+            ("template-modify",       "Modify template field"),
+            ("template-backup",       "Backup template"),
+            ("template-restore",      "Restore template backup"),
+            ("indice-add-metadata",   "Add metadata to index"),
+        ]),
+        ("💾 Storage & Shards", "cyan", [
+            ("storage",               "Disk usage"),
+            ("shards",                "Shard distribution"),
+            ("shard-colocation",      "Primary/replica on same host"),
+            ("allocation",            "Allocation settings"),
+            ("exclude",               "Exclude from host"),
+            ("exclude-reset",         "Reset exclusion"),
+            ("snapshots",             "Manage snapshots"),
+            ("repositories",          "Snapshot repos"),
+            ("dangling",              "Dangling indices"),
+            ("indices-analyze",       "Rollover series outlier analysis"),
+            ("indices-s3-estimate",   "S3 cost estimate"),
+            ("indices-watch-collect", "Sample index stats to JSON"),
+            ("indices-watch-report",  "Summarize watch samples"),
+            ("list-backups",          "List template backups"),
+        ]),
+        # row 2
+        ("🔄 ILM & Lifecycle", "yellow", [
+            ("ilm",           "ILM policies"),
+            ("datastreams",   "Datastream list"),
+            ("rollover",      "Rollover datastream"),
+            ("auto-rollover", "Rollover biggest shard"),
+            ("es-top / top",  "Live cluster dashboard"),
+            ("action",        "Action sequences"),
+            ("cluster-groups","Display cluster groups"),
+        ]),
+        ("🔩 Settings & Config", "white", [
+            ("cluster-settings",  "Cluster settings"),
+            ("set",               "Set setting (dot notation)"),
+            ("show-settings",     "Current config"),
+            ("locations",         "Configured clusters"),
+            ("get-default",       "Show default cluster"),
+            ("set-default",       "Change default cluster"),
+            ("set-username",      "Set default username"),
+            ("set-theme",         "Change colour theme"),
+            ("themes",            "Browse colour themes"),
+        ]),
+        ("🛠  Utilities", "bright_black", [
+            ("version",               "Version & system info"),
+            ("help",                  "Detailed help"),
+            ("store-password",        "Store encrypted password"),
+            ("list-stored-passwords", "List stored passwords"),
+            ("remove-stored-password","Remove stored password"),
+            ("generate-master-key",   "Generate master key"),
+            ("rotate-master-key",     "Rotate master key"),
+            ("migrate-to-env-key",    "Migrate to env key"),
+            ("clear-session",         "Clear session cache"),
+            ("session-info",          "Show session info"),
+            ("set-session-timeout",   "Set session timeout"),
+        ]),
     ]
 
-    for cmd, desc in quick_commands:
-        quick_start_table.add_row(cmd, desc)
+    # ── grid renderer ─────────────────────────────────────────────────────────
+    # Fixed column widths ensure all panels render identically regardless of
+    # content length, so borders align perfectly across both rows.
+    CMD_COL_WIDTH  = 24
+    DESC_COL_WIDTH = 30
 
-    quick_panel = Panel(
-        quick_start_table,
-        title="[bold blue]🚀 Quick Start Commands[/bold blue]",
-        border_style="blue",
-        padding=(1, 2),
-    )
+    def _make_table(commands, colour):
+        t = Table.grid(padding=(0, 1))
+        t.add_column(style=f"bold {colour}", no_wrap=True, width=CMD_COL_WIDTH)
+        t.add_column(style="dim", width=DESC_COL_WIDTH)
+        for cmd, desc in commands:
+            t.add_row(cmd, desc)
+        return t
 
-    # Dynamic command categories (compact version)
-    categories_table = Table(expand=True)
-    categories_table.add_column("Category", style="bold magenta", no_wrap=True)
-    categories_table.add_column("Count", justify="right", style="cyan")
-    categories_table.add_column("Examples", style="white")
-
-    # Use dynamic data for categories
-    for category, data in command_info["categories"].items():
-        count = data["count"]
-
-        # Select better representative examples for each category
-        if category == "Utilities":
-            # For utilities, prioritize commonly used commands
-            priority_commands = [
-                "locations",
-                "show-settings",
-                "version",
-                "help",
-                "get-default",
-                "set-default",
-                "themes",
-                "cluster-groups",
-            ]
-            available_commands = data["examples"]
-            selected_examples = []
-
-            # First, add priority commands that exist
-            for cmd in priority_commands:
-                if cmd in available_commands and len(selected_examples) < 3:
-                    selected_examples.append(cmd)
-
-            # Fill remaining slots with other commands if needed
-            for cmd in sorted(available_commands):
-                if cmd not in selected_examples and len(selected_examples) < 3:
-                    selected_examples.append(cmd)
-
-            examples = ", ".join(selected_examples)
-        else:
-            # For other categories, show first 3 as before
-            examples = ", ".join(data["examples"][:3])
-
-        categories_table.add_row(category, str(count), examples)
-
-    # Add totals row
-    categories_table.add_section()
-    total_commands = command_info["total_commands"]
-    total_subcommands = command_info["total_subcommands"]
-    categories_table.add_row(
-        "[bold white]TOTAL[/bold white]",
-        f"[bold white]{total_commands + total_subcommands}[/bold white]",
-        f"[dim]{total_commands} main + {total_subcommands} sub[/dim]",
-    )
-
-    categories_panel = Panel(
-        categories_table,
-        title="[bold magenta]📋 Categories Summary[/bold magenta]",
-        border_style="magenta",
-        padding=(1, 2),
-    )
-
-    # Complete command list with descriptions
-    commands_table = _generate_complete_commands_table()
-
-    commands_panel = Panel(
-        commands_table,
-        title="[bold cyan]📖 All Available Commands[/bold cyan]",
-        border_style="cyan",
-        padding=(1, 2),
-    )
-
-    # Usage tips
-    tips_table = Table.grid(padding=(0, 1))
-    tips_table.add_column(style="bold green", no_wrap=True)
-    tips_table.add_column(style="white")
-
-    tips_table.add_row(
-        "💡", "Use [bold]--format json[/bold] for machine-readable output"
-    )
-    tips_table.add_row(
-        "🎯", "Use [bold]-l <cluster>[/bold] to target specific clusters"
-    )
-    tips_table.add_row(
-        "📊", "Use [bold]--group <name>[/bold] for multi-cluster operations"
-    )
-    tips_table.add_row(
-        "🔍", "Use [bold]./escmd.py help <topic>[/bold] for detailed help"
-    )
-    tips_table.add_row(
-        "⚡", "Most commands support [bold]--pager[/bold] for large outputs"
-    )
-
-    tips_panel = Panel(
-        tips_table,
-        title="[bold yellow]💡 Pro Tips[/bold yellow]",
-        border_style="yellow",
-        padding=(1, 2),
-    )
-
-    # Display all panels
-    console.print()
-    console.print(title_panel)
-    console.print()
-
-    # Display quick start and categories side by side if terminal is wide enough
-    if console.size.width >= 120:
-        console.print(Columns([quick_panel, categories_panel], equal=True))
-    else:
-        console.print(quick_panel)
+    for row_cats in [categories[0:3], categories[3:6]]:
+        max_cmds = max(len(c[2]) for c in row_cats)
+        panels = []
+        for title, colour, commands in row_cats:
+            padded = commands + [("", "")] * (max_cmds - len(commands))
+            panels.append(Panel(
+                _make_table(padded, colour),
+                title=f"[bold {colour}]{title}[/bold {colour}]",
+                border_style=colour,
+                padding=(0, 1),
+            ))
+        console.print(Columns(panels, equal=True, expand=True))
         console.print()
-        console.print(categories_panel)
 
-    console.print()
-    console.print(commands_panel)
-    console.print()
-    console.print(tips_panel)
-    console.print()
-
-    # Footer with dynamic count
-    footer_text = f"[dim]Run [bold]./escmd.py version[/bold] for complete command statistics ({total_commands + total_subcommands} total commands) or [bold]./escmd.py help <topic>[/bold] for detailed help[/dim]"
-    console.print(Align.center(footer_text))
+    # ── footer ────────────────────────────────────────────────────────────────
+    footer = Text(justify="center")
+    footer.append("./escmd.py help <cmd>", style="bold cyan")
+    footer.append("  ·  ", style="dim")
+    footer.append("./escmd.py version", style="bold cyan")
+    footer.append("  ·  ", style="dim")
+    footer.append("-l <cluster>", style="bold cyan")
+    footer.append(" to target a cluster  ·  ", style="dim")
+    footer.append("--format json", style="bold cyan")
+    footer.append(" for machine output", style="dim")
+    console.print(Panel(Align.center(footer), border_style="dim", padding=(0, 1)))
     console.print()
 
 
@@ -755,55 +753,90 @@ def handle_get_default(configuration_manager):
     """Display the current default cluster configuration."""
     console = Console()
 
-    # Get theme styles
-    from esclient import get_theme_styles
-
-    styles = get_theme_styles(configuration_manager)
+    try:
+        from display.theme_manager import ThemeManager
+        from display.style_system import StyleSystem
+        tm = ThemeManager(configuration_manager)
+        ss = StyleSystem(tm)
+        full_theme    = tm.get_full_theme_data()
+        table_styles  = full_theme.get('table_styles', {})
+        border        = table_styles.get('border_style', 'bright_blue')
+        header_style  = table_styles.get('header_style', 'bold white on blue')
+        title_style   = tm.get_themed_style('panel_styles', 'title', 'bold white')
+        primary_style = ss._get_style('semantic', 'primary',  'cyan')
+        warning_style = ss._get_style('semantic', 'warning',  'yellow')
+        success_style = ss._get_style('semantic', 'success',  'green')
+        muted_style   = ss._get_style('semantic', 'muted',    'dim')
+        box_style     = ss.get_table_box()
+    except Exception:
+        from esclient import get_theme_styles
+        styles        = get_theme_styles(configuration_manager)
+        border        = styles.get('border_style', 'bright_blue')
+        header_style  = 'bold white on blue'
+        title_style   = 'bold white'
+        primary_style = 'cyan'
+        warning_style = 'yellow'
+        success_style = 'green'
+        muted_style   = 'dim'
+        box_style     = None
 
     current_cluster = configuration_manager.get_default_cluster()
     if not current_cluster:
-        console.print("[yellow]No default cluster configured.[/yellow]")
+        console.print(Panel(
+            f"[{warning_style}]No default cluster configured.[/{warning_style}]\n\n"
+            f"[{muted_style}]Use [/{muted_style}][{primary_style}]./escmd.py set-default <cluster>[/{primary_style}] "
+            f"[{muted_style}]to set one.[/{muted_style}]",
+            title=f"[{title_style}]🎯 Default Cluster[/{title_style}]",
+            border_style=warning_style,
+            padding=(1, 2),
+        ))
         return
 
-    # Try both the original case and lowercase version
-    server_config = configuration_manager.servers_dict.get(current_cluster.lower())
-    if not server_config:
-        server_config = configuration_manager.servers_dict.get(current_cluster)
+    server_config = (
+        configuration_manager.servers_dict.get(current_cluster.lower())
+        or configuration_manager.servers_dict.get(current_cluster)
+    )
 
     if not server_config:
-        console.print(
-            f"[red]Default server '{current_cluster}' not found in configuration.[/red]"
+        available = "\n".join(
+            f"  [{success_style}]•[/{success_style}] {n}"
+            for n in sorted(configuration_manager.servers_dict.keys())
         )
-        console.print("[yellow]Available clusters:[/yellow]")
-        for cluster_name in sorted(configuration_manager.servers_dict.keys()):
-            console.print(f"  • {cluster_name}")
+        console.print(Panel(
+            f"[red]Default server '[bold]{current_cluster}[/bold]' not found in configuration.[/red]\n\n"
+            f"[{warning_style}]Available clusters:[/{warning_style}]\n{available}",
+            title=f"[{title_style}]🎯 Default Cluster[/{title_style}]",
+            border_style="red",
+            padding=(1, 2),
+        ))
         return
 
-    # Create a table for the default configuration with better spacing
-    config_table = Table.grid(padding=(0, 3))  # Add padding between columns
-    config_table.add_column(
-        style=styles.get("panel_styles", {}).get("secondary", "cyan"),
-        no_wrap=True,
-        min_width=15,
+    # Build details grid
+    grid = Table(show_header=False, box=None, padding=(0, 3), expand=False)
+    grid.add_column(style=f"bold {warning_style}", no_wrap=True, min_width=14)
+    grid.add_column(style="white")
+
+    auth     = server_config.get("elastic_authentication", False)
+    username = server_config.get("elastic_username", "N/A")
+    ssl      = server_config.get("verify_certs", True)
+
+    grid.add_row("Location",    current_cluster.lower())
+    grid.add_row("Environment", server_config.get("env", "Unknown"))
+    grid.add_row("Host",        server_config.get("hostname", "N/A"))
+    grid.add_row("Port",        str(server_config.get("port", 9200)))
+    grid.add_row("Username",    username if auth else f"[{muted_style}]N/A (no auth)[/{muted_style}]")
+    grid.add_row(
+        "SSL Verify",
+        f"[{success_style}]✔ Enabled[/{success_style}]" if ssl else f"[{warning_style}]✘ Disabled[/{warning_style}]",
     )
-    config_table.add_column(style="white")
 
-    config_table.add_row("Location:", current_cluster.lower())
-    config_table.add_row("Environment:", server_config.get("env", "Unknown"))
-    config_table.add_row("Host:", server_config.get("hostname", "N/A"))
-    config_table.add_row("Port:", str(server_config.get("port", 9200)))
-    config_table.add_row("Username:", server_config.get("elastic_username", "N/A"))
-    config_table.add_row("SSL Verify:", str(server_config.get("verify_certs", True)))
-
-    panel = Panel(
-        config_table,
-        title=f"🎯 Current Default Cluster",
-        title_align="left",
-        border_style=styles["border_style"],
+    console.print()
+    console.print(Panel(
+        grid,
+        title=f"[{title_style}]🎯 Current Default Cluster[/{title_style}]",
+        border_style=border,
         padding=(1, 2),
-    )
-
-    console.print(panel)
+    ))
 
 
 def handle_set_default(location, configuration_manager):
@@ -902,13 +935,6 @@ def handle_show_settings(configuration_manager, format_output=None):
         renderer.render_json_settings(settings_data)
     else:
         renderer.render_settings_overview(settings_data, styles)
-
-    # Print state file info if available
-    if hasattr(configuration_manager, "state_file_path"):
-        info_style = styles.get("panel_styles", {}).get("subtitle", "dim white")
-        console.print(
-            f"[{info_style}]💾 State file: {configuration_manager.state_file_path}[/{info_style}]"
-        )
 
 
 def handle_set_username(args, configuration_manager):

@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/nodes_help.py
-# hypothesis_version: 6.151.12
-
-['   Action:', '   Benefit:', '   Command:', '   Export Data:', '   Integration:', '   Master Check:', '   Node Resources:', '   Overview:', '   Parse Results:', '   Purpose:', '   Recovery Impact:', '   Step 1:', '   Step 2:', '   Storage Load:', './escmd.py masters', './escmd.py nodes', './escmd.py recovery', './escmd.py storage', 'All nodes:', 'Current master:', 'Disk usage:', 'JSON output:', 'Master nodes:', 'Recovery status:', 'current-master', 'masters', 'nodes', 'recovery', 'storage', '📊 Automation:', '🔧 Troubleshooting:', '🚀 Node Examples']

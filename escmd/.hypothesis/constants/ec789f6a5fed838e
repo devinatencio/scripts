@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/health_help.py
-# hypothesis_version: 6.151.12
-
-['   Automation:', '   Command:', '   Compare:', '   Follow-up:', '   Group View:', '   Morning Check:', '   Note:', '   Pipeline:', '   Purpose:', './escmd.py health', 'Basic health:', 'Compare clusters:', 'Dashboard style:', 'Group by prefix:', 'JSON format:', 'Quick health check', 'health', 'health-detail', '| monitor_script.py', '📊 Daily Monitoring:', '🔄 Multi-Cluster Ops:', '🚀 Health Examples', '🚨 Incident Response:']

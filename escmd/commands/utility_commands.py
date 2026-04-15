@@ -35,10 +35,18 @@ class UtilityCommands(BaseCommand):
             dict: Data stream information
         """
         try:
+            # Check config for hidden datastreams preference
+            show_hidden = False
+            config_manager = getattr(self.es_client, 'configuration_manager', None)
+            if config_manager:
+                show_hidden = config_manager.get_show_hidden_datastreams()
+
+            expand = "all" if show_hidden else "open"
+
             if name:
-                datastreams = self.es_client.es.indices.get_data_stream(name=name)
+                datastreams = self.es_client.es.indices.get_data_stream(name=name, expand_wildcards=expand)
             else:
-                datastreams = self.es_client.es.indices.get_data_stream()
+                datastreams = self.es_client.es.indices.get_data_stream(expand_wildcards=expand)
 
             # Handle response format differences
             if hasattr(datastreams, 'body'):

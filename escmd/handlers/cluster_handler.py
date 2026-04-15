@@ -66,65 +66,54 @@ class ClusterHandler(BaseHandler):
 
                 # Get style system for semantic styling
                 style_system = self.es_client.style_system
+                tm = self.es_client.theme_manager
 
-                # Create title panel
-                title_panel = Panel(
-                    style_system.create_semantic_text("🏓 Elasticsearch Connection Test", "success", justify="center"),
-                    subtitle=f"✅ Connection Successful | Cluster: {cluster_name} | Status: {cluster_status.title()}",
-                    border_style=style_system.get_semantic_style("success"),
-                    padding=(1, 2)
-                )
-
-                # Create connection details panel
-                connection_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-                connection_table.add_column("Label", style=style_system.get_semantic_style("primary"), no_wrap=True)
-                connection_table.add_column("Icon", justify="left", width=3)
-                connection_table.add_column("Value", no_wrap=True)
-
-                connection_table.add_row("Host:", "🌐", self.es_client.host1)
-                connection_table.add_row("Port:", "🔌", str(self.es_client.port))
-                connection_table.add_row("SSL Enabled:", "🔒", "Yes" if self.es_client.use_ssl else "No")
-                connection_table.add_row("Verify Certs:", "📜", "Yes" if self.es_client.verify_certs else "No")
-
-                if self.es_client.elastic_authentication and self.es_client.elastic_username:
-                    connection_table.add_row("Username:", "👤", self.es_client.elastic_username)
-                    if self.es_client.elastic_password and len(self.es_client.elastic_password) > 2:
-                        connection_table.add_row("Password:", "🔐", "***" + self.es_client.elastic_password[-2:])
-                    else:
-                        connection_table.add_row("Password:", "🔐", "***")
+                # Subtitle bar with connection details
+                subtitle_rich = Text()
+                subtitle_rich.append("Host: ", style="default")
+                subtitle_rich.append(self.es_client.host1, style=style_system._get_style('semantic', 'info', 'cyan'))
+                subtitle_rich.append(f":{self.es_client.port}", style=style_system._get_style('semantic', 'info', 'cyan'))
+                subtitle_rich.append(" | SSL: ", style="default")
+                if self.es_client.use_ssl:
+                    subtitle_rich.append("Yes", style=style_system._get_style('semantic', 'success', 'green'))
                 else:
-                    connection_table.add_row("Authentication:", "🔓", "None")
+                    subtitle_rich.append("No", style=style_system._get_style('semantic', 'warning', 'yellow'))
+                if self.es_client.elastic_authentication and self.es_client.elastic_username:
+                    subtitle_rich.append(" | User: ", style="default")
+                    subtitle_rich.append(self.es_client.elastic_username, style=style_system._get_style('semantic', 'primary', 'bright_magenta'))
+                subtitle_rich.append(" | Nodes: ", style="default")
+                subtitle_rich.append(str(total_nodes), style=style_system._get_style('semantic', 'primary', 'bright_magenta'))
+                subtitle_rich.append(" | Data: ", style="default")
+                subtitle_rich.append(str(data_nodes), style=style_system._get_style('semantic', 'info', 'cyan'))
 
-                connection_panel = Panel(
-                    connection_table,
-                    title="🔗 Connection Details",
-                    border_style=style_system.get_semantic_style("info"),
-                    padding=(1, 2)
-                )
-
-                # Create cluster overview panel
-                overview_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-                overview_table.add_column("Label", style=style_system.get_semantic_style("primary"), no_wrap=True)
-                overview_table.add_column("Icon", justify="left", width=3)
-                overview_table.add_column("Value", no_wrap=True)
-
+                # Body: cluster status centered
                 status_icon = "🟢" if cluster_status == 'green' else "🟡" if cluster_status == 'yellow' else "🔴"
-                overview_table.add_row("Cluster Name:", "🏢", cluster_name)
-                overview_table.add_row("Status:", status_icon, cluster_status.title())
-                overview_table.add_row("Total Nodes:", "💻", str(total_nodes))
-                overview_table.add_row("Data Nodes:", "💾", str(data_nodes))
+                if cluster_status == 'green':
+                    status_text = f"{status_icon} Connected - {cluster_name} ({cluster_status.title()})"
+                    body_style = "bold green"
+                    border = style_system._get_style('table_styles', 'border_style', 'cyan')
+                elif cluster_status == 'yellow':
+                    status_text = f"{status_icon} Connected - {cluster_name} ({cluster_status.title()})"
+                    body_style = "bold yellow"
+                    border = "yellow"
+                else:
+                    status_text = f"{status_icon} Connected - {cluster_name} ({cluster_status.title()})"
+                    body_style = "bold red"
+                    border = "red"
 
-                overview_panel = Panel(
-                    overview_table,
-                    title="📊 Cluster Overview",
-                    border_style=style_system.get_semantic_style("secondary"),
+                ts = style_system._get_style('semantic', 'primary', 'bold cyan')
+                title_panel = Panel(
+                    Text(status_text, style=body_style, justify="center"),
+                    title=f"[{ts}]🔍 Elasticsearch Connection Test[/{ts}]",
+                    subtitle=subtitle_rich,
+                    border_style=border,
                     padding=(1, 2)
                 )
 
-                # Create quick actions panel
+                # Next Steps panel
                 actions_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-                actions_table.add_column("Action", style=style_system.get_semantic_style("primary"), no_wrap=True)
-                actions_table.add_column("Command", style=style_system.get_semantic_style("muted"))
+                actions_table.add_column("Action", style="bold", no_wrap=True)
+                actions_table.add_column("Command", style="dim white")
 
                 actions_table.add_row("Check health:", "./escmd.py health")
                 actions_table.add_row("View nodes:", "./escmd.py nodes")
@@ -132,18 +121,16 @@ class ClusterHandler(BaseHandler):
                 actions_table.add_row("View settings:", "./escmd.py settings")
                 actions_table.add_row("JSON output:", "./escmd.py ping --format json")
 
+                _title = tm.get_themed_style("panel_styles", "title", "bold white") if tm else "bold white"
                 actions_panel = Panel(
                     actions_table,
-                    title="🚀 Next Steps",
-                    border_style=style_system._get_style('table_styles', 'border_style', 'bright_magenta'),
+                    title=f"[{_title}]🚀 Next Steps[/{_title}]",
+                    border_style=style_system._get_style('table_styles', 'border_style', 'cyan'),
                     padding=(1, 2)
                 )
 
-                # Display everything
                 print()
                 console.print(title_panel)
-                print()
-                console.print(Columns([connection_panel, overview_panel], expand=True))
                 print()
                 console.print(actions_panel)
                 print()

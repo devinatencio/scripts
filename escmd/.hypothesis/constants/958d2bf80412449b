@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/snapshots_help.py
-# hypothesis_version: 6.151.12
-
-['   Check Config:', '   Check Integrity:', '   Daily Backup:', '   Filter:', '   Find Old:', '   Full Check:', '   List Available:', '   List Recent:', '   List Repos:', '   Monitor Space:', '   Purpose:', '   Quick Backup:', '   Recovery Point:', '   Retention Policy:', '   Space Cleanup:', '   Status Check:', '   Storage Growth:', '   Success Rate:', '   Verify Quick:', '   Verify Status:', 'Create new snapshot', 'Filter by pattern:', 'Full metadata:', 'JSON output:', 'List repositories:', 'List snapshots:', 'Repositories JSON:', 'Snapshot details:', 'With pager:', 'repositories', 'snapshots', 'snapshots list', '| filter latest', '| head -10', '💾 Backup Strategy:', '📊 Backup Monitoring:', '🔄 Disaster Recovery:', '🚀 Snapshot Examples']

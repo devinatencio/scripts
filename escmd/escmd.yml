@@ -4,7 +4,7 @@
 
 # Core application settings
 settings:
-  # box_style: SQUARE_DOUBLE_HEAD
+  box_style: ASCII  # SIMPLE, SQUARE_DOUBLE_HEAD
   health_style: dashboard
   classic_style: panel
   enable_paging: false
@@ -33,6 +33,7 @@ settings:
     confirmation_required: true
   # Elasticsearch Creds
   elastic_username: kibana_system
+  show_hidden_datastreams: true
   
 # Logical groupings of clusters for easier management
   test:

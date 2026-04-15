@@ -319,35 +319,25 @@ class PasswordManager:
             environment: Environment name to remove
 
         Returns:
-            bool: True if successful, False otherwise
+            bool: True if removed, False if not found
         """
         try:
             config = self._load_config()
             encrypted_passwords = config.get('security', {}).get('encrypted_passwords', {})
 
             if environment not in encrypted_passwords:
-                self.console.print(f"🔶  [yellow]No stored password found for '{environment}'[/yellow]")
                 return False
 
-            # Confirm deletion
-            if not Confirm.ask(f"Remove stored password for '{environment}'?"):
-                self.console.print("❌ [red]Operation cancelled[/red]")
-                return False
-
-            # Remove from config
             del encrypted_passwords[environment]
             self._save_config(config)
 
-            # Remove from session cache
             if environment in self._session_cache:
                 del self._session_cache[environment]
 
-            self.console.print(f"✅ [green]Password for '{environment}' removed successfully[/green]")
             return True
 
         except Exception as e:
-            self.console.print(f"❌ [red]Failed to remove password: {e}[/red]")
-            return False
+            raise
 
     def clear_session(self) -> None:
         """Clear the current session cache."""

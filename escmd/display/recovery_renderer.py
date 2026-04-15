@@ -33,6 +33,29 @@ class RecoveryRenderer:
         self.style_system = StyleSystem(theme_manager) if theme_manager else None
         self.console = Console()
 
+    def _border(self, fallback: str = "cyan") -> str:
+        """Return the theme border style."""
+        if self.theme_manager:
+            return self.theme_manager.get_theme_styles().get("border_style", fallback)
+        return fallback
+
+    def _title_style(self, fallback: str = "bold white") -> str:
+        """Return the theme panel title style."""
+        if self.theme_manager:
+            return self.theme_manager.get_themed_style("panel_styles", "title", fallback)
+        return fallback
+
+    def _sem(self, semantic: str, fallback: str = "white") -> str:
+        """Return a semantic style from the style system."""
+        if self.style_system:
+            return self.style_system.get_semantic_style(semantic)
+        return fallback
+
+    def _ts(self) -> str:
+        """Return themed primary style for title bar text."""
+        ss = self.style_system
+        return ss._get_style('semantic', 'primary', 'bold cyan') if ss else 'bold cyan'
+
     def render_enhanced_recovery_status(self, recovery_status: Dict[str, Any]) -> None:
         """
         Render enhanced recovery status with Rich formatting.
@@ -40,56 +63,160 @@ class RecoveryRenderer:
         Args:
             recovery_status: Recovery status data from HealthCommands.get_shard_recovery()
         """
+        ts = self._ts()
+
         if not recovery_status:
-            no_recovery_panel = Panel(
-                Text("🎉 No active recovery operations", style="bold green", justify="center"),
-                title="🔄 Cluster Recovery Status",
-                border_style="cyan",
-                padding=(2, 4)
+            panel = Panel(
+                Text("✅ No Active Recovery Operations", style=self._sem("success", "bold green"), justify="center"),
+                title=f"[{ts}]🔄 Cluster Recovery Status[/{ts}]",
+                border_style=self._border(),
+                padding=(1, 2)
             )
-            self.console.print(no_recovery_panel)
+            print()
+            self.console.print(panel)
+            print()
             return
 
         # Calculate recovery statistics
         stats = self._calculate_recovery_statistics(recovery_status)
 
-        # If no active recoveries, show the simple message
         if stats['active_recoveries'] == 0:
-            no_recovery_panel = Panel(
-                Text("🎉 No active recovery operations", style="bold green", justify="center"),
-                title="🔄 Cluster Recovery Status",
-                border_style="cyan",
-                padding=(2, 4)
+            panel = Panel(
+                Text("✅ No Active Recovery Operations", style=self._sem("success", "bold green"), justify="center"),
+                title=f"[{ts}]🔄 Cluster Recovery Status[/{ts}]",
+                border_style=self._border(),
+                padding=(1, 2)
             )
-            self.console.print(no_recovery_panel)
+            print()
+            self.console.print(panel)
+            print()
             return
 
-        # Create title panel
+        # --- Title panel (standard pattern) ---
+        ss = self.style_system
+        active = stats['active_recoveries']
+        total = stats['total_shards']
+        completion = (stats['completed_shards'] / total * 100) if total > 0 else 0
+
+        # Body: status centered
+        status_text = f"🔶 {active} Recovery Operation{'s' if active != 1 else ''} In Progress"
+
+        # Subtitle bar
+        subtitle_rich = Text()
+        subtitle_rich.append("Active: ", style="default")
+        subtitle_rich.append(str(active), style=ss._get_style('semantic', 'warning', 'yellow') if ss else "yellow")
+        subtitle_rich.append(" | Total Shards: ", style="default")
+        subtitle_rich.append(str(total), style=ss._get_style('semantic', 'info', 'cyan') if ss else "cyan")
+        subtitle_rich.append(" | Completion: ", style="default")
+        if completion >= 75:
+            subtitle_rich.append(f"{completion:.1f}%", style=ss._get_style('semantic', 'success', 'green') if ss else "green")
+        elif completion >= 25:
+            subtitle_rich.append(f"{completion:.1f}%", style=ss._get_style('semantic', 'warning', 'yellow') if ss else "yellow")
+        else:
+            subtitle_rich.append(f"{completion:.1f}%", style=ss._get_style('semantic', 'error', 'red') if ss else "red")
+
+        if stats['recovery_types']:
+            subtitle_rich.append(" | Types: ", style="default")
+            type_parts = []
+            for rtype, count in stats['recovery_types'].items():
+                type_parts.append(f"{count} {rtype}")
+            subtitle_rich.append(", ".join(type_parts), style=ss._get_style('semantic', 'primary', 'bright_magenta') if ss else "bright_magenta")
+
         title_panel = Panel(
-            Text("🔄 Cluster Recovery Status", style="bold blue", justify="center"),
-            subtitle=f"Active recovery operations: {stats['active_recoveries']}",
-            border_style="cyan",
+            Text(status_text, style="bold yellow", justify="center"),
+            title=f"[{ts}]🔄 Cluster Recovery Status[/{ts}]",
+            subtitle=subtitle_rich,
+            border_style="yellow",
             padding=(1, 2)
         )
 
-        # Create summary and stage panels
-        summary_panel = self._create_recovery_summary_panel(stats)
-        stage_panel = self._create_recovery_stages_panel(stats['stage_counts'])
+        # --- Stages & Types panel (left) ---
+        stages_table = Table(show_header=False, box=None, padding=(0, 1))
+        stages_table.add_column("Label", style="bold", no_wrap=True)
+        stages_table.add_column("Icon", justify="left", width=3)
+        stages_table.add_column("Value", no_wrap=True)
 
-        # Create detailed recovery table
+        stage_icons = {
+            'init': '🔨', 'index': '📚', 'start': '🚀',
+            'translog': '📝', 'finalize': '🏁', 'done': '✅'
+        }
+
+        for stage, count in stats['stage_counts'].items():
+            icon = stage_icons.get(stage.lower(), '🔩')
+            stages_table.add_row(f"{stage.title()}:", icon, str(count))
+
+        if stats['recovery_types']:
+            stages_table.add_row("", "", "")
+            for rtype, count in stats['recovery_types'].items():
+                if rtype == 'peer':
+                    stages_table.add_row("Peer Recovery:", "🔄", str(count))
+                elif rtype == 'existing_store':
+                    stages_table.add_row("Existing Store:", "💾", str(count))
+                else:
+                    stages_table.add_row(f"{rtype.title()}:", "🔧", str(count))
+
+        stages_panel = Panel(
+            stages_table,
+            title=f"[{self._title_style()}]🎯 Stages & Types[/{self._title_style()}]",
+            border_style=self._border(),
+            padding=(1, 2)
+        )
+
+        # --- Progress panel (right) ---
+        progress_table = Table(show_header=False, box=None, padding=(0, 1))
+        progress_table.add_column("Label", style="bold", no_wrap=True)
+        progress_table.add_column("Icon", justify="left", width=3)
+        progress_table.add_column("Value", no_wrap=True)
+
+        # Calculate per-shard progress for fastest/slowest/average
+        shard_progress = self._collect_shard_progress(recovery_status)
+
+        if shard_progress:
+            fastest = max(shard_progress, key=lambda x: x['percent'])
+            slowest = min(shard_progress, key=lambda x: x['percent'])
+            avg_pct = sum(s['percent'] for s in shard_progress) / len(shard_progress)
+
+            progress_table.add_row(
+                "Fastest:", "🚀",
+                Text(f"{fastest['label']} {fastest['percent']:.1f}%",
+                     style=ss.get_semantic_style("success") if ss else "green")
+            )
+            progress_table.add_row(
+                "Slowest:", "🐢",
+                Text(f"{slowest['label']} {slowest['percent']:.1f}%",
+                     style=ss.get_semantic_style("warning") if ss else "yellow")
+            )
+            progress_table.add_row(
+                "Average:", "📊",
+                Text(f"{avg_pct:.1f}%",
+                     style=ss.get_semantic_style("info") if ss else "cyan")
+            )
+        else:
+            progress_table.add_row("Progress:", "📊", "Calculating...")
+
+        progress_panel = Panel(
+            progress_table,
+            title=f"[{self._title_style()}]📈 Progress[/{self._title_style()}]",
+            border_style=self._border(),
+            padding=(1, 2)
+        )
+
+        # --- Recovery table ---
         recovery_table = self._create_recovery_table(recovery_status)
 
-        # Display everything
+        # --- Render layout ---
+        print()
         self.console.print(title_panel)
         print()
-        self.console.print(Columns([summary_panel, stage_panel], expand=True))
+        self.console.print(Columns([stages_panel, progress_panel], expand=True))
         print()
         self.console.print(Panel(
             recovery_table,
-            title="🔄 Active Recovery Operations",
-            border_style="cyan",
+            title=f"[{self._title_style()}]🔄 Active Recovery Operations[/{self._title_style()}]",
+            border_style=self._border(),
             padding=(1, 2)
         ))
+        print()
 
     def _calculate_recovery_statistics(self, recovery_status: Dict[str, Any]) -> Dict[str, Any]:
         """Calculate recovery statistics from status data."""
@@ -104,27 +231,19 @@ class RecoveryRenderer:
             for shard in shards:
                 total_shards += 1
 
-                # Only count as active recovery if not in DONE stage
                 stage = shard.get('stage', 'unknown')
                 if stage and stage.upper() != 'DONE':
                     active_recoveries += 1
-
-                # Count recovery types (only for active recoveries)
-                if stage and stage.upper() != 'DONE':
                     shard_type = shard.get('type', 'unknown')
                     recovery_types[shard_type] = recovery_types.get(shard_type, 0) + 1
-
-                # Count stages (only for active recoveries)
-                if stage and stage.upper() != 'DONE':
                     stage_counts[stage] = stage_counts.get(stage, 0) + 1
 
-                # Check completion
                 translog_percent = shard.get('translog', {}).get('percent', '0%')
                 try:
                     percent_value = float(translog_percent.replace('%', '').strip())
                     if percent_value >= 100:
                         completed_shards += 1
-                except:
+                except Exception:
                     pass
 
         return {
@@ -135,89 +254,47 @@ class RecoveryRenderer:
             'stage_counts': stage_counts
         }
 
-    def _create_recovery_summary_panel(self, stats: Dict[str, Any]) -> Panel:
-        """Create recovery summary panel."""
-        summary_table = Table(show_header=False, box=None, padding=(0, 1))
-        summary_table.add_column("Label", style="bold", no_wrap=True)
-        summary_table.add_column("Icon", justify="left", width=3)
-        summary_table.add_column("Value", no_wrap=True)
-
-        summary_table.add_row("Total Shards:", "📊", str(stats['total_shards']))
-        summary_table.add_row("Active Recoveries:", "🔄", str(stats['active_recoveries']))
-
-        if stats['total_shards'] > 0:
-            completion_rate = (stats['completed_shards'] / stats['total_shards']) * 100
-            summary_table.add_row("Completion Rate:", "✅", f"{completion_rate:.1f}%")
-
-        # Recovery types breakdown
-        if stats['recovery_types']:
-            type_text = ", ".join([f"{count} {rtype}" for rtype, count in stats['recovery_types'].items()])
-            summary_table.add_row("Recovery Types:", "🔧", type_text)
-
-        return Panel(
-            summary_table,
-            title="📈 Recovery Summary",
-            border_style="cyan",
-            padding=(1, 2)
-        )
-
-    def _create_recovery_stages_panel(self, stage_counts: Dict[str, int]) -> Panel:
-        """Create recovery stages panel."""
-        if stage_counts:
-            stage_table = Table(show_header=False, box=None, padding=(0, 1))
-            stage_table.add_column("Stage", style="bold", no_wrap=True)
-            stage_table.add_column("Icon", justify="left", width=3)
-            stage_table.add_column("Count", no_wrap=True)
-
-            stage_icons = {
-                'init': '🔨',
-                'index': '📚',
-                'start': '🚀',
-                'translog': '📝',
-                'finalize': '🏁',
-                'done': '✅'
-            }
-
-            for stage, count in stage_counts.items():
-                icon = stage_icons.get(stage, '🔩')
-                stage_table.add_row(stage.title(), icon, str(count))
-
-            return Panel(
-                stage_table,
-                title="🎯 Recovery Stages",
-                border_style="cyan",
-                padding=(1, 2)
-            )
-        else:
-            return Panel(
-                Text("No stage information available", style="dim", justify="center"),
-                title="🎯 Recovery Stages",
-                border_style="cyan",
-                padding=(1, 2)
-            )
+    def _collect_shard_progress(self, recovery_status: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Collect per-shard progress for active recoveries."""
+        progress = []
+        for index_name, index_data in recovery_status.items():
+            for shard in index_data.get('shards', []):
+                stage = shard.get('stage', '')
+                if stage and stage.upper() == 'DONE':
+                    continue
+                translog_percent = shard.get('translog', {}).get('percent', '0%')
+                try:
+                    pct = float(translog_percent.replace('%', '').strip())
+                except Exception:
+                    pct = 0.0
+                shard_id = shard.get('id', '?')
+                progress.append({
+                    'label': f"{index_name}[{shard_id}]",
+                    'percent': pct
+                })
+        return progress
 
     def _create_recovery_table(self, recovery_status: Dict[str, Any]) -> Table:
         """Create detailed recovery table."""
         recovery_table = Table(
             show_header=True,
-            header_style="bold white",
+            header_style=self.theme_manager.get_theme_styles().get("header_style", "bold white") if self.theme_manager else "bold white",
             expand=True,
             box=self.style_system.get_table_box() if self.style_system else None
         )
-        recovery_table.add_column("📚 Index", no_wrap=True)
-        recovery_table.add_column("📋 Shard", justify="center", width=8)
-        recovery_table.add_column("🎯 Stage", justify="center", width=12)
-        recovery_table.add_column("📤 Source Node", no_wrap=True)
-        recovery_table.add_column("📥 Target Node", no_wrap=True)
-        recovery_table.add_column("🔧 Type", justify="center", width=10)
-        recovery_table.add_column("📊 Progress", justify="center", width=15)
+        recovery_table.add_column("Index", no_wrap=True)
+        recovery_table.add_column("Shard", justify="center", width=6)
+        recovery_table.add_column("Stage", justify="center", width=12)
+        recovery_table.add_column("Source", no_wrap=True)
+        recovery_table.add_column("Target", no_wrap=True)
+        recovery_table.add_column("Type", justify="center", width=14)
+        recovery_table.add_column("Progress", justify="center", width=15)
 
         for index_name, index_data in recovery_status.items():
             shards = index_data.get('shards', [])
             for shard in shards:
                 stage = shard.get('stage', '-')
 
-                # Only show active recoveries (not DONE)
                 if stage and stage.upper() == 'DONE':
                     continue
 
@@ -227,30 +304,26 @@ class RecoveryRenderer:
                 shard_type = shard.get('type', '-')
                 translog_percent = shard.get('translog', {}).get('percent', '0%')
 
-                # Determine progress and styling
                 try:
                     percent_value = float(translog_percent.replace('%', '').strip())
-
-                    # Create progress bar display
                     progress_bar = self.create_progress_bar(percent_value)
 
                     if percent_value >= 100:
                         row_style = "green"
-                        progress_display = f"✅ {progress_bar} 100%"
+                        progress_display = f"{progress_bar} 100%"
                     elif percent_value >= 75:
                         row_style = "yellow"
-                        progress_display = f"📊 {progress_bar} {percent_value:.1f}%"
+                        progress_display = f"{progress_bar} {percent_value:.1f}%"
                     elif percent_value >= 25:
                         row_style = "cyan"
-                        progress_display = f"📊 {progress_bar} {percent_value:.1f}%"
+                        progress_display = f"{progress_bar} {percent_value:.1f}%"
                     else:
                         row_style = "red"
-                        progress_display = f"📊 {progress_bar} {percent_value:.1f}%"
+                        progress_display = f"{progress_bar} {percent_value:.1f}%"
                 except (ValueError, AttributeError):
-                    progress_display = "❓ Unknown"
+                    progress_display = "Unknown"
                     row_style = "dim"
 
-                # Format stage with appropriate styling
                 stage_styled = self._format_stage(stage)
 
                 recovery_table.add_row(
@@ -285,20 +358,10 @@ class RecoveryRenderer:
             return stage.title()
 
     def create_progress_bar(self, percent: float, width: int = 8) -> str:
-        """
-        Create a visual progress bar for recovery operations.
-
-        Args:
-            percent: Completion percentage (0-100)
-            width: Width of the progress bar in characters
-
-        Returns:
-            Formatted progress bar string with Rich markup
-        """
+        """Create a visual progress bar for recovery operations."""
         filled = int((percent / 100) * width)
         empty = width - filled
 
-        # Use theme-aware colors if available, otherwise fallback to defaults
         if self.style_system:
             success_color = self.style_system.get_semantic_style("success").replace("bold ", "")
             warning_color = self.style_system.get_semantic_style("warning").replace("bold ", "")

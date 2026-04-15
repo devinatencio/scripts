@@ -7,10 +7,11 @@ separation of concerns.
 """
 
 import json
-from rich.console import Console
+from rich.console import Console, Group
 from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
+from rich import box
 
 
 class SettingsRenderer:
@@ -27,547 +28,509 @@ class SettingsRenderer:
         self.console = console or Console()
         self.theme_manager = theme_manager
 
+        # Initialise style system if available
+        self.style_system = None
+        try:
+            from display.style_system import StyleSystem
+            if theme_manager:
+                self.style_system = StyleSystem(theme_manager)
+        except ImportError:
+            pass
+
+    # ------------------------------------------------------------------ #
+    # Theme helpers (same pattern as ILMRenderer / SnapshotRenderer)      #
+    # ------------------------------------------------------------------ #
+
+    def _border(self, fallback: str = "cyan") -> str:
+        """Return the theme border style."""
+        if self.theme_manager:
+            return self.theme_manager.get_theme_styles().get("border_style", fallback)
+        return fallback
+
+    def _title_style(self, fallback: str = "bold white") -> str:
+        """Return the theme panel title style."""
+        if self.theme_manager:
+            return self.theme_manager.get_themed_style("panel_styles", "title", fallback)
+        return fallback
+
+    def _sem(self, semantic: str, fallback: str = "white") -> str:
+        """Return a semantic style from the style system."""
+        if self.style_system:
+            return self.style_system.get_semantic_style(semantic)
+        defaults = {
+            "success":   "bold green",
+            "warning":   "bold yellow",
+            "error":     "bold red",
+            "info":      "cyan",
+            "primary":   "bold cyan",
+            "secondary": "magenta",
+            "neutral":   "white",
+            "muted":     "dim white",
+        }
+        return defaults.get(semantic, fallback)
+
+    def _fmt_value(self, value) -> Text:
+        """Format a setting value with semantic colour."""
+        if value is None:
+            return Text("null", style="dim italic")
+        if isinstance(value, bool):
+            return Text(str(value).lower(), style=self._sem("success") if value else self._sem("muted"))
+        if isinstance(value, (int, float)):
+            return Text(str(value), style=self._sem("info"))
+        return Text(str(value), style=self._sem("neutral"))
+
+    # ------------------------------------------------------------------ #
+    # Public entry point                                                   #
+    # ------------------------------------------------------------------ #
+
     def render_settings_overview(self, settings_data, styles=None):
         """
         Render complete settings overview with all sections.
-
-        Args:
-            settings_data: Dictionary containing settings information
-            styles: Theme styles dictionary (optional)
         """
-        styles = styles or self._get_default_styles()
-
-        # Render main settings table
-        self.render_settings_table(settings_data, styles)
-        self.console.print()
-
-        # Render username configuration section
-        if settings_data.get('username_configuration'):
-            self.render_username_configuration(settings_data, styles)
-            self.console.print()
-
-        # Render clusters if any exist
-        if settings_data.get('has_clusters'):
-            self.render_clusters_table(settings_data, styles)
-            self.console.print()
-
-            # Render authentication info if there are auth-enabled clusters
-            auth_clusters = [auth for auth in settings_data['authentication'] if auth['has_auth']]
-            if auth_clusters:
-                self.render_authentication_table(settings_data, styles)
-                self.console.print()
-
-        # Render configuration file info
-        self.render_file_info(settings_data, styles)
-
-    def render_settings_table(self, settings_data, styles=None):
-        """
-        Render the main configuration settings table.
-
-        Args:
-            settings_data: Dictionary containing settings information
-            styles: Theme styles dictionary (optional)
-        """
-        styles = styles or self._get_default_styles()
-        panel_styles = styles.get('panel_styles', {})
-
-        # Main Settings Table
-        settings_table = Table(
-            title="🔩 Configuration Settings",
-            title_style=styles.get('header_style', 'bold white'),
-            border_style=styles.get('border_style', 'white'),
-            expand=True
-        )
-        settings_table.add_column("Setting", style=panel_styles.get('title', 'cyan'), no_wrap=True)
-        settings_table.add_column("Value", style=panel_styles.get('info', 'white'))
-        settings_table.add_column("Description", style=panel_styles.get('subtitle', 'dim white'))
-
-        # Add default server info
+        # --- Title panel (standard pattern) ---
         default_cluster = settings_data.get('default_cluster')
-        default_value = Text(
-            default_cluster or "None",
-            style=panel_styles.get('success' if default_cluster else 'warning',
-                                  'green' if default_cluster else 'yellow')
-        )
-        settings_table.add_row(
-            "Default Server",
-            default_value,
-            "Currently active cluster"
-        )
+        num_settings = len(settings_data.get('settings', {}))
+        num_clusters = len(settings_data.get('clusters', [])) if settings_data.get('has_clusters') else 0
 
-        # Add all settings
-        setting_descriptions = self._get_setting_descriptions()
-        settings = settings_data.get('settings', {})
+        subtitle_rich = Text()
+        subtitle_rich.append("Default: ", style="default")
+        if default_cluster:
+            subtitle_rich.append(default_cluster, style=self._sem("success"))
+        else:
+            subtitle_rich.append("None", style=self._sem("warning"))
+        subtitle_rich.append(" | Settings: ", style="default")
+        subtitle_rich.append(str(num_settings), style=self._sem("info"))
+        subtitle_rich.append(" | Clusters: ", style="default")
+        subtitle_rich.append(str(num_clusters), style=self._sem("primary"))
 
-        for key, value in settings.items():
-            if key == 'dangling_cleanup':
-                # Special handling for nested dangling_cleanup settings
-                for sub_key, sub_value in value.items():
-                    setting_name = f"dangling_cleanup.{sub_key}"
-                    description = setting_descriptions.get(setting_name, 'Dangling cleanup setting')
-                    settings_table.add_row(setting_name, str(sub_value), description)
-            else:
-                description = setting_descriptions.get(key, 'Configuration setting')
-                settings_table.add_row(key, str(value), description)
+        if default_cluster:
+            status_text = f"✅ Connected to {default_cluster}"
+            body_style = "bold green"
+        else:
+            status_text = "🔶 No Default Cluster Configured"
+            body_style = "bold yellow"
 
-        # Add environment overrides
-        overrides = settings_data.get('environment_overrides', {})
-        for override_key, override_info in overrides.items():
-            override_value = Text(override_info['value'], style=panel_styles.get('warning', 'yellow'))
-            settings_table.add_row(
-                f"{override_key} (override)",
-                override_value,
-                f"Environment variable {override_info['variable']} active"
-            )
-
-        # Wrap in panel
-        settings_panel = Panel(
-            settings_table,
-            title="📋 Configuration Settings",
-            title_align="left",
-            border_style=styles.get('border_style', 'white'),
+        ts = self._sem("primary")
+        title_panel = Panel(
+            Text(status_text, style=body_style, justify="center"),
+            title=f"[{ts}]🔩 escmd Configuration[/{ts}]",
+            subtitle=subtitle_rich,
+            border_style=self._border(),
             padding=(1, 2)
         )
 
-        self.console.print(settings_panel)
+        self.console.print()
+        self.console.print(title_panel)
+        self.console.print()
+
+        self.render_settings_table(settings_data)
+        self.console.print()
+
+        if settings_data.get('username_configuration'):
+            self.render_username_configuration(settings_data)
+            self.console.print()
+
+        if settings_data.get('has_clusters'):
+            self.render_clusters_table(settings_data)
+            self.console.print()
+
+            auth_clusters = [a for a in settings_data['authentication'] if a['has_auth']]
+            if auth_clusters:
+                self.render_authentication_table(settings_data)
+                self.console.print()
+
+        self.render_file_info(settings_data)
+
+    # ------------------------------------------------------------------ #
+    # Settings table                                                       #
+    # ------------------------------------------------------------------ #
+
+    def render_settings_table(self, settings_data, styles=None):
+        """Render the main configuration settings table."""
+        border = self._border()
+        title  = self._title_style()
+
+        table = Table(
+            show_header=True,
+            header_style=title,
+            border_style=border,
+            expand=True,
+            box=box.SIMPLE_HEAD,
+        )
+        table.add_column("Setting",     style=self._sem("primary"),  no_wrap=True)
+        table.add_column("Value",       style=self._sem("neutral"))
+        table.add_column("Description", style=self._sem("muted"))
+
+        # Default cluster row
+        default_cluster = settings_data.get('default_cluster')
+        table.add_row(
+            "Default Server",
+            Text(default_cluster or "None", style=self._sem("success") if default_cluster else self._sem("warning")),
+            "Currently active cluster",
+        )
+
+        descriptions = self._get_setting_descriptions()
+        for key, value in settings_data.get('settings', {}).items():
+            if key == 'dangling_cleanup' and isinstance(value, dict):
+                for sub_key, sub_value in value.items():
+                    full_key = f"dangling_cleanup.{sub_key}"
+                    table.add_row(full_key, self._fmt_value(sub_value), descriptions.get(full_key, ""))
+            else:
+                table.add_row(key, self._fmt_value(value), descriptions.get(key, "Configuration setting"))
+
+        for override_key, info in settings_data.get('environment_overrides', {}).items():
+            table.add_row(
+                f"{override_key} (override)",
+                Text(info['value'], style=self._sem("warning")),
+                f"Env var {info['variable']} active",
+            )
+
+        self.console.print(Panel(
+            table,
+            title=f"[{title}]📋 Configuration Settings[/{title}]",
+            title_align="left",
+            border_style=border,
+            padding=(1, 2),
+        ))
+
+    # ------------------------------------------------------------------ #
+    # Clusters table                                                       #
+    # ------------------------------------------------------------------ #
 
     def render_clusters_table(self, settings_data, styles=None):
-        """
-        Render the clusters summary table.
-
-        Args:
-            settings_data: Dictionary containing settings information
-            styles: Theme styles dictionary (optional)
-        """
-        styles = styles or self._get_default_styles()
-        panel_styles = styles.get('panel_styles', {})
-
+        """Render the clusters summary table."""
         clusters = settings_data.get('clusters', [])
         if not clusters:
             return
 
-        # Clusters Summary Table
-        clusters_table = Table(
-            title=f"🌐 Configured Clusters ({len(clusters)} total)",
-            title_style=styles.get('header_style', 'bold white'),
-            border_style=styles.get('border_style', 'white'),
-            expand=True
+        border = self._border()
+        title  = self._title_style()
+
+        table = Table(
+            show_header=True,
+            header_style=title,
+            border_style=border,
+            expand=True,
+            box=box.SIMPLE_HEAD,
         )
-        clusters_table.add_column("Name", style=panel_styles.get('title', 'cyan'), no_wrap=True)
-        clusters_table.add_column("Environment", style=panel_styles.get('secondary', 'magenta'), no_wrap=True)
-        clusters_table.add_column("Primary Host", style=panel_styles.get('info', 'white'))
-        clusters_table.add_column("Port", style=panel_styles.get('success', 'green'), justify="right")
-        clusters_table.add_column("SSL", style=panel_styles.get('warning', 'yellow'), justify="center")
-        clusters_table.add_column("Auth", style=panel_styles.get('error', 'red'), justify="center")
+        table.add_column("Name",         style=self._sem("primary"),    no_wrap=True)
+        table.add_column("Environment",  style=self._sem("secondary"),  no_wrap=True)
+        table.add_column("Primary Host", style=self._sem("neutral"))
+        table.add_column("Port",         style=self._sem("info"),        justify="right")
+        table.add_column("SSL",          style=self._sem("warning"),     justify="center")
+        table.add_column("Auth",         style=self._sem("error"),       justify="center")
 
         for cluster in clusters:
-            # Add default marker to name if it's the default
-            if cluster['is_default']:
-                name_text = Text(f"{cluster['name']} 🏆", style=panel_styles.get('success', 'bold green'))
-            else:
-                name_text = Text(cluster['name'], style=panel_styles.get('info', 'white'))
-
-            clusters_table.add_row(
-                name_text,
-                cluster['environment'],
-                cluster['hostname'],
-                str(cluster['port']),
-                "Yes" if cluster['use_ssl'] else "No",
-                "Yes" if cluster['has_authentication'] else "No"
+            name = (
+                Text(f"★ {cluster['name']}", style=self._sem("success"))
+                if cluster['is_default']
+                else Text(cluster['name'], style=self._sem("neutral"))
             )
+            ssl_text  = Text("✓", style=self._sem("success")) if cluster['use_ssl']            else Text("✗", style=self._sem("muted"))
+            auth_text = Text("✓", style=self._sem("success")) if cluster['has_authentication'] else Text("✗", style=self._sem("muted"))
 
-        # Wrap in panel
-        clusters_panel = Panel(
-            clusters_table,
-            title=f"📂 Cluster Directory ({len(clusters)} configured)",
+            table.add_row(name, cluster['environment'], cluster['hostname'], str(cluster['port']), ssl_text, auth_text)
+
+        self.console.print(Panel(
+            table,
+            title=f"[{title}]🌐 Cluster Directory ({len(clusters)} configured)[/{title}]",
             title_align="left",
-            border_style=styles.get('border_style', 'white'),
-            padding=(1, 2)
-        )
+            border_style=border,
+            padding=(1, 2),
+        ))
 
-        self.console.print(clusters_panel)
+    # ------------------------------------------------------------------ #
+    # Authentication table                                                 #
+    # ------------------------------------------------------------------ #
 
     def render_authentication_table(self, settings_data, styles=None):
-        """
-        Render the authentication configuration table.
-
-        Args:
-            settings_data: Dictionary containing settings information
-            styles: Theme styles dictionary (optional)
-        """
-        styles = styles or self._get_default_styles()
-        panel_styles = styles.get('panel_styles', {})
-
-        auth_data = settings_data.get('authentication', [])
+        """Render the authentication configuration table."""
+        auth_data = [a for a in settings_data.get('authentication', []) if a['has_auth']]
         if not auth_data:
             return
 
-        # Authentication Information Table
-        auth_table = Table(
-            title="🔐 Authentication Configuration",
-            title_style=styles.get('header_style', 'bold white'),
-            border_style=styles.get('border_style', 'white'),
-            expand=True
+        border = self._border()
+        title  = self._title_style()
+
+        table = Table(
+            show_header=True,
+            header_style=title,
+            border_style=border,
+            expand=True,
+            box=box.SIMPLE_HEAD,
         )
-        auth_table.add_column("Cluster", style=panel_styles.get('title', 'cyan'), no_wrap=True)
-        auth_table.add_column("Username Source", style=panel_styles.get('info', 'white'))
-        auth_table.add_column("Username", style=panel_styles.get('secondary', 'magenta'))
-        auth_table.add_column("Password Source", style=panel_styles.get('warning', 'yellow'))
+        table.add_column("Cluster",         style=self._sem("primary"),    no_wrap=True)
+        table.add_column("Username Source", style=self._sem("neutral"))
+        table.add_column("Username",        style=self._sem("secondary"))
+        table.add_column("Password Source", style=self._sem("warning"))
 
         for auth in auth_data:
-            # Color code the cluster name if it's the default
-            if auth['is_default']:
-                cluster_name = Text(f"{auth['cluster_name']} 🏆", style=panel_styles.get('success', 'bold green'))
-            else:
-                cluster_name = Text(auth['cluster_name'], style=panel_styles.get('info', 'white'))
-
-            auth_table.add_row(
-                cluster_name,
-                auth['username_source'],
-                auth['username'],
-                auth['password_source']
+            cluster_name = (
+                Text(f"★ {auth['cluster_name']}", style=self._sem("success"))
+                if auth['is_default']
+                else Text(auth['cluster_name'], style=self._sem("neutral"))
             )
+            table.add_row(cluster_name, auth['username_source'], auth['username'], auth['password_source'])
 
-        # Wrap in panel
-        auth_panel = Panel(
-            auth_table,
-            title="🔐 Authentication Configuration",
+        self.console.print(Panel(
+            table,
+            title=f"[{title}]🔐 Authentication Configuration[/{title}]",
             title_align="left",
-            border_style=styles.get('border_style', 'white'),
-            padding=(1, 2)
-        )
+            border_style=border,
+            padding=(1, 2),
+        ))
 
-        self.console.print(auth_panel)
+    # ------------------------------------------------------------------ #
+    # Username configuration                                               #
+    # ------------------------------------------------------------------ #
 
     def render_username_configuration(self, settings_data, styles=None):
-        """
-        Render the username configuration section.
-
-        Args:
-            settings_data: Dictionary containing settings information
-            styles: Theme styles dictionary (optional)
-        """
-        styles = styles or self._get_default_styles()
-        panel_styles = styles.get('panel_styles', {})
-
+        """Render the username configuration section."""
         username_data = settings_data.get('username_configuration', {})
         if not username_data:
             return
 
-        from rich.table import Table
-        from rich.text import Text
-        from rich.panel import Panel
+        border = self._border()
+        title  = self._title_style()
 
-        # Current Username Configuration Table
-        config_table = Table(
-            title="🔑 Current Username Configuration",
-            title_style=styles.get('header_style', 'bold white'),
-            border_style=styles.get('border_style', 'white'),
-            expand=True
-        )
-        config_table.add_column("Setting", style=panel_styles.get('title', 'cyan'), no_wrap=True, width=20)
-        config_table.add_column("Value", style=panel_styles.get('info', 'white'), width=25)
-        config_table.add_column("Status", style=panel_styles.get('secondary', 'magenta'))
+        # Current resolution table
+        config_table = Table(show_header=True, header_style=title, box=box.SIMPLE_HEAD, expand=True)
+        config_table.add_column("Setting",  style=self._sem("primary"),   no_wrap=True, width=22)
+        config_table.add_column("Value",    style=self._sem("neutral"),   width=28)
+        config_table.add_column("Status",   style=self._sem("secondary"))
 
-        # Add current configuration rows
-        resolved_username = username_data.get('resolved_username')
+        resolved     = username_data.get('resolved_username')
         active_source = username_data.get('active_source')
-
-        if resolved_username:
-            status_text = f"✅ Active ({active_source})"
-            status_style = panel_styles.get('success', 'green')
-        else:
-            status_text = "❌ Not configured"
-            status_style = panel_styles.get('error', 'red')
-
-        config_table.add_row(
-            "Resolved Username",
-            resolved_username or Text("Not set", style="dim"),
-            Text(status_text, style=status_style)
+        status_text  = (
+            Text(f"✅ Active ({active_source})", style=self._sem("success"))
+            if resolved
+            else Text("❌ Not configured", style=self._sem("error"))
         )
+        config_table.add_row("Resolved Username", resolved or Text("Not set", style="dim"), status_text)
 
-        json_username = username_data.get('json_username')
+        json_u = username_data.get('json_username')
         config_table.add_row(
             "JSON Config",
-            json_username or Text("Not set", style="dim"),
-            "🎯 3rd Priority" if json_username else Text("Not configured", style="dim")
+            json_u or Text("Not set", style="dim"),
+            "🎯 3rd Priority" if json_u else Text("Not configured", style="dim"),
         )
 
-        global_username = username_data.get('global_username')
+        global_u = username_data.get('global_username')
         config_table.add_row(
             "Global Config",
-            global_username or Text("Not set", style="dim"),
-            "📁 4th Priority" if global_username else Text("Not configured", style="dim")
+            global_u or Text("Not set", style="dim"),
+            "📁 4th Priority" if global_u else Text("Not configured", style="dim"),
         )
 
-        # Priority Order Table
-        priority_table = Table(
-            title="🎯 Username Resolution Priority Order",
-            title_style=styles.get('header_style', 'bold white'),
-            border_style=styles.get('border_style', 'white'),
-            expand=True
-        )
-        priority_table.add_column("Priority", style=panel_styles.get('warning', 'yellow'), width=8)
-        priority_table.add_column("Source", style=panel_styles.get('title', 'cyan'), width=20)
-        priority_table.add_column("Description", style=panel_styles.get('info', 'white'))
-        priority_table.add_column("Status", style=panel_styles.get('secondary', 'magenta'), width=15)
+        # Priority order table
+        priority_table = Table(show_header=True, header_style=title, box=box.SIMPLE_HEAD, expand=True)
+        priority_table.add_column("Priority",    style=self._sem("warning"),   width=9)
+        priority_table.add_column("Source",      style=self._sem("primary"),   width=22)
+        priority_table.add_column("Description", style=self._sem("neutral"))
+        priority_table.add_column("Status",      style=self._sem("secondary"), width=16)
 
-        for priority_info in username_data.get('priority_order', []):
-            level = priority_info['level']
-            source = priority_info['source']
-            description = priority_info['description']
-            is_active = priority_info.get('active', False)
-            is_configured = priority_info.get('configured', False)
-            value = priority_info.get('value')
-
-            # Determine status
-            if is_active:
-                status_text = f"🎯 Active"
-                status_style = panel_styles.get('success', 'green')
-            elif is_configured:
-                status_text = f"✅ Set"
-                status_style = panel_styles.get('info', 'white')
-                if value:
-                    description += f" ({value})"
+        for p in username_data.get('priority_order', []):
+            description = p['description']
+            if p.get('active'):
+                st = Text("🎯 Active", style=self._sem("success"))
+            elif p.get('configured'):
+                val = p.get('value')
+                if val:
+                    description += f" ({val})"
+                st = Text("✅ Set", style=self._sem("info"))
             else:
-                status_text = "Not set"
-                status_style = "dim"
+                st = Text("Not set", style="dim")
 
-            priority_table.add_row(
-                f"{level}",
-                source,
-                description,
-                Text(status_text, style=status_style)
-            )
+            priority_table.add_row(str(p['level']), p['source'], description, st)
 
-        # Combine tables in a panel
-        from rich.columns import Columns
-        from rich.console import Group
-
-        tables_group = Group(config_table, "", priority_table)
-
-        username_panel = Panel(
-            tables_group,
-            title="🔑 Username Configuration",
+        self.console.print(Panel(
+            Group(config_table, Text(""), priority_table),
+            title=f"[{title}]🔑 Username Configuration[/{title}]",
             title_align="left",
-            border_style=styles.get('border_style', 'white'),
-            padding=(1, 2)
-        )
+            border_style=border,
+            padding=(1, 2),
+        ))
 
-        self.console.print(username_panel)
+    # ------------------------------------------------------------------ #
+    # File info                                                            #
+    # ------------------------------------------------------------------ #
 
     def render_file_info(self, settings_data, styles=None):
-        """
-        Render configuration file information.
+        """Render configuration file information as a panel."""
+        files = settings_data.get('configuration_files', {}).get('files', [])
+        if not files:
+            return
 
-        Args:
-            settings_data: Dictionary containing settings information
-            styles: Theme styles dictionary (optional)
-        """
-        styles = styles or self._get_default_styles()
-        panel_styles = styles.get('panel_styles', {})
-        info_style = panel_styles.get('subtitle', 'dim white')
+        border = self._border("dim")
+        title  = self._title_style()
 
-        file_info = settings_data.get('configuration_files', {})
-        files = file_info.get('files', [])
+        table = Table.grid(padding=(0, 3))
+        table.add_column(style=self._sem("primary"),  no_wrap=True)
+        table.add_column(style=self._sem("neutral"))
+        table.add_column(style=self._sem("muted"))
 
-        for file_data in files:
-            icon = "📄" if file_data['type'] == 'Configuration' else "📂" if 'Servers' in file_data['type'] else "📄"
-            self.console.print(f"[{info_style}]{icon} {file_data['type']}: {file_data['path']} ({file_data['status']})[/{info_style}]")
+        for f in files:
+            icon = "💾" if f['type'] == 'State File' else ("📂" if "Servers" in f['type'] else "📄")
+            status_style = self._sem("success") if f['exists'] else self._sem("error")
+            table.add_row(f"{icon} {f['type']}", f['path'], Text(f['status'], style=status_style))
+
+        self.console.print(Panel(
+            table,
+            title=f"[{title}]📁 Configuration Files[/{title}]",
+            title_align="left",
+            border_style=border,
+            padding=(1, 2),
+        ))
+
+    # ------------------------------------------------------------------ #
+    # Security / validation / summary / JSON  (unchanged logic, updated   #
+    # to use theme helpers)                                                #
+    # ------------------------------------------------------------------ #
 
     def render_security_analysis(self, settings_data, security_analysis, styles=None):
-        """
-        Render security posture analysis.
+        """Render security posture analysis."""
+        border = self._border()
+        title  = self._title_style()
 
-        Args:
-            settings_data: Dictionary containing settings information
-            security_analysis: Security analysis results
-            styles: Theme styles dictionary (optional)
-        """
-        styles = styles or self._get_default_styles()
-        panel_styles = styles.get('panel_styles', {})
+        table = Table.grid(padding=(0, 3))
+        table.add_column(style=self._sem("primary"),  no_wrap=True, min_width=20)
+        table.add_column(style=self._sem("neutral"))
 
-        # Security Analysis Table
-        security_table = Table.grid(padding=(0, 3))
-        security_table.add_column(style=panel_styles.get('title', 'cyan'), no_wrap=True, min_width=20)
-        security_table.add_column(style=panel_styles.get('info', 'white'))
+        total = security_analysis['total_clusters']
+        table.add_row("Total Clusters:",   str(total))
+        table.add_row("SSL Enabled:",      f"{security_analysis['ssl_enabled']}/{total}")
+        table.add_row("SSL Verified:",     f"{security_analysis['ssl_verified']}/{total}")
+        table.add_row("Auth Enabled:",     f"{security_analysis['auth_enabled']}/{total}")
+        table.add_row("Secure Passwords:", f"{security_analysis['secure_passwords']}/{security_analysis['auth_enabled']}")
 
-        security_table.add_row("Total Clusters:", str(security_analysis['total_clusters']))
-        security_table.add_row("SSL Enabled:", f"{security_analysis['ssl_enabled']}/{security_analysis['total_clusters']}")
-        security_table.add_row("SSL Verified:", f"{security_analysis['ssl_verified']}/{security_analysis['total_clusters']}")
-        security_table.add_row("Auth Enabled:", f"{security_analysis['auth_enabled']}/{security_analysis['total_clusters']}")
-        security_table.add_row("Secure Passwords:", f"{security_analysis['secure_passwords']}/{security_analysis['auth_enabled']}")
-
-        # Security score with color coding
         score = security_analysis['security_score']
-        if score >= 80:
-            score_color = panel_styles.get('success', 'green')
-        elif score >= 60:
-            score_color = panel_styles.get('warning', 'yellow')
-        else:
-            score_color = panel_styles.get('error', 'red')
+        score_style = self._sem("success") if score >= 80 else (self._sem("warning") if score >= 60 else self._sem("error"))
+        table.add_row("Security Score:", Text(f"{score}/100", style=score_style))
 
-        score_text = Text(f"{score}/100", style=score_color)
-        security_table.add_row("Security Score:", score_text)
-
-        # Recommendations
         if security_analysis['recommendations']:
-            security_table.add_row("", "")
-            security_table.add_row("Recommendations:", "")
+            table.add_row("", "")
+            table.add_row("Recommendations:", "")
             for rec in security_analysis['recommendations']:
-                security_table.add_row("", f"• {rec}")
+                table.add_row("", f"• {rec}")
 
-        security_panel = Panel(
-            security_table,
-            title="🔐 Security Analysis",
-            border_style=panel_styles.get('secondary', 'cyan'),
-            padding=(1, 2)
-        )
-
-        self.console.print(security_panel)
+        self.console.print(Panel(
+            table,
+            title=f"[{title}]🔐 Security Analysis[/{title}]",
+            border_style=border,
+            padding=(1, 2),
+        ))
 
     def render_validation_results(self, validation_results, styles=None):
-        """
-        Render configuration validation results.
+        """Render configuration validation results."""
+        border = self._border()
+        title  = self._title_style()
 
-        Args:
-            validation_results: Validation results dictionary
-            styles: Theme styles dictionary (optional)
-        """
-        styles = styles or self._get_default_styles()
-        panel_styles = styles.get('panel_styles', {})
+        status       = "✅ Valid" if validation_results['is_valid'] else "❌ Invalid"
+        status_style = self._sem("success") if validation_results['is_valid'] else self._sem("error")
 
-        # Validation status
-        status = "✅ Valid" if validation_results['is_valid'] else "❌ Invalid"
-        status_style = panel_styles.get('success', 'green') if validation_results['is_valid'] else panel_styles.get('error', 'red')
+        table = Table.grid(padding=(0, 3))
+        table.add_column(style=self._sem("primary"),  no_wrap=True, min_width=15)
+        table.add_column(style=self._sem("neutral"))
 
-        validation_table = Table.grid(padding=(0, 3))
-        validation_table.add_column(style=panel_styles.get('title', 'cyan'), no_wrap=True, min_width=15)
-        validation_table.add_column(style=panel_styles.get('info', 'white'))
+        table.add_row("Status:", Text(status, style=status_style))
+        table.add_row("Score:",  f"{validation_results['score']}/100")
 
-        validation_table.add_row("Status:", Text(status, style=status_style))
-        validation_table.add_row("Score:", f"{validation_results['score']}/100")
+        for error in validation_results.get('errors', []):
+            table.add_row("", Text(f"❌ {error}", style=self._sem("error")))
 
-        if validation_results['errors']:
-            validation_table.add_row("", "")
-            validation_table.add_row("Errors:", "")
-            for error in validation_results['errors']:
-                validation_table.add_row("", Text(f"❌ {error}", style=panel_styles.get('error', 'red')))
-
-        if validation_results['warnings']:
-            validation_table.add_row("", "")
-            validation_table.add_row("Warnings:", "")
+        if validation_results.get('warnings'):
+            table.add_row("", "")
+            table.add_row("Warnings:", "")
             for warning in validation_results['warnings']:
-                validation_table.add_row("", Text(f"🔶 {warning}", style=panel_styles.get('warning', 'yellow')))
+                table.add_row("", Text(f"🔶 {warning}", style=self._sem("warning")))
 
-        if validation_results['info']:
-            validation_table.add_row("", "")
-            validation_table.add_row("Info:", "")
+        if validation_results.get('info'):
+            table.add_row("", "")
+            table.add_row("Info:", "")
             for info in validation_results['info']:
-                validation_table.add_row("", Text(f"🔵 {info}", style=panel_styles.get('info', 'blue')))
+                table.add_row("", Text(f"🔵 {info}", style=self._sem("info")))
 
-        validation_panel = Panel(
-            validation_table,
-            title="✅ Configuration Validation",
-            border_style=panel_styles.get('secondary', 'cyan'),
-            padding=(1, 2)
-        )
-
-        self.console.print(validation_panel)
+        self.console.print(Panel(
+            table,
+            title=f"[{title}]✅ Configuration Validation[/{title}]",
+            border_style=border,
+            padding=(1, 2),
+        ))
 
     def render_settings_summary(self, settings_data, styles=None):
-        """
-        Render a compact settings summary.
+        """Render a compact settings summary."""
+        border = self._border()
+        title  = self._title_style()
 
-        Args:
-            settings_data: Dictionary containing settings information
-            styles: Theme styles dictionary (optional)
-        """
-        styles = styles or self._get_default_styles()
-        panel_styles = styles.get('panel_styles', {})
+        table = Table.grid(padding=(0, 3))
+        table.add_column(style=self._sem("primary"),  no_wrap=True, min_width=15)
+        table.add_column(style=self._sem("neutral"))
 
-        summary_table = Table.grid(padding=(0, 3))
-        summary_table.add_column(style=panel_styles.get('title', 'cyan'), no_wrap=True, min_width=15)
-        summary_table.add_column(style=panel_styles.get('info', 'white'))
+        table.add_row("Default Cluster:", settings_data.get('default_cluster', 'None'))
+        table.add_row("Total Clusters:",  str(settings_data.get('total_clusters', 0)))
 
-        # Key metrics
-        summary_table.add_row("Default Cluster:", settings_data.get('default_cluster', 'None'))
-        summary_table.add_row("Total Clusters:", str(settings_data.get('total_clusters', 0)))
-
-        # File mode
         file_info = settings_data.get('configuration_files', {})
-        mode = "Dual File" if file_info.get('is_dual_file_mode') else "Single File"
-        summary_table.add_row("Config Mode:", mode)
+        table.add_row("Config Mode:", "Dual File" if file_info.get('is_dual_file_mode') else "Single File")
 
-        # Environment overrides
         overrides = settings_data.get('environment_overrides', {})
         if overrides:
-            summary_table.add_row("Env Overrides:", str(len(overrides)))
+            table.add_row("Env Overrides:", str(len(overrides)))
 
-        summary_panel = Panel(
-            summary_table,
-            title="📋 Settings Summary",
-            border_style=panel_styles.get('secondary', 'cyan'),
-            padding=(1, 2)
-        )
-
-        self.console.print(summary_panel)
+        self.console.print(Panel(
+            table,
+            title=f"[{title}]📋 Settings Summary[/{title}]",
+            border_style=border,
+            padding=(1, 2),
+        ))
 
     def render_json_settings(self, settings_data):
-        """
-        Render settings information in JSON format.
-
-        Args:
-            settings_data: Dictionary containing settings information
-        """
-        # Create JSON-friendly output
+        """Render settings information in JSON format."""
         json_output = {
             'default_server': settings_data.get('default_cluster'),
-            'settings': settings_data.get('settings', {}),
-            'servers': {}
+            'settings':       settings_data.get('settings', {}),
+            'servers':        {c['name']: c['raw_config'] for c in settings_data.get('clusters', [])},
         }
-
-        # Add server information
-        for cluster in settings_data.get('clusters', []):
-            json_output['servers'][cluster['name']] = cluster['raw_config']
-
         self.console.print_json(json.dumps(json_output, indent=2))
+
+    # ------------------------------------------------------------------ #
+    # Internal helpers                                                     #
+    # ------------------------------------------------------------------ #
 
     def _get_setting_descriptions(self):
         """Get descriptions for configuration settings."""
         return {
-            'box_style': 'Rich table border style',
-            'health_style': 'Health command display mode',
-            'classic_style': 'Classic health display format',
-            'enable_paging': 'Auto-enable pager for long output',
-            'paging_threshold': 'Line count threshold for paging',
-            'ilm_display_limit': 'Max ILM unmanaged indices to show before truncating',
-            'show_legend_panels': 'Show legend panels in output',
-            'ascii_mode': 'Use plain text instead of Unicode',
-            'display_theme': 'Color theme (rich/plain) for universal compatibility',
-            'connection_timeout': 'ES connection timeout (seconds)',
-            'read_timeout': 'ES read timeout (seconds)',
-            'flush_timeout': 'ES flush command HTTP timeout (seconds)',
-            'dangling_cleanup.max_retries': 'Max retries for dangling operations',
-            'dangling_cleanup.retry_delay': 'Delay between retries (seconds)',
-            'dangling_cleanup.timeout': 'Operation timeout (seconds)',
+            'box_style':                          'Rich table border style',
+            'health_style':                       'Health command display mode',
+            'classic_style':                      'Classic health display format',
+            'enable_paging':                      'Auto-enable pager for long output',
+            'paging_threshold':                   'Line count threshold for paging',
+            'ilm_display_limit':                  'Max ILM unmanaged indices to show before truncating',
+            'show_legend_panels':                 'Show legend panels in output',
+            'ascii_mode':                         'Use plain text instead of Unicode',
+            'display_theme':                      'Color theme (rich/plain) for universal compatibility',
+            'connection_timeout':                 'ES connection timeout (seconds)',
+            'read_timeout':                       'ES read timeout (seconds)',
+            'flush_timeout':                      'ES flush command HTTP timeout (seconds)',
+            'dangling_cleanup.max_retries':       'Max retries for dangling operations',
+            'dangling_cleanup.retry_delay':       'Delay between retries (seconds)',
+            'dangling_cleanup.timeout':           'Operation timeout (seconds)',
             'dangling_cleanup.default_log_level': 'Default logging level',
-            'dangling_cleanup.enable_progress_bar': 'Show progress bars',
-            'dangling_cleanup.confirmation_required': 'Require user confirmation'
+            'dangling_cleanup.enable_progress_bar':   'Show progress bars',
+            'dangling_cleanup.confirmation_required': 'Require user confirmation',
         }
 
     def _get_default_styles(self):
-        """Get default styling when no theme is available."""
+        """Kept for backward compatibility — no longer used internally."""
         return {
             'header_style': 'bold white',
             'border_style': 'white',
             'panel_styles': {
-                'title': 'cyan',
-                'info': 'white',
-                'success': 'green',
-                'warning': 'yellow',
-                'error': 'red',
-                'secondary': 'magenta',
-                'subtitle': 'dim white'
-            }
+                'title':    'cyan',
+                'info':     'white',
+                'success':  'green',
+                'warning':  'yellow',
+                'error':    'red',
+                'secondary':'magenta',
+                'subtitle': 'dim white',
+            },
         }

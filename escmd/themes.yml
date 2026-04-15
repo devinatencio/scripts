@@ -1,5 +1,5 @@
 # 🎨 escmd Theme Configuration
-# Define custom themes for the Elasticsearch command-line t    table_styles:
+# Define custom themes for the Elasticsearch command-line tool.
 # Usage:
 #   1. Define your themes in this file
 #   2. Set display_theme in elastic_servers.yml to use a theme
@@ -64,20 +64,13 @@ themes:
           text: cyan bold
       row_styles:
         normal: white
+        zebra: grey11
         hot: bright_red
         frozen: bright_blue
         critical_health: red
         warning_health: yellow
         healthy: white
     panel_styles:
-      title: bold cyan
-      subtitle: dim white
-      success: green
-      warning: yellow
-      error: red
-      info: blue
-      secondary: magenta
-    help_styles:
       title: bold cyan
       section_header: bold yellow
       command: bold yellow
@@ -140,6 +133,7 @@ themes:
           text: bold
       row_styles:
         normal: white
+        zebra: grey89
         hot: bold
         frozen: bold
         critical_health: bold
@@ -173,7 +167,7 @@ themes:
     table_styles:
       border_style: bright_magenta
       header_style: bold bright_cyan on dark_magenta
-      table_box: heavy # Options: heavy, rounded, simple, double, or None for no borders
+      table_box: simple # Options: heavy, rounded, simple, double, or None for no borders
       health_styles:
         green:
           icon: bright_green bold
@@ -216,6 +210,7 @@ themes:
           text: bright_cyan bold
       row_styles:
         normal: bright_white
+        zebra: grey19
         hot: bright_red
         frozen: bright_cyan
         critical_health: bright_red
@@ -249,7 +244,7 @@ themes:
     table_styles:
       border_style: bright_yellow
       header_style: bold black on bright_yellow
-      table_box: double # Options: heavy, rounded, simple, double, or None for no borders
+      table_box: simple # Options: heavy, rounded, simple, double, or None for no borders
       health_styles:
         green:
           icon: bright_green bold
@@ -292,6 +287,7 @@ themes:
           text: yellow bold
       row_styles:
         normal: bright_white
+        zebra: grey19
         hot: red1
         frozen: cyan1
         critical_health: red1
@@ -368,6 +364,7 @@ themes:
           text: blue bold
       row_styles:
         normal: cyan
+        zebra: navy_blue
         hot: red
         frozen: blue
         critical_health: red
@@ -444,6 +441,7 @@ themes:
           text: light_steel_blue1 bold
       row_styles:
         normal: silver
+        zebra: grey15
         hot: light_coral
         frozen: light_steel_blue1
         critical_health: light_coral
@@ -520,6 +518,7 @@ themes:
           text: dark_orange bold
       row_styles:
         normal: orange3
+        zebra: grey11
         hot: red1
         frozen: gold3
         critical_health: red1
@@ -596,6 +595,7 @@ themes:
           text: bright_magenta bold
       row_styles:
         normal: bright_white
+        zebra: grey19
         hot: bright_red
         frozen: bright_blue
         critical_health: bright_red
@@ -672,6 +672,7 @@ themes:
           text: green bold
       row_styles:
         normal: green
+        zebra: grey11
         hot: bright_red
         frozen: bright_blue
         critical_health: bright_red
@@ -699,3 +700,157 @@ themes:
       warning: bright_yellow
       error: bright_red
       info: green
+
+  # 🧊 Nord Theme - Arctic, north-bluish color palette
+  nord:
+    table_styles:
+      border_style: steel_blue1
+      header_style: bold white on grey23
+      table_box: heavy
+      health_styles:
+        green:
+          icon: pale_turquoise1 bold
+          text: pale_turquoise1 bold
+        yellow:
+          icon: light_goldenrod2 bold
+          text: light_goldenrod2 bold
+        red:
+          icon: indian_red bold
+          text: indian_red bold
+      status_styles:
+        open:
+          icon: cornflower_blue bold
+          text: cornflower_blue bold
+        close:
+          icon: indian_red bold
+          text: indian_red bold
+      state_styles:
+        STARTED:
+          icon: pale_turquoise1 bold
+          text: pale_turquoise1 bold
+        INITIALIZING:
+          icon: light_goldenrod2 bold
+          text: light_goldenrod2 bold
+        RELOCATING:
+          icon: cornflower_blue bold
+          text: cornflower_blue bold
+        UNASSIGNED:
+          icon: indian_red bold
+          text: indian_red bold
+        default:
+          icon: light_steel_blue bold
+          text: light_steel_blue bold
+      type_styles:
+        primary:
+          icon: sky_blue1 bold
+          text: sky_blue1 bold
+        replica:
+          icon: steel_blue1 bold
+          text: steel_blue1 bold
+      row_styles:
+        normal: light_steel_blue
+        zebra: grey15
+        hot: indian_red
+        frozen: cornflower_blue
+        critical_health: indian_red
+        warning_health: light_goldenrod2
+        healthy: light_steel_blue
+    panel_styles:
+      title: bold sky_blue1
+      subtitle: dim light_steel_blue
+      success: pale_turquoise1
+      warning: light_goldenrod2
+      error: indian_red
+      info: cornflower_blue
+      secondary: steel_blue1
+    help_styles:
+      title: bold sky_blue1
+      section_header: bold cornflower_blue
+      command: light_goldenrod2 bold
+      description: light_steel_blue
+      example: pale_turquoise1
+      footer: dim grey70
+    semantic_styles:
+      primary: sky_blue1
+      secondary: steel_blue1
+      success: pale_turquoise1
+      warning: light_goldenrod2
+      error: indian_red
+      info: cornflower_blue
+
+  # ☀️ Solarized Theme - Precision colors for machines and people
+  solarized:
+    table_styles:
+      border_style: dark_cyan
+      header_style: bold white on dark_slate_gray3
+      table_box: heavy
+      health_styles:
+        green:
+          icon: dark_sea_green2 bold
+          text: dark_sea_green2 bold
+        yellow:
+          icon: yellow3 bold
+          text: yellow3 bold
+        red:
+          icon: red3 bold
+          text: red3 bold
+      status_styles:
+        open:
+          icon: dark_cyan bold
+          text: dark_cyan bold
+        close:
+          icon: red3 bold
+          text: red3 bold
+      state_styles:
+        STARTED:
+          icon: dark_sea_green2 bold
+          text: dark_sea_green2 bold
+        INITIALIZING:
+          icon: yellow3 bold
+          text: yellow3 bold
+        RELOCATING:
+          icon: dark_cyan bold
+          text: dark_cyan bold
+        UNASSIGNED:
+          icon: red3 bold
+          text: red3 bold
+        default:
+          icon: light_cyan3 bold
+          text: light_cyan3 bold
+      type_styles:
+        primary:
+          icon: cyan3 bold
+          text: cyan3 bold
+        replica:
+          icon: dark_cyan bold
+          text: dark_cyan bold
+      row_styles:
+        normal: light_cyan3
+        zebra: grey11
+        hot: red3
+        frozen: dark_cyan
+        critical_health: red3
+        warning_health: yellow3
+        healthy: light_cyan3
+    panel_styles:
+      title: bold cyan3
+      subtitle: dim light_cyan3
+      success: dark_sea_green2
+      warning: yellow3
+      error: red3
+      info: dark_cyan
+      secondary: dark_slate_gray3
+    help_styles:
+      title: bold cyan3
+      section_header: bold dark_cyan
+      command: yellow3 bold
+      description: light_cyan3
+      example: dark_sea_green2
+      footer: dim grey70
+    semantic_styles:
+      primary: cyan3
+      secondary: dark_cyan
+      success: dark_sea_green2
+      warning: yellow3
+      error: red3
+      info: dark_cyan

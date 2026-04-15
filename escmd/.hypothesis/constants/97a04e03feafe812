@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/display/recovery_renderer.py
-# hypothesis_version: 6.151.12
-
-[100, '%', ', ', '-', '0%', 'Active Recoveries:', 'Completion Rate:', 'Count', 'DONE', 'Icon', 'Label', 'Recovery Types:', 'Stage', 'Total Shards:', 'Value', 'active_recoveries', 'bold', 'bold ', 'bold blue', 'bold green', 'bold white', 'center', 'completed_shards', 'cyan', 'dim', 'done', 'error', 'finalize', 'green', 'id', 'index', 'init', 'left', 'muted', 'name', 'percent', 'recovery_types', 'red', 'shards', 'source', 'stage', 'stage_counts', 'start', 'success', 'target', 'total_shards', 'translog', 'type', 'unknown', 'warning', 'yellow', '✅', '✅ Done', '❓ Unknown', '🎯 Recovery Stages', '🎯 Stage', '🏁', '🏁 Finalize', '📈 Recovery Summary', '📊', '📊 Progress', '📋 Shard', '📚', '📚 Index', '📝', '📝 Translog', '📤 Source Node', '📥 Target Node', '🔄', '🔧', '🔧 Type', '🔨', '🔨 Init', '🔩', '🚀', '🚀 Start']

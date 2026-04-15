@@ -19,6 +19,27 @@ class ILMRenderer:
         self.es_client = es_client
         self.console = Console()
 
+    def _border(self, fallback: str = "cyan") -> str:
+        """Return the theme border style."""
+        tm = getattr(self.es_client, 'theme_manager', None)
+        if tm:
+            return tm.get_theme_styles().get("border_style", fallback)
+        return fallback
+
+    def _title_style(self, fallback: str = "bold white") -> str:
+        """Return the theme panel title style."""
+        tm = getattr(self.es_client, 'theme_manager', None)
+        if tm:
+            return tm.get_themed_style("panel_styles", "title", fallback)
+        return fallback
+
+    def _sem(self, semantic: str, fallback: str = "white") -> str:
+        """Return a semantic style from the style system."""
+        ss = getattr(self.es_client, 'style_system', None)
+        if ss:
+            return ss.get_semantic_style(semantic)
+        return fallback
+
     def print_enhanced_ilm_status(self):
         """Display comprehensive ILM status in multi-panel format."""
         try:
@@ -117,8 +138,8 @@ class ILMRenderer:
 
             status_panel = Panel(
                 status_table,
-                title="📊 ILM Status",
-                border_style="green",
+                title=f"[{self._title_style()}]📊 ILM Status[/{self._title_style()}]",
+                border_style=self._sem("success", "green"),
                 padding=(1, 2)
             )
 
@@ -129,7 +150,6 @@ class ILMRenderer:
             phase_table.add_column("Count", no_wrap=True)
 
             phase_icons = {'hot': '🔥', 'warm': '🟡', 'cold': '🧊', 'frozen': '🧊', 'delete': '🗑'}
-            phase_colors = {'hot': 'red', 'warm': 'yellow', 'cold': 'blue', 'frozen': 'cyan', 'delete': 'magenta'}
 
             for phase, count in ilm_data['phase_counts'].items():
                 if count > 0 and phase in phase_icons:
@@ -141,14 +161,14 @@ class ILMRenderer:
 
             phase_panel = Panel(
                 phase_table,
-                title="🔄 Phase Distribution",
-                border_style="blue",
+                title=f"[{self._title_style()}]🔄 Phase Distribution[/{self._title_style()}]",
+                border_style=self._sem("info", "blue"),
                 padding=(1, 2)
             )
 
             # Create quick actions panel
             actions_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-            actions_table.add_column("Action", style="bold cyan", no_wrap=True)
+            actions_table.add_column("Action", style=self._sem("primary", "bold cyan"), no_wrap=True)
             actions_table.add_column("Command", style="dim white")
 
             actions_table.add_row("List policies:", "./escmd.py ilm policies")
@@ -159,8 +179,8 @@ class ILMRenderer:
 
             actions_panel = Panel(
                 actions_table,
-                title="🚀 Quick Actions",
-                border_style="magenta",
+                title=f"[{self._title_style()}]🚀 Quick Actions[/{self._title_style()}]",
+                border_style=self._sem("secondary", "magenta"),
                 padding=(1, 2)
             )
 
@@ -225,27 +245,17 @@ class ILMRenderer:
                 style_variant='dashboard'
             )
         else:
-            # Fallback for compatibility - but still use theme if available
-            # Get theme colors from theme manager if available
+            # Fallback for compatibility - use theme if available
             theme_manager = getattr(self.es_client, 'theme_manager', None)
             full_theme = theme_manager.get_full_theme_data() if theme_manager else {}
             table_styles = full_theme.get('table_styles', {})
-
-            # Get styles from theme with defaults
             header_style = table_styles.get('header_style', 'bold white on dark_blue')
             border_style = table_styles.get('border_style', 'white')
-            table_box_style = table_styles.get('table_box', 'heavy')
 
-            # Map box style string to actual box
-            box_mapping = {
-                'heavy': box.HEAVY,
-                'double': box.DOUBLE,
-                'rounded': box.ROUNDED,
-                'simple': box.SIMPLE,
-                'minimal': box.MINIMAL,
-                'none': None
-            }
-            table_box = box_mapping.get(table_box_style, box.HEAVY)
+            # Reuse StyleSystem.get_table_box() to avoid duplicating the mapping
+            from display.style_system import StyleSystem
+            _ss = StyleSystem(theme_manager)
+            table_box = _ss.get_table_box()
 
             table = Table(
                 show_header=True,
@@ -428,8 +438,8 @@ class ILMRenderer:
 
             flow_panel = Panel(
                 Text(flow_content, style="bold white"),
-                title="🔄 Lifecycle Overview",
-                border_style="green",
+                title=f"[{self._title_style()}]🔄 Lifecycle Overview[/{self._title_style()}]",
+                border_style=self._sem("success", "green"),
                 padding=(1, 2)
             )
 
@@ -460,8 +470,8 @@ class ILMRenderer:
 
             summary_panel = Panel(
                 summary_table,
-                title="📊 Indices Distribution by Phase",
-                border_style="blue",
+                title=f"[{self._title_style()}]📊 Indices Distribution by Phase[/{self._title_style()}]",
+                border_style=self._sem("info", "blue"),
                 padding=(1, 1)
             )
 
@@ -524,7 +534,7 @@ class ILMRenderer:
             indices_panel = Panel(
                 indices_table,
                 title=indices_title,
-                border_style="green",
+                border_style=self._sem("success", "green"),
                 padding=(1, 1)
             )
         else:
@@ -532,8 +542,8 @@ class ILMRenderer:
             summary_panel = Panel(
                 Text("🔵  This policy is not currently being used by any indices.\n\nTo apply this policy to an index template or data stream, update your index template configuration.",
                      style="dim white", justify="center"),
-                title="📊 Policy Usage",
-                border_style="yellow",
+                title=f"[{self._title_style()}]📊 Policy Usage[/{self._title_style()}]",
+                border_style=self._sem("warning", "yellow"),
                 padding=(2, 2)
             )
             indices_panel = None
@@ -560,8 +570,8 @@ class ILMRenderer:
 
         actions_panel = Panel(
             actions_table,
-            title="🚀 Quick Actions",
-            border_style="magenta",
+            title=f"[{self._title_style()}]🚀 Quick Actions[/{self._title_style()}]",
+            border_style=self._sem("secondary", "magenta"),
             padding=(1, 1)
         )
 
@@ -628,8 +638,8 @@ class ILMRenderer:
 
         # Create title panel
         title_panel = Panel(
-            Text(f"📋 ILM Explain: {index_name}", style="bold cyan", justify="center"),
-            border_style="cyan",
+            Text(f"📋 ILM Explain: {index_name}", style=self._title_style(), justify="center"),
+            border_style=self._border(),
             padding=(1, 2)
         )
 
@@ -655,8 +665,8 @@ class ILMRenderer:
 
         details_panel = Panel(
             details_table,
-            title="📊 ILM Details",
-            border_style="blue",
+            title=f"[{self._title_style()}]📊 ILM Details[/{self._title_style()}]",
+            border_style=self._sem("info", "blue"),
             padding=(1, 2)
         )
 
@@ -674,29 +684,28 @@ class ILMRenderer:
             self.console.print(f"[red]❌ Error retrieving ILM errors: {errors['error']}[/red]")
             return
 
-        # Create title panel
-        title_panel = Panel(
-            Text(f"🔶 ILM Errors Report", style="bold red", justify="center"),
-            subtitle=f"Indices with errors: {len(errors)}",
-            border_style="red",
-            padding=(1, 2)
-        )
-
+        # Create title panel — style depends on whether errors exist
         if not errors:
-            self.console.print(title_panel)
-            self.console.print()
             self.console.print(Panel(
-                Text("✅ No ILM errors found!", style="bold green", justify="center"),
-                border_style="green",
+                Text("✅ No ILM errors found!", style=self._sem("success", "bold green"), justify="center"),
+                title=f"[{self._title_style()}]🔍 ILM Errors Report[/{self._title_style()}]",
+                border_style=self._sem("success", "green"),
                 padding=(1, 2)
             ))
             print()
             return
 
+        title_panel = Panel(
+            Text(f"🔶 ILM Errors Report", style=self._sem("error", "bold red"), justify="center"),
+            subtitle=f"Indices with errors: {len(errors)}",
+            border_style=self._sem("error", "red"),
+            padding=(1, 2)
+        )
+
         # Create errors table
         table = Table(
             show_header=True,
-            header_style="bold white",
+            header_style=getattr(self.es_client, 'theme_manager', None) and self.es_client.theme_manager.get_theme_styles().get('header_style', 'bold white') or 'bold white',
             expand=True,
             box=self.es_client.style_system.get_table_box() if hasattr(self.es_client, 'style_system') else None
         )

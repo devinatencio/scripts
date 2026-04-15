@@ -33,8 +33,19 @@ class SnapshotRenderer:
             from display.style_system import StyleSystem
             self.style_system = StyleSystem(self.theme_manager)
         except ImportError:
-            # Fallback to old styling methods
             pass
+
+    def _border(self, fallback: str = "cyan") -> str:
+        """Return the theme border style."""
+        if self.theme_manager:
+            return self.theme_manager.get_theme_styles().get("border_style", fallback)
+        return fallback
+
+    def _title_style(self, fallback: str = "bold white") -> str:
+        """Return the theme panel title style."""
+        if self.theme_manager:
+            return self.theme_manager.get_themed_style("panel_styles", "title", fallback)
+        return fallback
 
     def create_snapshots_panel(self, theme_color: str, snapshot_repo: Optional[str] = None,
                              snapshots: Optional[Any] = None) -> Panel:
@@ -223,11 +234,12 @@ class SnapshotRenderer:
             table.add_row("🎯 Status:", Text(status_text, style=panel_styles.get('info', 'bold white')), status_icon)
 
         # Apply theme color to panel border
-        panel_border_style = panel_styles.get('border', theme_color)
+        panel_border_style = panel_styles.get('border', self._border())
+        ts = self._title_style()
 
         return Panel(
             table,
-            title="[bold cyan]📸 Snapshots[/bold cyan]",
+            title=f"[{ts}]📸 Snapshots[/{ts}]",
             border_style=panel_border_style,
             padding=(1, 1)
         )
@@ -299,16 +311,17 @@ class SnapshotRenderer:
         stats_table.add_row("🔶 Failures:", Text(str(failures_count), style=failures_style))
 
         # Create panels
+        ts = self._title_style()
         main_panel = Panel(
             status_table,
-            title="[bold cyan]📸 Snapshot Information[/bold cyan]",
+            title=f"[{ts}]📸 Snapshot Information[/{ts}]",
             border_style=panel_style,
             padding=(1, 2)
         )
 
         stats_panel = Panel(
             stats_table,
-            title="[bold cyan]📊 Statistics[/bold cyan]",
+            title=f"[{ts}]📊 Statistics[/{ts}]",
             border_style=panel_style,
             padding=(1, 2)
         )
@@ -331,7 +344,7 @@ class SnapshotRenderer:
 
             indices_panel = Panel(
                 indices_text,
-                title="[bold cyan]📂 Included Indices[/bold cyan]",
+                title=f"[{ts}]📂 Included Indices[/{ts}]",
                 border_style=panel_style,
                 padding=(1, 2)
             )
@@ -350,8 +363,8 @@ class SnapshotRenderer:
 
             failures_panel = Panel(
                 failures_text,
-                title="[bold red]❌ Failures Details[/bold red]",
-                border_style="red",
+                title=f"[{self.style_system.get_semantic_style('error') if self.style_system else ts}]❌ Failures Details[/{self.style_system.get_semantic_style('error') if self.style_system else ts}]",
+                border_style=self.style_system.get_semantic_style("error") if self.style_system else "red",
                 padding=(1, 2)
             )
             self.console.print(failures_panel)

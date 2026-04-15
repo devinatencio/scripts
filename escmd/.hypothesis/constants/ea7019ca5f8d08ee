@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/commands/utility_commands.py
-# hypothesis_version: 6.151.12
-
-[300, ', ', 'analyzer', 'blue', 'body', 'bold green', 'bold white', 'border', 'border_style', 'center', 'cluster_count', 'cluster_groups', 'clusters', 'conditions', 'current_step', 'cyan', 'description', 'dim white', 'displayed', 'error', 'flush_timeout', 'get', 'group_details', 'index', 'info', 'json', 'left', 'main_config', 'max_age', 'max_docs', 'max_size', 'message', 'name', 'next_step', 'panel_styles', 'settings', 'success', 'table', 'text', 'timeout', 'title', 'total_groups', 'utility', 'white', '📊 Count', '📋 Clusters', '📝 Description', '🔖  Group Name']

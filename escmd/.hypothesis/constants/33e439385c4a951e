@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/handlers/settings_handler.py
-# hypothesis_version: 6.151.12
-
-['.', 'JSON Structure:\n', 'Setting Key: ', 'Setting Value: ', 'acknowledged', 'blue', 'bold', 'bold green', 'dim', 'dry_run', 'error', 'green', 'green bold', 'json', 'null', 'persistent', 'red', 'reset', 'set', 'transient', 'true\n', 'yellow', 'yes', '✓ ', '✓ Acknowledged: ']

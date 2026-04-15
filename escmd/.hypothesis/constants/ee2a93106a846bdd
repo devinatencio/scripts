@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/handlers/shard_handler.py
-# hypothesis_version: 6.151.12
-
-['*', 'Auto Rollover', 'UNASSIGNED', 'alias', 'bold white', 'dry_run', 'json', 'limit', 'locations', 'node', 'pager', 'regex', 'server', 'size', 'state', 'unassigned', 'white on blue', 'yellow']

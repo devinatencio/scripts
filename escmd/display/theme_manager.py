@@ -289,11 +289,25 @@ class ThemeManager:
         # Extract panel_styles and help_styles if they exist in styles
         panel_styles = styles.pop('panel_styles', {})
         help_styles = styles.pop('help_styles', {})
+
+        # Build semantic_styles from panel_styles so the semantic lookup works
+        # even when falling back to the built-in theme (no themes.yml present)
+        semantic_styles = {
+            'primary':   panel_styles.get('title', 'cyan'),
+            'secondary': panel_styles.get('secondary', 'magenta'),
+            'success':   panel_styles.get('success', 'green'),
+            'warning':   panel_styles.get('warning', 'yellow'),
+            'error':     panel_styles.get('error', 'red'),
+            'info':      panel_styles.get('info', 'blue'),
+            'neutral':   styles.get('row_styles', {}).get('normal', 'white'),
+            'muted':     panel_styles.get('subtitle', 'dim white'),
+        }
         
         return {
             'table_styles': styles,
             'panel_styles': panel_styles,
-            'help_styles': help_styles
+            'help_styles': help_styles,
+            'semantic_styles': semantic_styles,
         }
 
 

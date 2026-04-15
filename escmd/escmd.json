@@ -1,4 +1,14 @@
 {
     "current_cluster": "default",
-    "display_theme": "cyberpunk"
+    "display_theme": "cyberpunk",
+    "security": {
+        "master_key": "8s8Pwij9DvsBvzmh5OqPOFNdowtkZADsjzSVHxsc924=",
+        "encrypted_passwords": {
+            "global.devin": "Z0FBQUFBQnAzb1gyZktVeFJUREw2bVVLUkF1Z2tXR3djSlBzRGxSSTNPZk43MEFiS0t5TjNsdzFDYjY4bExJcmJwQzhlS0lDLTc1dlVtOWxsWUlnMVdOQlZiMkFkUUhnNkE9PQ==",
+            "global.bob": "Z0FBQUFBQnAzcU9ZTkwyeU81Q0JHWS01YUVpT2lkTlNlcmYzZ1VMX2ZqT2FNNTkwV0ZwNE9vYVgzNDFrTEpFMEN2c29COWFkVkxfWWQ0LTBwekVVTDZrVjVsMU9VWk53Z2c9PQ==",
+            "prod.bob": "Z0FBQUFBQnAzcU9zYXVmeTZsX1ZvSWNtUDEtbXV0cWc0REdFcjJNT25ncG9Lcnp1RHROalVrUWR2OS1iZ3FhVHFLM2pFNlVJLVNzaFM5Mnh2OG5yYVpxZGhkNnVHc1BtV3c9PQ==",
+            "dev.tina": "Z0FBQUFBQnAzcVA3TDhEWHB2ZW5wU3A5TUhkLTNpZTRaQms3aFRNQkNIa3FPdFpXaTRyVE90dlE5TUNLUnhMRUdGek5rMGowdzdjMURLVzNNc1pqNURWaUZTU0RaTUhKc3c9PQ==",
+            "global": "Z0FBQUFBQnAzc3JPUEJEcWRoXzRjS2pGT18wZW9ZTkNmTlYyVm04d2ZUMjNfc1lqX2VwdFk0TUpqaVBEbFlaT0ZEQjFSU3FRQ21uUVRnTUpLd2VvRjNBaEN2aWZhU2hoUnc9PQ=="
+        }
+    }
 }

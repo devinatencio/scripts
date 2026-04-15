@@ -602,22 +602,27 @@ def analyze_watch_trends(
 
     m0 = _index_map(first.get("indices") or [])
     m1 = _index_map(last.get("indices") or [])
+    # Include indices present in both samples plus indices that are new (only in last sample).
+    # New indices are treated as having 0 docs/store in the first sample.
     common = sorted(set(m0.keys()) & set(m1.keys()))
+    new_indices = sorted(set(m1.keys()) - set(m0.keys()))
+    all_last_indices = sorted(set(m1.keys()))
 
     proc = IndexProcessor()
     date_re = proc.date_pattern_regex
 
-    # docs/s for every index in both samples (including Δ docs = 0) — peer baseline
+    # docs/s for every index in the last sample — peer baseline
+    # For new indices (not in m0), baseline starts at 0
     docs_per_sec_all: Dict[str, float] = {}
-    for name in common:
-        d0 = _row_docs(m0[name])
+    for name in all_last_indices:
+        d0 = _row_docs(m0[name]) if name in m0 else 0
         d1 = _row_docs(m1[name])
         docs_per_sec_all[name] = float(d1 - d0) / elapsed
 
-    # Rollover series membership: all common indices, not only rows we will print
+    # Rollover series membership: all last-sample indices, not only rows we will print
     base_to_names: Dict[str, List[str]] = {}
     index_to_base: Dict[str, Optional[str]] = {}
-    for name in common:
+    for name in all_last_indices:
         parsed = _parse_index_row(
             {"index": name, "docs.count": 0, "store.size": 0}, date_re
         )
@@ -629,10 +634,10 @@ def analyze_watch_trends(
         base_to_names.setdefault(base, []).append(name)
 
     raw_rows: List[Dict[str, Any]] = []
-    for name in common:
-        d0 = _row_docs(m0[name])
+    for name in all_last_indices:
+        d0 = _row_docs(m0[name]) if name in m0 else 0
         d1 = _row_docs(m1[name])
-        s0 = _row_store(m0[name])
+        s0 = _row_store(m0[name]) if name in m0 else 0
         s1 = _row_store(m1[name])
         delta_docs = d1 - d0
         delta_store = s1 - s0
@@ -719,7 +724,8 @@ def analyze_watch_trends(
         "last_captured_at": last.get("captured_at"),
         "elapsed_seconds": round(elapsed, 3),
         "interval_count": max(0, len(samples) - 1),
-        "indices_compared": len(common),
+        "indices_compared": len(all_last_indices),
+        "new_indices": len(new_indices),
         "rows_shown": len(raw_rows),
         "min_docs_delta": min_docs_delta,
         "hot_ratio": hot_ratio,

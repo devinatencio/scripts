@@ -457,188 +457,6 @@ class HealthHandler(BaseHandler):
         # Use the existing multi-cluster health comparison method
         self.es_client.print_multi_cluster_health_comparison(self.config_file, group_name, output_format)
 
-    def handle_ping(self):
-        """Enhanced ping command with Rich formatting and detailed connection information."""
-        from rich.panel import Panel
-        from rich.text import Text
-        from rich.columns import Columns
-        from rich.table import Table as InnerTable
-
-        console = self.console
-
-        try:
-            # Test the connection
-            if self.es_client.ping():
-                # Get comprehensive cluster information
-                cluster_connection_info = self._get_cluster_connection_info()
-
-                # Get cluster health for additional context
-                try:
-                    health_data = self.es_client.get_cluster_health()
-                    cluster_name = health_data.get('cluster_name', 'Unknown')
-                    cluster_status = health_data.get('cluster_status', 'unknown')
-                    total_nodes = health_data.get('number_of_nodes', 0)
-                    data_nodes = health_data.get('number_of_data_nodes', 0)
-                except:
-                    cluster_name = 'Unknown'
-                    cluster_status = 'unknown'
-                    total_nodes = 0
-                    data_nodes = 0
-
-                # Handle JSON format
-                if getattr(self.args, 'format', 'table') == 'json':
-                    ping_data = {
-                        'connection_successful': True,
-                        'cluster_name': cluster_name,
-                        'cluster_status': cluster_status,
-                        'connection_details': {
-                            'host': self.es_client.host1,
-                            'port': self.es_client.port,
-                            'ssl_enabled': self.es_client.use_ssl,
-                            'verify_certs': self.es_client.verify_certs,
-                            'username': self.es_client.elastic_username if self.es_client.elastic_username else None
-                        },
-                        'cluster_overview': {
-                            'total_nodes': total_nodes,
-                            'data_nodes': data_nodes
-                        }
-                    }
-                    print(json.dumps(ping_data, indent=2))
-                    return True
-
-                # Get theme styles for consistent coloring
-                from esclient import get_theme_styles
-                # Create title panel
-                title_panel = Panel(
-                    self.es_client.style_system.create_semantic_text("🏓 Elasticsearch Connection Test", "success", justify="center"),
-                    subtitle=f"✅ Connection Successful | Cluster: {cluster_name} | Status: {cluster_status.title()}",
-                    border_style=self.es_client.style_system.get_semantic_style("success"),
-                    padding=(1, 2)
-                )
-
-                # Create connection details panel
-                connection_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-                connection_table.add_column("Label", style=self.es_client.style_system.get_semantic_style("primary"), no_wrap=True)
-                connection_table.add_column("Icon", justify="left", width=3)
-                connection_table.add_column("Value", style=self.es_client.style_system.get_semantic_style("secondary"), no_wrap=True)
-
-                connection_table.add_row("Host:", "🌐", self.es_client.host1)
-                connection_table.add_row("Port:", "🔌", str(self.es_client.port))
-                connection_table.add_row("SSL Enabled:", "🔒", "Yes" if self.es_client.use_ssl else "No")
-                connection_table.add_row("Verify Certs:", "📜", "Yes" if self.es_client.verify_certs else "No")
-
-                if self.es_client.elastic_username:
-                    connection_table.add_row("Username:", "👤", self.es_client.elastic_username)
-                    connection_table.add_row("Password:", "🔐", "***" + self.es_client.elastic_password[-2:] if len(self.es_client.elastic_password) > 2 else "***")
-                else:
-                    connection_table.add_row("Authentication:", "🔓", "None")
-
-                connection_panel = Panel(
-                    connection_table,
-                    title="🔗 Connection Details",
-                    border_style=self.es_client.style_system.get_semantic_style("info"),
-                    padding=(1, 2)
-                )
-
-                # Create cluster overview panel
-                overview_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-                overview_table.add_column("Label", style=self.es_client.style_system.get_semantic_style("primary"), no_wrap=True)
-                overview_table.add_column("Icon", justify="left", width=3)
-                overview_table.add_column("Value", style=self.es_client.style_system.get_semantic_style("secondary"), no_wrap=True)
-
-                status_icon = "🟢" if cluster_status == 'green' else "🟡" if cluster_status == 'yellow' else "🔴"
-                overview_table.add_row("Cluster Name:", "🏢", cluster_name)
-                overview_table.add_row("Status:", status_icon, cluster_status.title())
-                overview_table.add_row("Total Nodes:", "💻", str(total_nodes))
-                overview_table.add_row("Data Nodes:", "💾", str(data_nodes))
-
-                overview_panel = Panel(
-                    overview_table,
-                    title="📊 Cluster Overview",
-                    border_style=self.es_client.style_system.get_semantic_style("info"),
-                    padding=(1, 2)
-                )
-
-                # Create quick actions panel
-                actions_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-                actions_table.add_column("Action", style=self.es_client.style_system.get_semantic_style("primary"), no_wrap=True)
-                actions_table.add_column("Command", style=self.es_client.style_system.get_semantic_style("secondary"))
-
-                actions_table.add_row("Check health:", "./escmd.py health")
-                actions_table.add_row("View nodes:", "./escmd.py nodes")
-                actions_table.add_row("List indices:", "./escmd.py indices")
-                actions_table.add_row("View settings:", "./escmd.py settings")
-                actions_table.add_row("JSON output:", "./escmd.py ping --format json")
-
-                actions_panel = Panel(
-                    actions_table,
-                    title="🚀 Next Steps",
-                    border_style=self.es_client.style_system.get_semantic_style("primary"),
-                    padding=(1, 2)
-                )
-
-                # Display everything
-                print()
-                console.print(title_panel)
-                print()
-                console.print(Columns([connection_panel, overview_panel], expand=True))
-                print()
-                console.print(actions_panel)
-                print()
-
-                return True
-            else:
-                # Connection failed
-                if getattr(self.args, 'format', 'table') == 'json':
-                    error_data = {
-                        'connection_successful': False,
-                        'error': 'Connection failed',
-                        'host': self.es_client.host1,
-                        'port': self.es_client.port
-                    }
-                    print(json.dumps(error_data, indent=2))
-                    return False
-
-                # Get theme styles for consistent coloring
-                from esclient import get_theme_styles
-                error_panel = Panel(
-                    self.es_client.style_system.create_semantic_text("❌ Connection Failed", "error", justify="center"),
-                    subtitle=f"Unable to connect to {self.es_client.host1}:{self.es_client.port}",
-                    border_style=self.es_client.style_system.get_semantic_style("error"),
-                    padding=(1, 2)
-                )
-                print()
-                console.print(error_panel)
-                print()
-                return False
-
-        except Exception as e:
-            # Handle connection errors
-            if getattr(self.args, 'format', 'table') == 'json':
-                error_data = {
-                    'connection_successful': False,
-                    'error': str(e),
-                    'host': self.es_client.host1,
-                    'port': self.es_client.port
-                }
-                print(json.dumps(error_data, indent=2))
-                return False
-
-            self.es_client.show_message_box("Connection Error", f"❌ Connection Error: {str(e)}\nFailed to ping {self.es_client.host1}:{self.es_client.port}",
-                                           message_style=self.es_client.style_system.get_semantic_style("secondary"),
-                                           panel_style=self.es_client.style_system.get_semantic_style("error"))
-            return False
-
-    def _get_cluster_connection_info(self):
-        """Get cluster connection information for ping command."""
-        return {
-            'host': self.es_client.host1,
-            'port': self.es_client.port,
-            'ssl_enabled': self.es_client.use_ssl,
-            'verify_certs': self.es_client.verify_certs,
-            'username': self.es_client.elastic_username if self.es_client.elastic_username else None
-        }
-
     def handle_cluster_check(self):
         """Handle comprehensive cluster health checking command."""
         import time
@@ -792,16 +610,20 @@ class HealthHandler(BaseHandler):
         """
         Display a comprehensive cluster health report using Rich formatting.
         """
-        from rich.console import Console
+        from rich.console import Console, Group
         from rich.panel import Panel
         from rich.table import Table
-        from rich.columns import Columns
         from rich.text import Text
-        from rich import box
+        from rich.rule import Rule
         from datetime import datetime
         from configuration_manager import ConfigurationManager
 
         console = Console()
+
+        def emit_panel(renderable, ending_newline=True):
+            console.print(renderable)
+            if ending_newline:
+                print()
 
         # Get configuration for display limits
         config_manager = ConfigurationManager(self.config_file, "escmd.json")
@@ -845,84 +667,150 @@ class HealthHandler(BaseHandler):
         # Update managed count to include S3-managed indices
         total_managed_count = ilm_managed_count + len(ilm_s3_managed)
 
-        # Create title panel
+        # Create combined header panel — title + summary in one
         try:
             cluster_name = self.es_client.get_cluster_health().get('cluster_name', 'Unknown')
         except:
             cluster_name = 'Unknown'
 
-        title_text = f"🏥 Cluster Health Check Report"
-        subtitle_text = f"Cluster: {cluster_name} | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        ss = self.es_client.style_system
 
-        title_panel = Panel(
-            self.es_client.style_system.create_semantic_text(title_text, "info", justify="center"),
-            subtitle=subtitle_text,
-            border_style="cyan",
-            padding=(1, 2)
-        )
-
-        # Create summary panel
-        summary_table = Table.grid(padding=(0, 1))
-        summary_table.add_column(style=self.es_client.style_system.get_semantic_style("primary"), no_wrap=True)
-        summary_table.add_column(style=self.es_client.style_system.get_semantic_style("info"))
-
-        # Add summary with status indicators
-        if isinstance(ilm_results, dict) and ilm_results.get('not_supported'):
-            ilm_status = "🔵 Not supported on this cluster"
-        elif isinstance(ilm_results, dict) and ilm_results.get('skipped'):
-            ilm_status = "💤 Skipped"
-        else:
-            error_count = len(ilm_errors)
-            no_policy_count = len(ilm_no_policy)
-            s3_managed_count = len(ilm_s3_managed)
-
-            if error_count == 0 and no_policy_count == 0:
-                if s3_managed_count > 0:
-                    ilm_status = f"✅ All managed ({s3_managed_count} S3-managed)"
-                else:
-                    ilm_status = "✅ All indices managed"
-            elif error_count > 0 and no_policy_count > 0:
-                status_parts = [f"❌ {error_count} errors", f"🔶 {no_policy_count} unmanaged"]
-                if s3_managed_count > 0:
-                    status_parts.append(f"✅ {s3_managed_count} S3-managed")
-                ilm_status = ", ".join(status_parts)
-            elif error_count > 0:
-                status_parts = [f"❌ {error_count} errors found"]
-                if s3_managed_count > 0:
-                    status_parts.append(f"✅ {s3_managed_count} S3-managed")
-                ilm_status = ", ".join(status_parts)
-            elif no_policy_count > 0:
-                status_parts = [f"🔶 {no_policy_count} indices unmanaged"]
-                if s3_managed_count > 0:
-                    status_parts.append(f"✅ {s3_managed_count} S3-managed")
-                ilm_status = ", ".join(status_parts)
-            else:
-                ilm_status = f"✅ {s3_managed_count} S3-managed"
-
-        replica_status = "✅ All have replicas" if len(no_replica_indices) == 0 else f"🔶 {len(no_replica_indices)} without replicas"
-        shard_status = "✅ All within limits" if len(large_shards) == 0 else f"🔶 {len(large_shards)} oversized shards"
-
-        summary_table.add_row("🔍 ILM Status:", ilm_status)
-        summary_table.add_row("📊 Replica Status:", replica_status)
-        summary_table.add_row(f"📏 Shard Size (>{max_shard_size}GB):", shard_status)
-
-        # Determine border color based on issues found
+        # Determine overall status
         has_ilm_errors = len(ilm_errors) > 0
-        has_ilm_unmanaged = len(ilm_no_policy) > 0  # Only truly unmanaged indices count as issues
+        has_ilm_unmanaged = len(ilm_no_policy) > 0
         has_issues = has_ilm_errors or has_ilm_unmanaged or len(no_replica_indices) > 0 or len(large_shards) > 0
 
-        summary_panel = Panel(
-            summary_table,
-            title="📋 Summary",
-            border_style="green" if not has_issues else "yellow",
-            padding=(1, 2)
+        err_style = ss._get_style('semantic', 'error', 'red') if ss else 'red'
+        warn_style = ss._get_style('semantic', 'warning', 'yellow') if ss else 'yellow'
+        ok_style = ss._get_style('semantic', 'success', 'green') if ss else 'green'
+        info_style = ss._get_style('semantic', 'info', 'cyan') if ss else 'cyan'
+        muted_style_hdr = ss._get_style('semantic', 'muted', 'dim') if ss else 'dim'
+
+        # ILM row content (Label / Icon / Value pattern per ui-standards)
+        if isinstance(ilm_results, dict) and ilm_results.get('not_supported'):
+            ilm_icon = "🔶"
+            ilm_value = "Not supported on this cluster"
+            ilm_val_style = warn_style
+        elif isinstance(ilm_results, dict) and ilm_results.get('skipped'):
+            ilm_icon = "🔶"
+            ilm_value = "Skipped (omit --skip-ilm to check)"
+            ilm_val_style = muted_style_hdr
+        else:
+            ec = len(ilm_errors)
+            npc = len(ilm_no_policy)
+            s3c = len(ilm_s3_managed)
+            if ec == 0 and npc == 0:
+                ilm_icon = "✅"
+                ilm_value = (
+                    f"All managed ({s3c} S3-snapshot)" if s3c > 0 else "All indices have ILM policies"
+                )
+                ilm_val_style = ok_style
+            elif ec > 0:
+                ilm_icon = "❌"
+                parts = [f"{ec} error{'s' if ec != 1 else ''}"]
+                if npc > 0:
+                    parts.append(f"{npc} unmanaged")
+                if s3c > 0:
+                    parts.append(f"{s3c} S3-snapshot")
+                ilm_value = ", ".join(parts)
+                ilm_val_style = err_style
+            elif npc > 0:
+                ilm_icon = "🔶"
+                parts = [f"{npc} without policy"]
+                if s3c > 0:
+                    parts.append(f"{s3c} S3-snapshot")
+                ilm_value = ", ".join(parts)
+                ilm_val_style = warn_style
+            else:
+                ilm_icon = "✅"
+                ilm_value = f"{s3c} S3-snapshot managed"
+                ilm_val_style = ok_style
+
+        if len(no_replica_indices) == 0:
+            rep_icon, rep_value, rep_val_style = "✅", "All indices have replicas", ok_style
+        else:
+            nrep = len(no_replica_indices)
+            rep_icon, rep_value, rep_val_style = "🔶", f"{nrep} index{'es' if nrep != 1 else ''} without replicas", warn_style
+
+        if len(large_shards) == 0:
+            sh_icon, sh_value, sh_val_style = "✅", f"None over {max_shard_size} GB", ok_style
+        else:
+            ns = len(large_shards)
+            sh_icon, sh_value, sh_val_style = "🔶", f"{ns} shard{'s' if ns != 1 else ''} over {max_shard_size} GB", warn_style
+
+        # Top panel: centered status line (bold green / yellow / red) per ui-standards
+        if has_ilm_errors:
+            body_line = "❌ ILM Errors Detected — Review Details Below"
+            body_style = "bold red"
+            title_border = err_style
+        elif has_issues:
+            body_line = "🔶 Health Warnings — Review Details Below"
+            body_style = "bold yellow"
+            title_border = warn_style
+        else:
+            body_line = "✅ Cluster Healthy — All Checks Passed"
+            body_style = "bold green"
+            title_border = ss._get_style('table_styles', 'border_style', 'cyan') if ss else 'cyan'
+
+        ts = ss._get_style('semantic', 'primary', 'bold cyan') if ss else 'bold cyan'
+
+        # Subtitle: key stats with themed colors (ui-standards §1)
+        subtitle_rich = Text()
+        subtitle_rich.append("Cluster: ", style="default")
+        subtitle_rich.append(cluster_name, style=info_style)
+        subtitle_rich.append(" | ", style="default")
+        subtitle_rich.append(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), style=muted_style_hdr)
+        if isinstance(ilm_results, dict) and ilm_results.get('skipped'):
+            subtitle_rich.append(" | ILM: ", style="default")
+            subtitle_rich.append("skipped", style=muted_style_hdr)
+        elif isinstance(ilm_results, dict) and ilm_results.get('not_supported'):
+            subtitle_rich.append(" | ILM: ", style="default")
+            subtitle_rich.append("n/a", style=muted_style_hdr)
+        else:
+            subtitle_rich.append(" | ILM err: ", style="default")
+            subtitle_rich.append(str(len(ilm_errors)), style=err_style if len(ilm_errors) else ok_style)
+            subtitle_rich.append(" | Unmanaged: ", style="default")
+            subtitle_rich.append(str(len(ilm_no_policy)), style=warn_style if len(ilm_no_policy) else ok_style)
+            subtitle_rich.append(" | S3-managed: ", style="default")
+            subtitle_rich.append(str(len(ilm_s3_managed)), style=info_style)
+        subtitle_rich.append(" | Replicas: ", style="default")
+        subtitle_rich.append(
+            "OK" if len(no_replica_indices) == 0 else str(len(no_replica_indices)),
+            style=ok_style if not no_replica_indices else warn_style,
+        )
+        subtitle_rich.append(" | Shards: ", style="default")
+        subtitle_rich.append(
+            "OK" if len(large_shards) == 0 else str(len(large_shards)),
+            style=ok_style if not large_shards else warn_style,
+        )
+
+        # Inner key-value table — ui-standards §4 (Label bold, icon width=3, value)
+        status_inner = Table(show_header=False, box=None, padding=(0, 1))
+        status_inner.add_column("Label", style="bold", no_wrap=True)
+        status_inner.add_column("Icon", justify="left", width=3)
+        status_inner.add_column("Value", no_wrap=False)
+        status_inner.add_row("ILM:", ilm_icon, Text(ilm_value, style=ilm_val_style))
+        status_inner.add_row("Replicas:", rep_icon, Text(rep_value, style=rep_val_style))
+        status_inner.add_row(f"Shards (>{max_shard_size} GB):", sh_icon, Text(sh_value, style=sh_val_style))
+
+        title_body = Group(
+            Text(body_line, style=body_style, justify="center"),
+            Text(""),
+            status_inner,
+        )
+
+        title_panel = Panel(
+            title_body,
+            title=f"[{ts}]🏥 Cluster Health Check Report[/{ts}]",
+            subtitle=subtitle_rich,
+            border_style=title_border,
+            padding=(1, 2),
+            expand=True,
         )
 
         # Display header
         print()
-        console.print(title_panel)
-        print()
-        console.print(summary_panel)
+        emit_panel(title_panel)
 
         # Create detailed panels if there are issues or details requested
         panels = []
@@ -935,7 +823,8 @@ class HealthHandler(BaseHandler):
                 Text(info_text, style="bright_blue", justify="left"),
                 title="🔵 ILM Checks Skipped",
                 border_style="blue",
-                padding=(1, 2)
+                padding=(1, 2),
+                expand=True,
             )
             panels.append(info_panel)
         elif isinstance(ilm_results, dict) and ilm_results.get('not_supported'):
@@ -945,18 +834,25 @@ class HealthHandler(BaseHandler):
                 Text(info_text, style="bright_blue", justify="left"),
                 title="🔵 ILM Not Available",
                 border_style="blue",
-                padding=(1, 2)
+                padding=(1, 2),
+                expand=True,
             )
             panels.append(info_panel)
         elif ilm_errors or ilm_no_policy or ilm_s3_managed or show_details:
             # ILM Errors Panel
             if ilm_errors:
-                error_table = Table(box=self.es_client.style_system.get_table_box(), show_header=True, header_style=self.es_client.style_system.get_semantic_style("primary"))
-                error_table.add_column("Index", style="cyan")
-                error_table.add_column("Error", style="red")
-                error_table.add_column("Policy", style="yellow")
-                error_table.add_column("Phase", style="green")
-                error_table.add_column("Action", style="blue")
+                error_table = Table(
+                    box=self.es_client.style_system.get_table_box(),
+                    show_header=True,
+                    header_style=self.es_client.style_system.get_semantic_style("primary"),
+                    expand=True,
+                    padding=(0, 1),
+                )
+                error_table.add_column("Index", style="cyan", no_wrap=True, max_width=28, overflow="ellipsis")
+                error_table.add_column("Error", style="red", overflow="fold", ratio=2)
+                error_table.add_column("Policy", style="yellow", max_width=22, overflow="ellipsis")
+                error_table.add_column("Phase", style="green", max_width=10)
+                error_table.add_column("Action", style="blue", max_width=14)
 
                 # Sort error indices alphabetically for better readability
                 sorted_errors = sorted(ilm_errors, key=lambda x: x.get('index', ''))
@@ -966,10 +862,12 @@ class HealthHandler(BaseHandler):
                     action = error.get('action', 'Unknown')
                     step_info = error.get('step_info', {})
                     error_reason = step_info.get('reason', 'Unknown error') if isinstance(step_info, dict) else 'Unknown error'
+                    if len(error_reason) > 600:
+                        error_reason = error_reason[:597] + "..."
 
                     error_table.add_row(
                         error['index'],
-                        f"{error_reason[:60]}{'...' if len(error_reason) > 60 else ''}",
+                        error_reason,
                         policy,
                         phase,
                         action
@@ -979,42 +877,87 @@ class HealthHandler(BaseHandler):
                     error_table,
                     title=f"❌ ILM Errors ({len(ilm_errors)} indices)",
                     border_style="red",
-                    padding=(1, 1)
+                    padding=(1, 2),
+                    expand=True,
                 )
                 panels.append(error_panel)
 
-            # No Policy Panel (truly unmanaged indices)
-            if ilm_no_policy:
-                no_policy_table = Table(box=self.es_client.style_system.get_table_box(), show_header=True, header_style=self.es_client.style_system.get_semantic_style("primary"))
-                no_policy_table.add_column("Index", style="cyan")
-                no_policy_table.add_column("Status", style="yellow")
+            # Combined issues panel — one index per line, centered
+            if ilm_no_policy or no_replica_indices:
+                ss = self.es_client.style_system
+                warning_style = ss._get_style('semantic', 'warning', 'yellow') if ss else 'yellow'
+                primary_style = ss._get_style('semantic', 'primary', 'cyan') if ss else 'cyan'
+                muted_style = ss._get_style('semantic', 'muted', 'dim') if ss else 'dim'
 
-                no_policy_shown = 0
-                # Sort indices alphabetically for better readability
-                sorted_no_policy = sorted(ilm_no_policy, key=lambda x: x.get('index', ''))
-                for no_policy in sorted_no_policy:
-                    if not show_details and no_policy_shown >= ilm_display_limit:
-                        no_policy_table.add_row("...", f"{len(ilm_no_policy) - no_policy_shown} more unmanaged indices")
-                        break
+                combined = Table.grid(padding=(0, 0))
+                combined.add_column(justify="left")
 
-                    no_policy_table.add_row(
-                        no_policy['index'],
-                        no_policy.get('reason', 'No ILM policy attached')
-                    )
-                    no_policy_shown += 1
+                if ilm_no_policy:
+                    combined.add_row(Text(f"🔶 Unmanaged Indices ({len(ilm_no_policy)})", style=warning_style))
+                    combined.add_row(Rule(style=warning_style))
 
-                no_policy_panel = Panel(
-                    no_policy_table,
-                    title=f"🔶  Unmanaged Indices ({len(ilm_no_policy)} indices)",
-                    border_style="yellow",
-                    padding=(1, 1)
+                    sorted_no_policy = sorted(ilm_no_policy, key=lambda x: x.get('index', ''))
+                    display_list = sorted_no_policy if show_details else sorted_no_policy[:ilm_display_limit]
+                    remainder = len(ilm_no_policy) - len(display_list)
+
+                    name_grid = Table.grid(padding=(0, 0))
+                    name_grid.add_column(style=primary_style, no_wrap=True)
+                    for item in display_list:
+                        name_grid.add_row(item['index'])
+                    if remainder > 0:
+                        name_grid.add_row(Text(f"... and {remainder} more", style=muted_style))
+
+                    combined.add_row(name_grid)
+
+                if ilm_no_policy and no_replica_indices:
+                    combined.add_row(Text(""))
+                    combined.add_row(Rule(style=muted_style))
+                    combined.add_row(Text(""))
+
+                if no_replica_indices:
+                    combined.add_row(Text(f"📊 Indices Without Replicas ({len(no_replica_indices)})", style=warning_style))
+                    combined.add_row(Rule(style=warning_style))
+
+                    rep_grid = Table.grid(padding=(0, 3))
+                    rep_grid.add_column(style=primary_style, no_wrap=True)
+                    rep_grid.add_column(style=muted_style, no_wrap=True)
+
+                    shown_count = 0
+                    for index_info in no_replica_indices:
+                        if not show_details and shown_count >= 10:
+                            rep_grid.add_row(Text(f"... and {len(no_replica_indices) - shown_count} more", style=muted_style), "")
+                            break
+                        creation_date = index_info.get('creation_date', 'Unknown')
+                        if creation_date not in ('Unknown', 'N/A'):
+                            try:
+                                import datetime as dt
+                                creation_date = dt.datetime.fromtimestamp(int(creation_date) / 1000).strftime('%Y-%m-%d %H:%M')
+                            except (ValueError, TypeError):
+                                pass
+                        rep_grid.add_row(index_info['index'], f"created {creation_date}")
+                        shown_count += 1
+
+                    combined.add_row(rep_grid)
+
+                issues_panel = Panel(
+                    combined,
+                    title=f"[{warning_style}]Issues Found[/{warning_style}]",
+                    border_style=warning_style,
+                    padding=(1, 2),
+                    expand=True,
                 )
-                panels.append(no_policy_panel)
+                panels.append(issues_panel)
 
             # S3-Snapshot Managed Panel
             if ilm_s3_managed:
-                s3_table = Table(box=self.es_client.style_system.get_table_box(), show_header=True, header_style=self.es_client.style_system.get_semantic_style("primary"))
-                s3_table.add_column("Index", style="cyan")
+                s3_table = Table(
+                    box=self.es_client.style_system.get_table_box(),
+                    show_header=True,
+                    header_style=self.es_client.style_system.get_semantic_style("primary"),
+                    expand=True,
+                    padding=(0, 1),
+                )
+                s3_table.add_column("Index", style="cyan", ratio=1)
                 s3_table.add_column("Management", style="green")
 
                 s3_shown = 0
@@ -1035,56 +978,21 @@ class HealthHandler(BaseHandler):
                     s3_table,
                     title=f"✅ S3-Managed Indices ({len(ilm_s3_managed)} indices)",
                     border_style="green",
-                    padding=(1, 1)
+                    padding=(1, 2),
+                    expand=True,
                 )
                 panels.append(s3_panel)
-
-        # No Replicas Panel
-        if no_replica_indices or show_details:
-            # Show detailed replica issues panel
-            replica_table = Table(box=self.es_client.style_system.get_table_box(), show_header=True, header_style=self.es_client.style_system.get_semantic_style("primary"))
-            replica_table.add_column("Index", style="cyan")
-            replica_table.add_column("Shards", style="yellow")
-            replica_table.add_column("Replicas", style="red")
-            replica_table.add_column("Creation Date", style="green")
-
-            shown_count = 0
-            for index_info in no_replica_indices:
-                if not show_details and shown_count >= 10:
-                    replica_table.add_row("...", "", "", f"and {len(no_replica_indices) - shown_count} more")
-                    break
-
-                creation_date = index_info.get('creation_date', 'Unknown')
-                if creation_date != 'Unknown' and creation_date != 'N/A':
-                    try:
-                        # Convert timestamp to readable format
-                        import datetime as dt
-                        date_obj = dt.datetime.fromtimestamp(int(creation_date) / 1000)
-                        creation_date = date_obj.strftime('%Y-%m-%d %H:%M')
-                    except (ValueError, TypeError):
-                        pass
-
-                replica_table.add_row(
-                    index_info['index'],
-                    str(index_info.get('shards', 'Unknown')),
-                    str(index_info.get('replicas', 0)),
-                    creation_date
-                )
-                shown_count += 1
-
-            if replica_table.rows:
-                replica_panel = Panel(
-                    replica_table,
-                    title=f"📊 Indices Without Replicas ({len(no_replica_indices)})",
-                    border_style="yellow",
-                    padding=(1, 1)
-                )
-                panels.append(replica_panel)
 
         # Large Shards Panel
         if large_shards or show_details:
             # Show detailed shard allocation issues panel
-            shard_table = Table(box=self.es_client.style_system.get_table_box(), show_header=True, header_style=self.es_client.style_system.get_semantic_style("primary"))
+            shard_table = Table(
+                box=self.es_client.style_system.get_table_box(),
+                show_header=True,
+                header_style=self.es_client.style_system.get_semantic_style("primary"),
+                expand=True,
+                padding=(0, 1),
+            )
             shard_table.add_column("Index", style="cyan")
             shard_table.add_column("Shard", style="yellow")
             shard_table.add_column("Type", style="blue")
@@ -1111,7 +1019,8 @@ class HealthHandler(BaseHandler):
                     shard_table,
                     title=f"📏 Large Shards (>{max_shard_size}GB) - ({len(large_shards)})",
                     border_style="yellow",
-                    padding=(1, 1)
+                    padding=(1, 2),
+                    expand=True,
                 )
                 panels.append(shard_panel)
 
@@ -1119,51 +1028,76 @@ class HealthHandler(BaseHandler):
         if panels:
             print()
             for panel in panels:
-                console.print(panel)
-                print()
+                emit_panel(panel)
 
-        # Add footer with recommendations
+        # Footer — recommendations + count in one styled panel
         if has_issues:
             recommendations = []
             if ilm_errors:
-                recommendations.append("• Fix ILM errors to ensure proper index lifecycle management")
+                recommendations.append(("❌", "Fix ILM errors to ensure proper index lifecycle management"))
             if ilm_no_policy:
-                recommendations.append("• Consider attaching ILM policies to unmanaged indices")
+                recommendations.append(("🔶", "Attach ILM policies to unmanaged indices"))
             if no_replica_indices:
-                recommendations.append("• Add replicas to indices for high availability")
+                recommendations.append(("🔶", "Add replicas to indices for high availability"))
             if large_shards:
-                recommendations.append(f"• Consider breaking down shards larger than {max_shard_size}GB")
+                recommendations.append(("🔶", f"Break down shards larger than {max_shard_size}GB"))
 
-            if recommendations:
-                rec_text = "\n".join(recommendations)
-                rec_panel = Panel(
-                    Text(rec_text, style="bright_yellow"),
-                    title="💡 Recommendations",
-                    border_style="yellow",
-                    padding=(1, 2)
-                )
-                console.print(rec_panel)
-                print()
-
-        # Final status
-        if not has_issues:
-            success_panel = Panel(
-                self.es_client.style_system.create_semantic_text("🎉 No issues found! Your cluster appears to be healthy.", "success", justify="center"),
-                border_style="green",
-                padding=(1, 2)
-            )
-            console.print(success_panel)
-        else:
             warning_count = (len(no_replica_indices) > 0) + (len(large_shards) > 0) + (len(ilm_no_policy) > 0)
             error_count = len(ilm_errors)
 
-            status_text = f"Found {error_count} errors and {warning_count} warnings that need attention."
-            status_panel = Panel(
-                self.es_client.style_system.create_semantic_text(status_text, "error" if error_count > 0 else "warning", justify="center"),
-                border_style="red" if error_count > 0 else "yellow",
-                padding=(1, 2)
-            )
-            console.print(status_panel)
+            ss = self.es_client.style_system
+            error_style = ss._get_style('semantic', 'error', 'red') if ss else 'red'
+            warning_style = ss._get_style('semantic', 'warning', 'yellow') if ss else 'yellow'
+            success_style = ss._get_style('semantic', 'success', 'green') if ss else 'green'
+            muted_style = ss._get_style('semantic', 'muted', 'dim') if ss else 'dim'
+            primary_style = ss._get_style('semantic', 'primary', 'cyan') if ss else 'cyan'
+            border_color = error_style if error_count > 0 else warning_style
+
+            rec_grid = Table.grid(padding=(0, 0))
+            rec_grid.add_column(justify="left")
+
+            # Count summary line
+            parts = []
+            if error_count > 0:
+                parts.append(Text(f"{error_count} error{'s' if error_count != 1 else ''}", style=error_style))
+            if warning_count > 0:
+                parts.append(Text(f"{warning_count} warning{'s' if warning_count != 1 else ''}", style=warning_style))
+
+            count_line = Text()
+            for i, part in enumerate(parts):
+                count_line.append_text(part)
+                if i < len(parts) - 1:
+                    count_line.append(" and ", style=muted_style)
+            count_line.append(" require attention", style=muted_style)
+            rec_grid.add_row(count_line)
+            rec_grid.add_row(Rule(style=border_color))
+            rec_grid.add_row(Text(""))
+
+            action_grid = Table.grid(padding=(0, 2))
+            action_grid.add_column(justify="left", width=3)
+            action_grid.add_column(style=primary_style, no_wrap=False, ratio=1)
+            for icon, msg in recommendations:
+                action_grid.add_row(Text(icon), Text(msg, style=primary_style))
+
+            rec_grid.add_row(action_grid)
+
+            emit_panel(Panel(
+                rec_grid,
+                title=f"[{warning_style}]Recommendations[/{warning_style}]",
+                border_style=border_color,
+                padding=(1, 2),
+                expand=True,
+            ))
+        else:
+            ss = self.es_client.style_system
+            success_style = ss._get_style('semantic', 'success', 'green') if ss else 'green'
+            emit_panel(Panel(
+                Text("No issues found. Your cluster appears to be healthy.", style="bold green", justify="center"),
+                title=f"[{success_style}]All Clear[/{success_style}]",
+                border_style=success_style,
+                padding=(1, 2),
+                expand=True,
+            ))
 
         print()
 

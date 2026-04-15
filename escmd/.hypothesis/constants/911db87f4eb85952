@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/indices_analyze_help.py
-# hypothesis_version: 6.151.12
-
-['--format json|table', '--min-docs N', '--min-peers N', '--min-ratio R', '--pager', '--top N', '--within-days N', 'Default cluster', 'JSON output', 'Last 7d by name', 'More index commands', 'Regex + location', 'bold cyan', 'command', 'description', 'dim white', 'example', 'green', 'indices-analyze', 'min-docs 0', 'min-ratio 2', 'regex (positional)', 'white']

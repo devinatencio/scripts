@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/display/replica_renderer.py
-# hypothesis_version: 6.151.12
-
-['...', '0', 'Current Replicas', 'Error', 'Index', 'New', 'Previous', 'Reason', 'Status', 'Target Replicas', 'blue', 'bold cyan', 'bold green', 'bold red', 'bold yellow', 'bright_green', 'current_replicas', 'dim', 'error', 'failed_updates', 'failure_count', 'green', 'index', 'indices_to_update', 'new_replicas', 'no_replicas_only', 'number_of_replicas', 'pattern', 'previous_replicas', 'reason', 'red', 'settings', 'skipped_indices', 'successful_updates', 'target_replicas', 'unknown', 'yellow', '✅ Has replicas', '✅ Successful Updates', '❌ Failed Updates', '🔄 Ready for update', '🔧 Indices to Update', '🔶 No replicas']

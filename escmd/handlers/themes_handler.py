@@ -11,275 +11,282 @@ from rich.panel import Panel
 from rich import box
 from rich.text import Text
 from rich.columns import Columns
+from rich.markup import escape
 
 
 class ThemesHandler(BaseHandler):
     """Handler for themes command."""
-    
+
+    def _load_theme_manager(self, config_manager):
+        """Return (ThemeManager, StyleSystem) or (None, None)."""
+        try:
+            from display.theme_manager import ThemeManager
+            from display.style_system import StyleSystem
+            tm = ThemeManager(config_manager)
+            ss = StyleSystem(tm)
+            return tm, ss
+        except Exception:
+            return None, None
+
+    def _theme_styles(self, tm, ss):
+        """Extract the common style tokens from theme/style objects."""
+        full_theme   = tm.get_full_theme_data() if tm else {}
+        ts           = full_theme.get('table_styles', {})
+        border       = ts.get('border_style',  'bright_blue')
+        header       = ts.get('header_style',  'bold white on blue')
+        title_style  = tm.get_themed_style('panel_styles', 'title',   'bold white') if tm else 'bold white'
+        primary      = ss._get_style('semantic', 'primary',  'cyan')   if ss else 'cyan'
+        success      = ss._get_style('semantic', 'success',  'green')  if ss else 'green'
+        warning      = ss._get_style('semantic', 'warning',  'yellow') if ss else 'yellow'
+        muted        = ss._get_style('semantic', 'muted',    'dim')    if ss else 'dim'
+        box_style    = ss.get_table_box() if ss else None
+        return border, header, title_style, primary, success, warning, muted, box_style
+
     def handle_themes(self):
         """Handle themes command - display all available themes with previews."""
-        from rich.columns import Columns
-        
         console = Console()
-        
-        # Get current theme and full theme data
-        from esclient import get_theme_styles, get_full_theme_data
+
         from configuration_manager import ConfigurationManager
-        config_manager = ConfigurationManager(self.config_file, os.path.join(os.path.dirname(self.config_file), 'escmd.json'))
-        current_styles = get_theme_styles(config_manager)
-        full_theme_data = get_full_theme_data(config_manager)
+        config_manager = ConfigurationManager(
+            self.config_file,
+            os.path.join(os.path.dirname(self.config_file), 'escmd.json'),
+        )
+        tm, ss = self._load_theme_manager(config_manager)
+        border, header, title_style, primary, success, warning, muted, box_style = \
+            self._theme_styles(tm, ss)
+
         current_theme = config_manager.get_display_theme()
-        
-        # Load all themes from themes.yml
-     
+
+        # Load themes.yml
         themes_file = config_manager.default_settings.get('themes_file', 'themes.yml')
         if not os.path.isabs(themes_file):
-            config_dir = os.path.dirname(config_manager.config_file_path)
-            themes_file = os.path.join(config_dir, themes_file)
-        
+            themes_file = os.path.join(os.path.dirname(config_manager.config_file_path), themes_file)
+
         try:
             with open(themes_file, 'r') as f:
                 themes_config = yaml.safe_load(f)
             available_themes = themes_config.get('themes', {})
         except (FileNotFoundError, yaml.YAMLError):
             available_themes = {}
-        
-        # Check if current theme is a manual/custom theme not in themes.yml
+
+        full_theme_data = tm.get_full_theme_data() if tm else {}
         if current_theme and current_theme not in available_themes:
-            # Add the current manual theme to our display list
             available_themes[current_theme] = full_theme_data
-        
-        # Theme descriptions
+
         theme_descriptions = {
-            'rich': '🌈 Colorful theme optimized for dark terminals',
-            'plain': '⚪ Minimal theme with universal compatibility', 
-            'cyberpunk': '🔮 High-contrast neon theme with bright colors',
-            'ocean': '🌊 Oceanic theme with blue and cyan tones',
-            'midnight': '🌙 Dark theme with muted colors',
-            'fire': '🔥 Warm theme with orange and red highlights'
+            'rich':       'Colorful — optimized for dark terminals',
+            'plain':      'Minimal — universal compatibility',
+            'cyberpunk':  'High-contrast neon with bright colors',
+            'ocean':      'Oceanic blues and cyan tones',
+            'midnight':   'Dark theme with muted colors',
+            'fire':       'Warm orange and red highlights',
+            'nord':       'Arctic slate blues and muted greens',
+            'solarized':  'Precision teal and warm tones',
         }
-        
+
         if not available_themes:
-            console.print("[yellow]🔶 No themes found in themes.yml[/yellow]")
+            console.print(Panel(
+                f"[{warning}]No themes found in themes.yml[/{warning}]",
+                title=f"[{title_style}]🎨 Themes[/{title_style}]",
+                border_style=warning,
+                padding=(1, 2),
+            ))
             return
-        
-        # Title panel
-        title_panel = Panel(
-            Text("🎨 Available Color Themes", style=current_styles.get('panel_styles', {}).get('title', 'bold cyan'), justify="center"),
-            subtitle=f"Current theme: {current_theme} | Total themes: {len(available_themes)}",
-            border_style=current_styles['border_style'],
-            padding=(1, 2)
-        )
-        
-        print()
-        console.print(title_panel)
-        print()
-        
-        # Create theme preview panels
+
+        # Header panel
+        console.print()
+        console.print(Panel(
+            Text.from_markup(
+                f"[{primary}]{len(available_themes)} themes available[/{primary}]   "
+                f"[{muted}]Active:[/{muted}] [{success}]{escape(current_theme or 'none')}[/{success}]\n\n"
+                f"[{muted}]./escmd.py set-theme <name>   ./escmd.py set-theme <name> --preview[/{muted}]"
+            ),
+            title=f"[{title_style}]🎨 Color Themes[/{title_style}]",
+            border_style=border,
+            padding=(1, 3),
+        ))
+        console.print()
+
+        # Theme cards — 2 per row
         theme_panels = []
         for theme_name, theme_data in available_themes.items():
-            # Create preview table showing key colors
-            preview_table = Table(show_header=False, box=None, padding=(0, 3))
-            preview_table.add_column("Element", style="bold", width=18)  # Increased from 16
-            preview_table.add_column("Preview", width=28)  # Increased significantly for more screen usage
-            
-            table_styles = theme_data.get('table_styles', {})
-            panel_styles = theme_data.get('panel_styles', {})
-            
-            # Show key color samples
-            border_color = table_styles.get('border_style', 'white')
-            success_color = panel_styles.get('success', 'green')
-            warning_color = panel_styles.get('warning', 'yellow')
-            error_color = panel_styles.get('error', 'red')
-            
-            preview_table.add_row("Border:", f"[{border_color}]████████████[/{border_color}]")
-            preview_table.add_row("Success:", f"[{success_color}]████████████[/{success_color}]")
-            preview_table.add_row("Warning:", f"[{warning_color}]████████████[/{warning_color}]")
-            preview_table.add_row("Error:", f"[{error_color}]████████████[/{error_color}]")
-            
-            # Theme status indicator
-            status_indicator = "🎯 ACTIVE" if theme_name == current_theme else "     "
-            
-            # Theme panel - handle custom themes
-            if theme_name in theme_descriptions:
-                description = theme_descriptions[theme_name]
-            else:
-                description = f"🔧 Custom {theme_name} theme (manually configured)"
-            
-            panel_title = f"{status_indicator} {theme_name.upper()}"
-            
-            # Add empty row for better spacing
-            preview_table.add_row("", "")
-            
-            theme_panel = Panel(
-                preview_table,
-                title=panel_title,
-                subtitle=description,
-                border_style=border_color if theme_name == current_theme else current_styles['border_style'],
-                padding=(2, 3),  # Increased horizontal padding for more breathing room
-                expand=True,     # Changed to True to fill available space
-                height=12,       # Increased height slightly
-                # Removed fixed width to allow expansion
+            ts_t   = theme_data.get('table_styles', {})
+            ps_t   = theme_data.get('panel_styles', {})
+            is_active = theme_name == current_theme
+
+            b_col  = ts_t.get('border_style', 'white')
+            ok_col = ps_t.get('success', 'green')
+            wn_col = ps_t.get('warning', 'yellow')
+            er_col = ps_t.get('error', 'red')
+            pr_col = ps_t.get('primary', ps_t.get('title', 'cyan'))
+
+            swatch = Table(show_header=False, box=None, padding=(0, 1))
+            swatch.add_column(style=f"bold {muted}", width=8,  no_wrap=True)
+            swatch.add_column(width=12, no_wrap=True)
+            swatch.add_column(width=20, no_wrap=True, style=muted)
+
+            swatch.add_row("Border",  f"[{b_col}]██████████[/{b_col}]",  b_col)
+            swatch.add_row("Primary", f"[{pr_col}]██████████[/{pr_col}]", pr_col)
+            swatch.add_row("Success", f"[{ok_col}]██████████[/{ok_col}]", ok_col)
+            swatch.add_row("Warning", f"[{wn_col}]██████████[/{wn_col}]", wn_col)
+            swatch.add_row("Error",   f"[{er_col}]██████████[/{er_col}]", er_col)
+
+            desc = theme_descriptions.get(theme_name, f"Custom theme")
+            card_title = (
+                f"[bold {ok_col}]🎯 {theme_name.upper()} ✔ active[/bold {ok_col}]"
+                if is_active else
+                f"[bold]{theme_name.upper()}[/bold]"
             )
-            theme_panels.append(theme_panel)
-        
-        # Display themes in a grid (2 columns)
+
+            theme_panels.append(Panel(
+                swatch,
+                title=card_title,
+                subtitle=f"[{muted}]{escape(desc)}[/{muted}]",
+                border_style=b_col if is_active else muted,
+                padding=(1, 2),
+                expand=True,
+            ))
+
         for i in range(0, len(theme_panels), 2):
             if i + 1 < len(theme_panels):
-                console.print(Columns([theme_panels[i], theme_panels[i+1]], expand=True))
+                console.print(Columns([theme_panels[i], theme_panels[i + 1]], expand=True))
             else:
                 console.print(theme_panels[i])
-            print()
-        
-        # Usage instructions panel
-        usage_table = Table(show_header=False, box=None, padding=(0, 1))
-        usage_table.add_column("Action", style="bold yellow", width=20)
-        usage_table.add_column("Command", style="cyan")
-        
-        usage_table.add_row("Switch Theme:", "./escmd.py set-theme <theme_name>")
-        usage_table.add_row("Preview Theme:", "./escmd.py set-theme <theme_name> --preview")
-        usage_table.add_row("Quick Switch:", "./escmd.py set-theme <theme_name> --no-confirm")
-        usage_table.add_row("Test Theme:", "./escmd.py health (or any command)")
-        usage_table.add_row("List Themes:", "./escmd.py themes")
-        
-        usage_panel = Panel(
-            usage_table,
-            title="🚀 How to Switch Themes",
-            border_style=current_styles.get('panel_styles', {}).get('info', 'blue'),
-            padding=(1, 2)
-        )
-        
-        console.print(usage_panel)
-        print()
-        
-        # Theme categories info - handle case when es_client is None
-        if self.es_client and hasattr(self.es_client, 'style_system'):
-            table_box = self.es_client.style_system.get_table_box()
-        else:
-            # Default to box.HEAVY when no ES client available
-            from rich import box
-            table_box = box.HEAVY
-            
-        categories_table = Table(show_header=True, header_style=current_styles['header_style'], box=table_box)
-        categories_table.add_column("Theme Type", style="bold")
-        categories_table.add_column("Recommended For", style="white")
-        categories_table.add_column("Terminal Background")
-        
-        categories_table.add_row("Rich/Colorful", "Dark terminals, full color support", "Dark")
-        categories_table.add_row("Plain/Minimal", "Light terminals, compatibility mode", "Light") 
-        categories_table.add_row("Specialty", "Personal preference, specific aesthetics", "Varies")
-        
-        categories_panel = Panel(
-            categories_table,
-            title="📋 Theme Categories",
-            border_style=current_styles['border_style'],
-            padding=(1, 2)
-        )
-        
-        console.print(categories_panel)
+            console.print()
+
+        # Usage table
+        usage = Table(show_header=False, box=None, padding=(0, 2))
+        usage.add_column(style=f"bold {warning}", no_wrap=True, width=20)
+        usage.add_column(style=primary)
+
+        usage.add_row("Switch theme",   "./escmd.py set-theme <name>")
+        usage.add_row("Preview first",  "./escmd.py set-theme <name> --preview")
+        usage.add_row("Skip confirm",   "./escmd.py set-theme <name> --no-confirm")
+
+        console.print(Panel(
+            usage,
+            title=f"[{title_style}]Usage[/{title_style}]",
+            border_style=border,
+            padding=(1, 2),
+        ))
+        console.print()
 
     def handle_set_theme(self):
         """Handle set-theme command - switch to a different theme."""
-        from configuration_manager import ConfigurationManager
-        import yaml
-        
         console = Console()
         theme_name = self.args.theme_name
-        preview = getattr(self.args, 'preview', False)
+        preview    = getattr(self.args, 'preview', False)
         no_confirm = getattr(self.args, 'no_confirm', False)
-        
-        # Load available themes
-        config_manager = ConfigurationManager(self.config_file, os.path.join(os.path.dirname(self.config_file), 'escmd.json'))
+
+        from configuration_manager import ConfigurationManager
+        config_manager = ConfigurationManager(
+            self.config_file,
+            os.path.join(os.path.dirname(self.config_file), 'escmd.json'),
+        )
+        tm, ss = self._load_theme_manager(config_manager)
+        border, header, title_style, primary, success, warning, muted, box_style = \
+            self._theme_styles(tm, ss)
+
         themes_file = config_manager.default_settings.get('themes_file', 'themes.yml')
         if not os.path.isabs(themes_file):
-            config_dir = os.path.dirname(config_manager.config_file_path)
-            themes_file = os.path.join(config_dir, themes_file)
-        
+            themes_file = os.path.join(os.path.dirname(config_manager.config_file_path), themes_file)
+
         try:
             with open(themes_file, 'r') as f:
                 themes_config = yaml.safe_load(f)
             available_themes = themes_config.get('themes', {})
         except (FileNotFoundError, yaml.YAMLError):
-            console.print(Panel.fit(f"❌ Could not load themes from {themes_file}", style="bold red"))
+            console.print(Panel(
+                f"[red]Could not load themes from [bold]{escape(themes_file)}[/bold][/red]",
+                title=f"[{title_style}]❌ Set Theme[/{title_style}]",
+                border_style="red",
+                padding=(1, 2),
+            ))
             return
-        
-        # Validate theme name
-        if theme_name not in available_themes:
-            console.print(Panel.fit(f"❌ Theme '{theme_name}' not found", style="bold red"))
-            console.print(f"\n[bold]Available themes:[/bold] {', '.join(available_themes.keys())}")
-            return
-        
-        # Get current theme
-        current_theme = config_manager.get_display_theme()
-        
-        if current_theme == theme_name:
-            console.print(Panel.fit(f"✅ Theme '{theme_name}' is already active", style="bold green"))
-            return
-        
-        # Show preview if requested
-        if preview:
-            self._show_theme_preview(theme_name, available_themes[theme_name])
-            if not no_confirm:
-                response = input(f"\nSwitch to '{theme_name}' theme? (y/N): ").strip().lower()
-                if response not in ['y', 'yes']:
-                    console.print("Theme change cancelled.")
-                    return
-        elif not no_confirm:
-            response = input(f"Switch from '{current_theme}' to '{theme_name}'? (y/N): ").strip().lower()
-            if response not in ['y', 'yes']:
-                console.print("Theme change cancelled.")
-                return
-        
-        # Set the new theme
-        success = config_manager.set_display_theme(theme_name)
-        
-        if success:
-            console.print(Panel.fit(f"✅ Theme switched to '{theme_name}'", style="bold green"))
-            console.print(f"[dim]New theme will be active for new commands[/dim]")
-        else:
-            console.print(Panel.fit(f"❌ Failed to set theme '{theme_name}'", style="bold red"))
 
-    def _show_theme_preview(self, theme_name, theme_data):
+        if theme_name not in available_themes:
+            console.print(Panel(
+                f"[red]Theme [bold]{escape(theme_name)}[/bold] not found.[/red]\n\n"
+                f"[{muted}]Available:[/{muted}] [{primary}]{', '.join(available_themes.keys())}[/{primary}]",
+                title=f"[{title_style}]❌ Set Theme[/{title_style}]",
+                border_style="red",
+                padding=(1, 2),
+            ))
+            return
+
+        current_theme = config_manager.get_display_theme()
+        if current_theme == theme_name:
+            console.print(Panel(
+                f"[{success}]Theme [bold]{escape(theme_name)}[/bold] is already active.[/{success}]",
+                title=f"[{title_style}]🎨 Set Theme[/{title_style}]",
+                border_style=success,
+                padding=(1, 2),
+            ))
+            return
+
+        if preview:
+            self._show_theme_preview(theme_name, available_themes[theme_name], muted)
+
+        if not no_confirm:
+            while True:
+                answer = console.input(
+                    f"\n  Switch from [{success}]{escape(current_theme or 'none')}[/{success}] "
+                    f"to [{primary}]{escape(theme_name)}[/{primary}]? [{muted}][y/n][/{muted}] "
+                ).strip().lower()
+                if answer in ('y', 'yes'):
+                    break
+                if answer in ('n', 'no', ''):
+                    console.print(Panel(
+                        f"[{warning}]No changes made.[/{warning}]",
+                        title=f"[{title_style}]🎨 Set Theme — Cancelled[/{title_style}]",
+                        border_style=warning,
+                        padding=(1, 2),
+                    ))
+                    return
+
+        if config_manager.set_display_theme(theme_name):
+            console.print(Panel(
+                f"[{success}]Theme switched to [bold]{escape(theme_name)}[/bold].[/{success}]\n"
+                f"[{muted}]Active on next command.[/{muted}]",
+                title=f"[{title_style}]🎨 Theme Updated[/{title_style}]",
+                border_style=success,
+                padding=(1, 2),
+            ))
+        else:
+            console.print(Panel(
+                f"[red]Failed to set theme [bold]{escape(theme_name)}[/bold].[/red]",
+                title=f"[{title_style}]❌ Set Theme[/{title_style}]",
+                border_style="red",
+                padding=(1, 2),
+            ))
+
+    def _show_theme_preview(self, theme_name, theme_data, muted='dim'):
         """Show a preview of the theme."""
         console = Console()
-        
-        # Extract colors from the theme structure
-        table_styles = theme_data.get('table_styles', {})
-        panel_styles = theme_data.get('panel_styles', {})
-        health_styles = theme_data.get('table_styles', {}).get('health_styles', {})
-        
-        # Get key colors from theme
-        border_style = table_styles.get('border_style', 'white')
-        primary_style = panel_styles.get('success', 'green')
-        warning_style = health_styles.get('yellow', {}).get('text', 'yellow')
-        error_style = health_styles.get('red', {}).get('text', 'red')
-        success_style = health_styles.get('green', {}).get('text', 'green')
-        
-        # Preview using Rich markup for better color display
-        preview_lines = [f"[bold]🎨 {theme_name.title()} Theme Preview[/bold]\n"]
-        
-        # Show colors with Rich markup
-        preview_lines.append(f"[{border_style}]● Border & Primary: Theme border styling[/{border_style}]")
-        preview_lines.append(f"[{success_style}]● Success: Operation completed successfully[/{success_style}]")
-        preview_lines.append(f"[{warning_style}]● Warning: Please check configuration[/{warning_style}]")
-        preview_lines.append(f"[{error_style}]● Error: Connection failed[/{error_style}]")
-        
-        # Add table sample
-        preview_lines.append("")
-        header_style = table_styles.get('header_style', 'bold white')
-        # Simplify header style for preview (remove 'on color' parts that cause markup issues)
-        header_display = header_style.split(' on ')[0] if ' on ' in header_style else header_style
-        preview_lines.append(f"[{header_display}]Sample Table Header[/{header_display}]")
-        preview_lines.append(f"[{table_styles.get('border_style', 'white')}]├─────────────────────────┤[/{table_styles.get('border_style', 'white')}]")
-        
-        # Join the lines
-        preview_text = "\n".join(preview_lines)
-        
-        panel = Panel(
-            preview_text,
-            title=f"[bold]🎨 {theme_name.title()} Preview[/bold]",
-            border_style=border_style,
-            padding=(1, 2)
-        )
-        
-        console.print(panel)
+
+        ts = theme_data.get('table_styles', {})
+        ps = theme_data.get('panel_styles', {})
+
+        b_col  = ts.get('border_style', 'white')
+        ok_col = ps.get('success', 'green')
+        wn_col = ps.get('warning', 'yellow')
+        er_col = ps.get('error', 'red')
+        pr_col = ps.get('primary', ps.get('title', 'cyan'))
+
+        swatch = Table(show_header=False, box=None, padding=(0, 1))
+        swatch.add_column(style=f"bold {muted}", width=8,  no_wrap=True)
+        swatch.add_column(width=12, no_wrap=True)
+        swatch.add_column(width=20, no_wrap=True, style=muted)
+
+        swatch.add_row("Border",  f"[{b_col}]██████████[/{b_col}]",  b_col)
+        swatch.add_row("Primary", f"[{pr_col}]██████████[/{pr_col}]", pr_col)
+        swatch.add_row("Success", f"[{ok_col}]██████████[/{ok_col}]", ok_col)
+        swatch.add_row("Warning", f"[{wn_col}]██████████[/{wn_col}]", wn_col)
+        swatch.add_row("Error",   f"[{er_col}]██████████[/{er_col}]", er_col)
+
+        console.print(Panel(
+            swatch,
+            title=f"[bold]🎨 {escape(theme_name.title())} Preview[/bold]",
+            border_style=b_col,
+            padding=(1, 2),
+        ))

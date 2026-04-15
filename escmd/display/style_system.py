@@ -32,23 +32,52 @@ class StyleSystem:
         """
         Get semantic color style based on meaning, not hardcoded colors.
 
+        Prefers the dedicated ``semantic_styles`` section in themes.yml so that
+        every theme can define its own palette in one place.  Falls back to
+        ``panel_styles`` for backward compatibility, then to safe defaults.
+
         Args:
-            semantic_type: One of success, warning, error, info, primary, secondary, neutral
+            semantic_type: One of success, warning, error, info, primary,
+                           secondary, neutral, muted
 
         Returns:
             str: Rich style string
         """
-        style_map = {
-            "success": self._get_style("panel_styles", "success", "green"),
-            "warning": self._get_style("panel_styles", "warning", "yellow"),
-            "error": self._get_style("panel_styles", "error", "red"),
-            "info": self._get_style("panel_styles", "info", "blue"),
-            "primary": self._get_style("panel_styles", "title", "cyan"),
-            "secondary": self._get_style("panel_styles", "secondary", "magenta"),
-            "neutral": self._get_style("row_styles", "normal", "white"),
-            "muted": self._get_style("panel_styles", "subtitle", "dim white"),
+        # Defaults used when neither semantic_styles nor panel_styles has a value
+        defaults = {
+            "success":   "green",
+            "warning":   "yellow",
+            "error":     "red",
+            "info":      "blue",
+            "primary":   "cyan",
+            "secondary": "magenta",
+            "neutral":   "white",
+            "muted":     "dim white",
         }
-        return style_map.get(semantic_type, "white")
+
+        # 1. Try the dedicated semantic_styles block (preferred)
+        semantic_val = self._get_style("semantic_styles", semantic_type, "")
+        if semantic_val:
+            return semantic_val
+
+        # 2. Fall back to panel_styles / row_styles (legacy mapping)
+        legacy_map = {
+            "success":   ("panel_styles", "success"),
+            "warning":   ("panel_styles", "warning"),
+            "error":     ("panel_styles", "error"),
+            "info":      ("panel_styles", "info"),
+            "primary":   ("panel_styles", "title"),
+            "secondary": ("panel_styles", "secondary"),
+            "neutral":   ("row_styles",   "normal"),
+            "muted":     ("panel_styles", "subtitle"),
+        }
+        if semantic_type in legacy_map:
+            cat, key = legacy_map[semantic_type]
+            legacy_val = self._get_style(cat, key, "")
+            if legacy_val:
+                return legacy_val
+
+        return defaults.get(semantic_type, "white")
 
     def create_semantic_text(self, text: str, semantic_type: str, **kwargs) -> Text:
         """Create a Text object with semantic styling."""
@@ -210,6 +239,24 @@ class StyleSystem:
         if self.theme_manager:
             return self.theme_manager.get_themed_style(category, style_type, default)
         return default
+
+    def get_zebra_style(self, row_index: int) -> Optional[str]:
+        """
+        Return a background-only alternate row style for zebra striping.
+
+        Returns None for even rows (use default column style) and a subtle
+        background highlight for odd rows. Text colors are preserved.
+
+        Args:
+            row_index: Zero-based row index
+
+        Returns:
+            str background style for odd rows, None for even rows
+        """
+        if row_index % 2 == 0:
+            return None
+        zebra_color = self._get_style("table_styles", "row_styles.zebra", "grey23")
+        return f"on {zebra_color}"
 
     def get_table_box(self) -> Optional[box.Box]:
         """Get table box style from theme configuration."""

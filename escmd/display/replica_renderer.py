@@ -10,19 +10,47 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich import box
+from .style_system import StyleSystem
 
 
 class ReplicaRenderer:
     """Renderer for replica management display operations."""
 
-    def __init__(self, console: Console = None):
+    def __init__(self, console: Console = None, theme_manager=None):
         """
         Initialize replica renderer.
 
         Args:
             console: Rich console instance (optional)
+            theme_manager: Theme manager instance for styling (optional)
         """
         self.console = console if console else Console()
+        self.theme_manager = theme_manager
+        self.style_system = StyleSystem(theme_manager) if theme_manager else None
+
+    def _border(self, fallback: str = "blue") -> str:
+        """Return the theme border style."""
+        if self.theme_manager:
+            return self.theme_manager.get_theme_styles().get("border_style", fallback)
+        return fallback
+
+    def _title_style(self, fallback: str = "bold white") -> str:
+        """Return the theme panel title style."""
+        if self.theme_manager:
+            return self.theme_manager.get_themed_style("panel_styles", "title", fallback)
+        return fallback
+
+    def _sem(self, semantic: str, fallback: str = "white") -> str:
+        """Return a semantic style from the style system."""
+        if self.style_system:
+            return self.style_system.get_semantic_style(semantic)
+        return fallback
+
+    def _table_box(self):
+        """Return the themed table box style."""
+        if self.style_system:
+            return self.style_system.get_table_box()
+        return box.ROUNDED
 
     def render_update_plan(self, plan_result: Dict[str, Any], dry_run: bool = False):
         """
@@ -48,8 +76,8 @@ class ReplicaRenderer:
         summary_text = "\n".join(summary_info)
         summary_panel = Panel(
             summary_text,
-            title="📋 Replica Update Plan Summary",
-            border_style="blue",
+            title=f"[{self._title_style()}]📋 Replica Update Plan Summary[/{self._title_style()}]",
+            border_style=self._border(),
             padding=(1, 2)
         )
         self.console.print(summary_panel)
@@ -78,10 +106,10 @@ class ReplicaRenderer:
         ]
 
         summary_text = "\n".join(summary_info)
-        border_style = "green" if result['failure_count'] == 0 else "red"
+        border_style = self._sem("success", "green") if result['failure_count'] == 0 else self._sem("error", "red")
         summary_panel = Panel(
             summary_text,
-            title="📊 Replica Update Results",
+            title=f"[{self._title_style()}]📊 Replica Update Results[/{self._title_style()}]",
             border_style=border_style,
             padding=(1, 2)
         )
@@ -110,12 +138,12 @@ class ReplicaRenderer:
         # Create summary table
         summary_table = Table(
             title="📊 Replica Settings Summary",
-            box=box.ROUNDED,
+            box=self._table_box(),
             expand=True
         )
-        summary_table.add_column("Index", style="bold cyan", ratio=4)
-        summary_table.add_column("Current Replicas", style="yellow", ratio=2)
-        summary_table.add_column("Status", style="green", ratio=3)
+        summary_table.add_column("Index", style=self._sem("primary", "bold cyan"), ratio=4)
+        summary_table.add_column("Current Replicas", style=self._sem("warning", "yellow"), ratio=2)
+        summary_table.add_column("Status", style=self._sem("success", "green"), ratio=3)
 
         for index_name, index_data in replica_settings.items():
             current_replicas = index_data.get('settings', {}).get('index', {}).get('number_of_replicas', 'unknown')
@@ -137,7 +165,7 @@ class ReplicaRenderer:
                 f"[{status_style}]{status}[/{status_style}]"
             )
 
-        self.console.print(Panel(summary_table, border_style="blue", padding=(1, 2)))
+        self.console.print(Panel(summary_table, border_style=self._border(), padding=(1, 2)))
 
     def _render_indices_to_update(self, indices_to_update: List[Dict[str, Any]], dry_run: bool):
         """
@@ -147,11 +175,11 @@ class ReplicaRenderer:
             indices_to_update: List of indices to update
             dry_run: Whether this is a dry run
         """
-        update_table = Table(title="🔧 Indices to Update", box=box.ROUNDED, expand=True)
-        update_table.add_column("Index", style="bold cyan", ratio=4)
-        update_table.add_column("Current Replicas", style="red", ratio=1)
-        update_table.add_column("Target Replicas", style="green", ratio=1)
-        update_table.add_column("Status", style="yellow", ratio=2)
+        update_table = Table(title="🔧 Indices to Update", box=self._table_box(), expand=True)
+        update_table.add_column("Index", style=self._sem("primary", "bold cyan"), ratio=4)
+        update_table.add_column("Current Replicas", style=self._sem("error", "red"), ratio=1)
+        update_table.add_column("Target Replicas", style=self._sem("success", "green"), ratio=1)
+        update_table.add_column("Status", style=self._sem("warning", "yellow"), ratio=2)
 
         for index_info in indices_to_update:
             status = "🔄 Ready for update" if not dry_run else "📋 Dry run (no changes)"
@@ -162,7 +190,7 @@ class ReplicaRenderer:
                 status
             )
 
-        self.console.print(Panel(update_table, border_style="green", padding=(1, 2)))
+        self.console.print(Panel(update_table, border_style=self._sem("success", "green"), padding=(1, 2)))
         print()
 
     def _render_skipped_indices(self, skipped_indices: List[Dict[str, Any]]):
@@ -172,9 +200,9 @@ class ReplicaRenderer:
         Args:
             skipped_indices: List of indices that were skipped
         """
-        skipped_table = Table(title="💤 Skipped Indices (First 10)", box=box.ROUNDED, expand=True)
-        skipped_table.add_column("Index", style="bold yellow", ratio=3)
-        skipped_table.add_column("Reason", style="dim", ratio=3)
+        skipped_table = Table(title="💤 Skipped Indices (First 10)", box=self._table_box(), expand=True)
+        skipped_table.add_column("Index", style=self._sem("warning", "bold yellow"), ratio=3)
+        skipped_table.add_column("Reason", style=self._sem("muted", "dim"), ratio=3)
 
         for index_info in skipped_indices[:10]:
             skipped_table.add_row(
@@ -185,7 +213,7 @@ class ReplicaRenderer:
         if len(skipped_indices) > 10:
             skipped_table.add_row("...", f"and {len(skipped_indices) - 10} more")
 
-        self.console.print(Panel(skipped_table, border_style="yellow", padding=(1, 2)))
+        self.console.print(Panel(skipped_table, border_style=self._sem("warning", "yellow"), padding=(1, 2)))
         print()
 
     def _render_successful_updates(self, successful_updates: List[Dict[str, Any]]):
@@ -195,11 +223,11 @@ class ReplicaRenderer:
         Args:
             successful_updates: List of successful update results
         """
-        success_table = Table(title="✅ Successful Updates", box=box.ROUNDED, expand=True)
-        success_table.add_column("Index", style="bold green", ratio=4)
-        success_table.add_column("Previous", style="red", ratio=1)
-        success_table.add_column("New", style="green", ratio=1)
-        success_table.add_column("Status", style="bright_green", ratio=2)
+        success_table = Table(title="✅ Successful Updates", box=self._table_box(), expand=True)
+        success_table.add_column("Index", style=self._sem("success", "bold green"), ratio=4)
+        success_table.add_column("Previous", style=self._sem("error", "red"), ratio=1)
+        success_table.add_column("New", style=self._sem("success", "green"), ratio=1)
+        success_table.add_column("Status", style=self._sem("success", "bright_green"), ratio=2)
 
         for update_info in successful_updates:
             success_table.add_row(
@@ -209,7 +237,7 @@ class ReplicaRenderer:
                 "✅ Updated successfully"
             )
 
-        self.console.print(Panel(success_table, border_style="green", padding=(1, 2)))
+        self.console.print(Panel(success_table, border_style=self._sem("success", "green"), padding=(1, 2)))
         print()
 
     def _render_failed_updates(self, failed_updates: List[Dict[str, Any]]):
@@ -219,10 +247,10 @@ class ReplicaRenderer:
         Args:
             failed_updates: List of failed update results
         """
-        failure_table = Table(title="❌ Failed Updates", box=box.ROUNDED, expand=True)
-        failure_table.add_column("Index", style="bold red", ratio=3)
-        failure_table.add_column("Previous", style="yellow", ratio=1)
-        failure_table.add_column("Error", style="red", ratio=4)
+        failure_table = Table(title="❌ Failed Updates", box=self._table_box(), expand=True)
+        failure_table.add_column("Index", style=self._sem("error", "bold red"), ratio=3)
+        failure_table.add_column("Previous", style=self._sem("warning", "yellow"), ratio=1)
+        failure_table.add_column("Error", style=self._sem("error", "red"), ratio=4)
 
         for failure_info in failed_updates:
             failure_table.add_row(
@@ -231,5 +259,5 @@ class ReplicaRenderer:
                 failure_info['error']
             )
 
-        self.console.print(Panel(failure_table, border_style="red", padding=(1, 2)))
+        self.console.print(Panel(failure_table, border_style=self._sem("error", "red"), padding=(1, 2)))
         print()

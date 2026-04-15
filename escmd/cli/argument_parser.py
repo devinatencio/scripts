@@ -4,6 +4,35 @@ Handles all command-line argument parsing and subcommand configuration.
 """
 
 import argparse
+import sys
+
+
+class _RichErrorParser(argparse.ArgumentParser):
+    """ArgumentParser subclass that prints a Rich panel on error instead of raw stderr."""
+
+    def error(self, message):
+        try:
+            from rich.console import Console
+            from rich.panel import Panel
+            cmd = self.prog.split()[-1]
+            # Per-parser examples, or fall back to the set defaults
+            examples = getattr(self, "_rich_examples", None) or (
+                f"  [cyan]./escmd.py set persistent cluster.routing.allocation.node_concurrent_recoveries 5[/cyan]\n"
+                f"  [cyan]./escmd.py set transient indices.recovery.max_bytes_per_sec 100mb[/cyan]\n"
+                f"  [cyan]./escmd.py set persistent cluster.routing.allocation.enable null[/cyan]  [dim]← resets to default[/dim]"
+            )
+            Console().print(Panel(
+                f"[bold white]{message}[/bold white]\n\n"
+                f"[bold]Example:[/bold]\n"
+                f"{examples}\n\n"
+                f"[dim]Run [cyan]./escmd.py {cmd} --help[/cyan] for full usage.[/dim]",
+                title="[bold red]✗ Invalid Arguments[/bold red]",
+                border_style="red",
+                padding=(1, 2),
+            ))
+        except Exception:
+            sys.stderr.write(f"error: {message}\n")
+        sys.exit(2)
 
 
 def create_argument_parser():
@@ -509,17 +538,17 @@ def _add_basic_commands(subparsers):
         "indice-add-metadata", help="Add metadata to an index"
     )
     indice_add_metadata_parser.add_argument(
-        "indice_name", help="Name of the index to add metadata to"
+        "indice_name", nargs="?", default=None, help="Name of the index to add metadata to"
     )
     indice_add_metadata_parser.add_argument(
-        "metadata_json", help="JSON string containing metadata to add"
+        "metadata_json", nargs="?", default=None, help="JSON string containing metadata to add"
     )
 
     # Create index command
     create_index_parser = subparsers.add_parser(
         "create-index", help="Create a new empty index with custom settings"
     )
-    create_index_parser.add_argument("index_name", help="Name of the index to create")
+    create_index_parser.add_argument("index_name", nargs="?", default=None, help="Name of the index to create")
     create_index_parser.add_argument(
         "--shards",
         "-s",
@@ -579,15 +608,22 @@ def _add_basic_commands(subparsers):
     )
     set_parser.add_argument(
         "setting_type",
+        nargs="?",
+        default=None,
         choices=["transient", "persistent"],
         help="Setting type: transient (resets after restart) or persistent (survives restart)",
     )
     set_parser.add_argument(
         "setting_key",
+        nargs="?",
+        default=None,
         help="Setting key in dot notation (e.g., cluster.routing.allocation.node_concurrent_recoveries)",
     )
     set_parser.add_argument(
-        "setting_value", help='Setting value (use "null" to reset/remove a setting)'
+        "setting_value",
+        nargs="?",
+        default=None,
+        help='Setting value (use "null" to reset/remove a setting)',
     )
     set_parser.add_argument(
         "--format",
@@ -796,10 +832,10 @@ def _add_basic_commands(subparsers):
     )
 
     excludereset_parser = subparsers.add_parser(
-        "exclude-reset", help="Remove Settings from Indice"
+        "exclude-reset", help="Remove exclusion settings from an index"
     )
     excludereset_parser.add_argument(
-        "indice", nargs="?", default=None, help="Indice to reset"
+        "indice", nargs="?", default=None, help="Index name to reset exclusion settings for"
     )
 
     flush_parser = subparsers.add_parser("flush", help="Perform Elasticsearch Flush")
@@ -807,7 +843,7 @@ def _add_basic_commands(subparsers):
     freeze_parser = subparsers.add_parser(
         "freeze", help="Freeze an Elasticsearch index"
     )
-    freeze_parser.add_argument("pattern", help="Index name or regex pattern to freeze")
+    freeze_parser.add_argument("pattern", nargs="?", default=None, help="Index name or regex pattern to freeze")
     freeze_parser.add_argument(
         "--regex", "-r", action="store_true", help="Treat pattern as regex"
     )
@@ -825,7 +861,7 @@ def _add_basic_commands(subparsers):
         "unfreeze", help="Unfreeze an Elasticsearch index"
     )
     unfreeze_parser.add_argument(
-        "pattern", help="Index name or regex pattern to unfreeze"
+        "pattern", nargs="?", default=None, help="Index name or regex pattern to unfreeze"
     )
     unfreeze_parser.add_argument(
         "--regex", "-r", action="store_true", help="Treat pattern as regex"
@@ -866,7 +902,7 @@ def _add_basic_commands(subparsers):
     template_parser = subparsers.add_parser(
         "template", help="Show detailed information about a specific template"
     )
-    template_parser.add_argument("name", help="Template name to inspect")
+    template_parser.add_argument("name", nargs="?", default=None, help="Template name to inspect")
     template_parser.add_argument(
         "--type",
         choices=["auto", "legacy", "composable", "component"],
@@ -901,7 +937,7 @@ def _add_basic_commands(subparsers):
         "template-modify",
         help="Modify template fields with set/append/remove/delete operations",
     )
-    template_modify_parser.add_argument("name", help="Template name to modify")
+    template_modify_parser.add_argument("name", nargs="?", default=None, help="Template name to modify")
     template_modify_parser.add_argument(
         "--type",
         "-t",
@@ -912,7 +948,7 @@ def _add_basic_commands(subparsers):
     template_modify_parser.add_argument(
         "--field",
         "-f",
-        required=True,
+        default=None,
         help="Field path in dot notation (e.g., template.settings.index.routing.allocation.exclude._name)",
     )
     template_modify_parser.add_argument(
@@ -947,7 +983,7 @@ def _add_basic_commands(subparsers):
     template_backup_parser = subparsers.add_parser(
         "template-backup", help="Create a backup of a template"
     )
-    template_backup_parser.add_argument("name", help="Template name to backup")
+    template_backup_parser.add_argument("name", nargs="?", default=None, help="Template name to backup")
     template_backup_parser.add_argument(
         "--type",
         "-t",
@@ -964,7 +1000,7 @@ def _add_basic_commands(subparsers):
         "template-restore", help="Restore a template from backup"
     )
     template_restore_parser.add_argument(
-        "--backup-file", required=True, help="Path to the backup file to restore from"
+        "--backup-file", default=None, help="Path to the backup file to restore from"
     )
 
     list_backups_parser = subparsers.add_parser(
@@ -1095,7 +1131,7 @@ def _add_allocation_commands(subparsers):
     )
     explain_parser.add_argument("index", help="Index name to explain allocation for")
     explain_parser.add_argument(
-        "--shard", "-s", type=int, default=0, help="Shard number (default: 0)"
+        "--shard", "-s", type=int, default=None, help="Shard number (default: auto-detect)"
     )
     explain_parser.add_argument(
         "--primary",
@@ -1669,6 +1705,12 @@ def _add_utility_commands(subparsers):
     set_username_parser = subparsers.add_parser(
         "set-username", help="Set default Elasticsearch username in JSON config"
     )
+    set_username_parser.__class__ = _RichErrorParser
+    set_username_parser._rich_examples = (
+        "  [cyan]./escmd.py set-username elastic[/cyan]\n"
+        "  [cyan]./escmd.py set-username admin[/cyan]\n"
+        "  [cyan]./escmd.py set-username clear[/cyan]  [dim]← removes the stored username[/dim]"
+    )
     set_username_parser.add_argument(
         "username", help='Username to set as default (use "clear" to remove)'
     )
@@ -1824,6 +1866,17 @@ def _add_password_commands(subparsers):
     remove_password_parser.add_argument(
         "environment", help="Environment name to remove"
     )
+    remove_password_parser.add_argument(
+        "--username",
+        "-u",
+        help="Username to remove (e.g., kibana_system) — removes environment.username entry",
+    )
+    remove_password_parser.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        help="Skip confirmation prompt and delete immediately",
+    )
 
     # Clear session command
     clear_session_parser = subparsers.add_parser(
@@ -1877,7 +1930,6 @@ def _add_password_commands(subparsers):
 def _add_action_commands(subparsers):
     """Add action sequence management commands."""
 
-    # Action parent parser
     action_parser = subparsers.add_parser(
         "action", help="Manage and execute action sequences"
     )
@@ -1942,6 +1994,13 @@ def _add_action_commands(subparsers):
         type=int,
         default=15,
         help="Maximum lines to show in output panels (default: 15)",
+    )
+    run_parser.add_argument(
+        "--format",
+        dest="output_format",
+        choices=["json"],
+        default=None,
+        help="Output format: 'json' emits one JSON object per step with step metadata and output",
     )
 
     # Dynamic parameter support - these will be added dynamically based on action definitions

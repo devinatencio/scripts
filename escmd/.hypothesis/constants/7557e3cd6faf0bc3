@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/template_restore_help.py
-# hypothesis_version: 6.151.12
-
-['   Automation:', '   Before restoring:', '   Cross-cluster:', '   Example:', '   Filename format:', '   Step 3 - Restore:', '   Step 4 - Verify:', '   Template body:', '   Template type:', 'Filter by name:', 'Find backup files:', 'Restore from backup:', 'bold cyan', 'bold green', 'bold magenta', 'command', 'description', 'dim white', 'example', 'list-backups', 'section_header', 'template-restore', 'white', '💡 Pro Tips:', '🔄 Restore Workflow:']

@@ -84,203 +84,86 @@ class SnapshotHandler(BaseHandler):
             )
 
     def _show_snapshots_help(self):
-        """Display comprehensive help screen for snapshot commands."""
+        """Display help screen for snapshot commands."""
         console = Console()
+        ss = self.es_client.style_system
+        tm = self.es_client.theme_manager
 
-        # Get theme colors
-        info_style = self.es_client.style_system.get_semantic_style("info")
-        success_style = self.es_client.style_system.get_semantic_style("success")
-        primary_style = self.es_client.style_system.get_semantic_style("primary")
-        secondary_style = self.es_client.style_system.get_semantic_style("secondary")
-        border_style = self.es_client.style_system._get_style(
-            "table_styles", "border_style", "white"
-        )
+        primary_style = ss.get_semantic_style("primary")
+        success_style = ss.get_semantic_style("success")
+        muted_style = ss._get_style('semantic', 'muted', 'dim')
+        border_style = ss._get_style('table_styles', 'border_style', 'white')
+        header_style = tm.get_theme_styles().get('header_style', 'bold white') if tm else 'bold white'
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        box_style = ss.get_table_box()
 
-        # Create main title with theme colors
-        title_text = self.es_client.style_system.create_semantic_text(
-            "📦 Elasticsearch Snapshots Management", "info"
-        )
-        title_panel = Panel(
-            title_text,
-            subtitle="Available Commands & Usage Examples",
-            border_style=info_style,
+        # Header panel
+        header_panel = Panel(
+            Text("Run ./escmd.py snapshots <command> [options]", style="bold white"),
+            title=f"[{title_style}]📦 Elasticsearch Snapshots[/{title_style}]",
+            subtitle=Text.from_markup("[dim]Use[/dim] [cyan]--help[/cyan] [dim]on any subcommand for full options[/dim]"),
+            border_style=border_style,
             padding=(1, 2),
             expand=True,
         )
 
-        # Create commands table with full width
-        commands_table = Table(
+        # Single combined table — commands then a separator row then options
+        table = Table(
             show_header=True,
-            header_style=primary_style,
+            header_style=header_style,
             border_style=border_style,
+            box=box_style,
+            show_lines=False,
             expand=True,
-            show_lines=True,
         )
-        commands_table.add_column("Command", style=info_style, ratio=2)
-        commands_table.add_column("Description", style="white", ratio=3)
-        commands_table.add_column("Usage Example", style=success_style, ratio=3)
+        table.add_column("Command / Option", style=primary_style, ratio=2)
+        table.add_column("Description", style="white", ratio=3)
+        table.add_column("Example", style=success_style, ratio=3)
 
-        # Add command rows
-        commands_table.add_row(
-            "list",
-            "List all snapshots from configured repository",
-            "./escmd.py snapshots list",
-        )
-        commands_table.add_row(
-            "list [pattern]",
-            "Filter snapshots by regex pattern",
-            "./escmd.py snapshots list 'logs.*'",
-        )
-        commands_table.add_row(
-            "status <name>",
-            "Show detailed status of a specific snapshot",
-            "./escmd.py snapshots status snapshot_name",
-        )
-        commands_table.add_row(
-            "info <name>",
-            "Show comprehensive information about a snapshot",
-            "./escmd.py snapshots info snapshot_name",
-        )
-        commands_table.add_row(
-            "create <target>",
-            "Create snapshot of indices or datastreams",
-            "./escmd.py snapshots create 'logs-*'",
-        )
-        commands_table.add_row(
-            "delete <name>",
-            "Delete a specific snapshot",
-            "./escmd.py snapshots delete snapshot_name",
-        )
-        commands_table.add_row(
-            "list-restored",
-            "List all restored snapshots/indices tracked in system",
-            "./escmd.py snapshots list-restored",
-        )
-        commands_table.add_row(
-            "clear-staged",
-            "Clear all pending restores (in INIT status)",
-            "./escmd.py snapshots clear-staged",
-        )
-        commands_table.add_row(
-            "repositories",
-            "List all configured snapshot repositories",
-            "./escmd.py snapshots repositories",
-        )
-
-        # Create options table with full width
-        options_table = Table(
-            show_header=True,
-            header_style=primary_style,
-            border_style=border_style,
-            expand=True,
-            show_lines=True,
-        )
-        options_table.add_column("Common Options", style=secondary_style, ratio=2)
-        options_table.add_column("Description", style="white", ratio=3)
-        options_table.add_column("Example", style=success_style, ratio=3)
-
-        options_table.add_row(
-            "--format json",
-            "Output in JSON format instead of table",
-            "./escmd.py snapshots list --format json",
-        )
-        options_table.add_row(
-            "--pager",
-            "Force pager for scrolling long lists",
-            "./escmd.py snapshots list --pager",
-        )
-        options_table.add_row(
-            "--slow",
-            "Use slow listing mode (full metadata)",
-            "./escmd.py snapshots list --slow",
-        )
-        options_table.add_row(
-            "--repository <name>",
-            "Specify snapshot repository",
-            "./escmd.py snapshots list --repository backup-repo",
-        )
-        options_table.add_row(
-            "--wait",
-            "Wait for snapshot completion (create only)",
-            "./escmd.py snapshots create 'logs-*' --wait",
-        )
-        options_table.add_row(
-            "--dry-run",
-            "Show what would be snapshotted (create only)",
-            "./escmd.py snapshots create 'logs-*' --dry-run",
-        )
-        options_table.add_row(
-            "--force",
-            "Skip confirmation prompts",
-            "./escmd.py snapshots delete snapshot_name --force",
-        )
-
-        # Create quick start panel with theme colors
-        quick_start_lines = [
-            self.es_client.style_system.create_semantic_text(
-                "🚀 Quick Start:", "primary"
-            ),
-            "",
-            "1. List all snapshots:",
-            "   ./escmd.py snapshots list",
-            "",
-            "2. Check specific snapshot status:",
-            "   ./escmd.py snapshots status <snapshot_name>",
-            "",
-            "3. Create new snapshot:",
-            "   ./escmd.py snapshots create 'index-pattern-*'",
-            "",
-            self.es_client.style_system.create_semantic_text(
-                "💡 Tip: Use tab completion or --help on any command for more options",
-                "secondary",
-            ),
+        # Commands
+        rows = [
+            ("list",                  "List all snapshots from configured repository",        "snapshots list"),
+            ("list [pattern]",        "Filter snapshots by regex pattern",                    "snapshots list 'logs.*'"),
+            ("status <name>",         "Detailed status of a specific snapshot",               "snapshots status <name>"),
+            ("info <name>",           "Full snapshot information",                            "snapshots info <name>"),
+            ("create <target>",       "Create snapshot of indices or datastreams",            "snapshots create 'logs-*'"),
+            ("delete <name>",         "Delete a snapshot",                                    "snapshots delete <name>"),
+            ("list-restored",         "List restored snapshots tracked in system",            "snapshots list-restored"),
+            ("clear-staged",          "Clear pending restores (INIT status)",                 "snapshots clear-staged"),
+            ("repositories",          "List configured snapshot repositories",                "snapshots repositories"),
         ]
+        for i, (cmd, desc, ex) in enumerate(rows):
+            table.add_row(cmd, desc, f"./escmd.py {ex}", style=ss.get_zebra_style(i) if ss else None)
 
-        # Create a Text object with proper formatting
-        quick_start_text = Text()
-        for i, line in enumerate(quick_start_lines):
-            if isinstance(line, Text):
-                quick_start_text.append(line)
-            elif line.strip().startswith("./escmd.py"):
-                quick_start_text.append(line, style=success_style)
-            else:
-                quick_start_text.append(line)
-
-            # Add newline unless it's the last line
-            if i < len(quick_start_lines) - 1:
-                quick_start_text.append("\n")
-
-        quick_start_panel = Panel(
-            quick_start_text,
-            title="🏁 Quick Start Guide",
-            border_style=success_style,
-            padding=(1, 2),
-            expand=True,
+        # Visual separator row
+        table.add_row(
+            Text("── Options ──", style=muted_style),
+            Text("", style=muted_style),
+            Text("", style=muted_style),
         )
 
-        # Display all sections
-        console.print()
-        console.print(title_panel)
-        console.print()
-        console.print(
-            Panel(
-                commands_table,
-                title="📋 Available Commands",
-                border_style=border_style,
-                expand=True,
+        # Options
+        options = [
+            ("--format json",       "JSON output instead of table",                         "snapshots list --format json"),
+            ("--repository <name>", "Specify snapshot repository",                          "snapshots list --repository backup-repo"),
+            ("--pager",             "Force pager for long lists",                           "snapshots list --pager"),
+            ("--slow",              "Slow listing mode (full metadata)",                    "snapshots list --slow"),
+            ("--wait",              "Wait for completion (create only)",                    "snapshots create 'logs-*' --wait"),
+            ("--dry-run",           "Show what would be snapshotted (create only)",         "snapshots create 'logs-*' --dry-run"),
+            ("--force",             "Skip confirmation prompts",                            "snapshots delete <name> --force"),
+        ]
+        for i, (opt, desc, ex) in enumerate(options):
+            table.add_row(
+                Text(opt, style=ss._get_style('semantic', 'secondary', 'magenta')),
+                desc,
+                Text(f"./escmd.py {ex}", style=muted_style),
+                style=ss.get_zebra_style(i) if ss else None,
             )
-        )
+
         console.print()
-        console.print(
-            Panel(
-                options_table,
-                title="🔩 Common Options",
-                border_style=border_style,
-                expand=True,
-            )
-        )
+        console.print(header_panel)
         console.print()
-        console.print(quick_start_panel)
+        console.print(table)
         console.print()
 
     def _handle_list_snapshots(self):

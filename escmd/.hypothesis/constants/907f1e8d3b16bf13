@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/display/../processors/node_processor.py
-# hypothesis_version: 6.151.12
-
-[100, 9200, '15m', '1m', '5m', ':', 'Unknown', 'available', 'available_in_bytes', 'bound_address', 'count', 'cpu', 'cpu_percent', 'current_open', 'data', 'deleted', 'disk', 'docs', 'docs_count', 'docs_deleted', 'fs', 'heap_max_in_bytes', 'heap_used_in_bytes', 'host', 'hostname', 'http', 'http_port', 'indices', 'ingest', 'jvm', 'load_15m', 'load_1m', 'load_5m', 'load_average', 'master', 'mem', 'memory_total_bytes', 'memory_used_bytes', 'name', 'network', 'nodeid', 'nodes', 'os', 'percent', 'process', 'publish_address', 'roles', 'roles_distribution', 'rx_count', 'rx_size_in_bytes', 'server_open', 'shard_stats', 'shards', 'size_in_bytes', 'store', 'store_size', 'total', 'total_count', 'total_docs', 'total_in_bytes', 'total_nodes', 'total_opened', 'total_shards', 'total_store_size', 'transport', 'tx_count', 'tx_size_in_bytes', 'used', 'used_percent']

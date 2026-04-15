@@ -170,16 +170,86 @@ This is a cluster-wide operation that cannot be undone easily."""
     def handle_exclude(self):
         """Handle index-level exclusion from specific nodes."""
         if not self.args.indice or not self.args.server:
-            self._show_exclude_error()
+            self._show_exclude_help()
             return
         self._process_exclude()
 
     def handle_exclude_reset(self):
         """Handle resetting index exclusion settings."""
-        if not self.args.indice:
-            self.es_client.show_message_box("ERROR", "You must pass indice name \n(i.e.: .ds-aex10-c01-logs-ueb-main-2025.04.03-000732)", message_style="bold white", panel_style="red")
-            exit(1)
+        if not getattr(self.args, 'indice', None):
+            self._show_exclude_reset_help()
+            return
         self._process_exclude_reset()
+
+    def _show_exclude_reset_help(self):
+        """Display help screen for exclude-reset command."""
+        from rich.panel import Panel
+        from rich.table import Table
+        from rich.text import Text
+
+        console = self.console
+        ss = self.es_client.style_system
+        tm = self.es_client.theme_manager
+
+        primary_style = ss.get_semantic_style("primary")
+        success_style = ss.get_semantic_style("success")
+        muted_style = ss._get_style('semantic', 'muted', 'dim')
+        border_style = ss._get_style('table_styles', 'border_style', 'white')
+        header_style = tm.get_theme_styles().get('header_style', 'bold white') if tm else 'bold white'
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        box_style = ss.get_table_box()
+
+        header_panel = Panel(
+            Text("Run ./escmd.py exclude-reset <index>", style="bold white"),
+            title=f"[{title_style}]🔄 Exclude Reset[/{title_style}]",
+            subtitle=Text.from_markup("[dim]Use[/dim] [cyan]--help[/cyan] [dim]for full options[/dim]"),
+            border_style=border_style,
+            padding=(1, 2),
+            expand=True,
+        )
+
+        table = Table(
+            show_header=True,
+            header_style=header_style,
+            border_style=border_style,
+            box=box_style,
+            show_lines=False,
+            expand=True,
+        )
+        table.add_column("Command", style=primary_style, ratio=2)
+        table.add_column("Description", style="white", ratio=3)
+        table.add_column("Example", style=success_style, ratio=3)
+
+        rows = [
+            ("exclude-reset <index>", "Reset exclusion settings for an index", "exclude-reset .ds-aex10-c01-logs-2025.04.03-000732"),
+            ("exclude-reset <index>", "Reset by simple index name", "exclude-reset my-index-001"),
+        ]
+        for i, (cmd, desc, ex) in enumerate(rows):
+            table.add_row(cmd, desc, f"./escmd.py {ex}", style=ss.get_zebra_style(i) if ss else None)
+
+        table.add_row(
+            Text("── Related ──", style=muted_style),
+            Text("", style=muted_style),
+            Text("", style=muted_style),
+        )
+
+        related = [
+            ("exclude <index> -s <host>", "Exclude index from a specific host", "exclude .ds-logs-000732 -s ess01"),
+            ("indice <index>", "View index details", "indice my-index-001"),
+        ]
+        for i, (opt, desc, ex) in enumerate(related):
+            table.add_row(
+                Text(opt, style=ss._get_style('semantic', 'secondary', 'magenta')),
+                desc,
+                Text(f"./escmd.py {ex}", style=muted_style),
+                style=ss.get_zebra_style(i) if ss else None,
+            )
+
+        console.print()
+        console.print(header_panel)
+        console.print()
+        console.print(table)
+        console.print()
 
     def _handle_allocation_remove(self):
         """Remove a specific host from the cluster-wide exclusion list."""
@@ -238,41 +308,115 @@ This is a cluster-wide operation that cannot be undone easily."""
         """
         Handle allocation explain command.
         Provides detailed allocation information for a specific index/shard.
+        Automatically detects unassigned shards and explains them.
         """
         try:
             index_name = self.args.index
-            shard_number = getattr(self.args, 'shard', 0)
+            shard_number = getattr(self.args, 'shard', None)
+            explicit_primary = hasattr(self.args, 'primary') and self.args.primary
 
-            # Auto-detect primary vs replica if not specified
-            if hasattr(self.args, 'primary') and self.args.primary:
-                is_primary = True
+            # Gather shard overview data for the index
+            shard_overview = self._build_shard_overview(index_name)
+
+            # If user explicitly specified --primary or a shard number, do a single explain
+            if explicit_primary or shard_number is not None:
+                if shard_number is None:
+                    shard_number = 0
+                is_primary = explicit_primary if explicit_primary else True
+
+                explain_result = self.es_client.get_enhanced_allocation_explain(index_name, shard_number, is_primary)
+                explain_result['shard_overview'] = shard_overview
+
+                if self.args.format == 'json':
+                    self.es_client.pretty_print_json(explain_result)
+                else:
+                    self.es_client.print_allocation_explain_results(explain_result)
+                return
+
+            # Auto-detect: find all shards for this index and prefer unassigned ones
+            index_shards = shard_overview.get('_raw_shards', [])
+
+            if not index_shards:
+                # No shard info available, fall back to primary shard 0
+                explain_result = self.es_client.get_enhanced_allocation_explain(index_name, 0, True)
+                explain_result['shard_overview'] = shard_overview
+                if self.args.format == 'json':
+                    self.es_client.pretty_print_json(explain_result)
+                else:
+                    self.es_client.print_allocation_explain_results(explain_result)
+                return
+
+            # Find unassigned shards (UNASSIGNED, INITIALIZING, RELOCATING)
+            problem_shards = [s for s in index_shards if s.get('state') in ('UNASSIGNED', 'INITIALIZING', 'RELOCATING')]
+
+            if problem_shards:
+                shards_to_explain = problem_shards
             else:
-                # Auto-detect by checking shard status
-                try:
-                    shards_data = self.es_client.get_shards_as_dict()
-                    index_shards = [s for s in shards_data if s['index'] == index_name and s['shard'] == str(shard_number)]
+                shards_to_explain = [{'shard': '0', 'prirep': 'p'}]
 
-                    if index_shards:
-                        # If we have both primary and replica, prefer primary for explanation
-                        primary_shard = next((s for s in index_shards if s['prirep'] == 'p'), index_shards[0])
-                        is_primary = primary_shard['prirep'] == 'p'
-                    else:
-                        # Default to primary if we can't find the shard
-                        is_primary = True
-                except:
-                    # Fallback to primary if detection fails
-                    is_primary = True
-
-            # Get allocation explanation
-            explain_result = self.es_client.get_enhanced_allocation_explain(index_name, shard_number, is_primary)
+            results = []
+            for shard in shards_to_explain:
+                s_num = int(shard.get('shard', 0))
+                s_primary = shard.get('prirep', 'p') == 'p'
+                result = self.es_client.get_enhanced_allocation_explain(index_name, s_num, s_primary)
+                result['shard_overview'] = shard_overview
+                results.append(result)
 
             if self.args.format == 'json':
-                self.es_client.pretty_print_json(explain_result)
+                if len(results) == 1:
+                    self.es_client.pretty_print_json(results[0])
+                else:
+                    self.es_client.pretty_print_json(results)
             else:
-                self.es_client.print_allocation_explain_results(explain_result)
+                for result in results:
+                    self.es_client.print_allocation_explain_results(result)
 
         except Exception as e:
             self.es_client.show_message_box("Error", f"Failed to explain allocation for {self.args.index}: {str(e)}", message_style="bold white", panel_style="red")
+
+    def _build_shard_overview(self, index_name):
+        """Build a shard overview dict for the given index."""
+        overview = {
+            'health': 'unknown',
+            'total_shards': 0,
+            'primary_count': 0,
+            'replica_count': 0,
+            'states': {},
+            'nodes': {},
+            '_raw_shards': [],
+        }
+
+        try:
+            shards_data = self.es_client.get_shards_as_dict()
+            index_shards = [s for s in shards_data if s.get('index') == index_name]
+            overview['_raw_shards'] = index_shards
+            overview['total_shards'] = len(index_shards)
+
+            for shard in index_shards:
+                if shard.get('prirep') == 'p':
+                    overview['primary_count'] += 1
+                else:
+                    overview['replica_count'] += 1
+
+                state = shard.get('state', 'UNKNOWN')
+                overview['states'][state] = overview['states'].get(state, 0) + 1
+
+                node = shard.get('node') or 'unassigned'
+                overview['nodes'][node] = overview['nodes'].get(node, 0) + 1
+        except Exception:
+            pass
+
+        # Get index health
+        try:
+            indices_data = self.es_client.filter_indices(pattern=None, status=None)
+            for idx in indices_data:
+                if idx.get('index') == index_name:
+                    overview['health'] = idx.get('health', 'unknown')
+                    break
+        except Exception:
+            pass
+
+        return overview
 
     def _get_current_exclusions(self):
         """Get list of currently excluded hosts from both persistent and transient settings."""
@@ -335,13 +479,76 @@ This is a cluster-wide operation that cannot be undone easily."""
             print(f"Error resetting exclusions: {str(e)}")
             return False
 
-    def _show_exclude_error(self):
-        """Show error message for missing exclude parameters."""
-        if not self.args.indice:
-            print("Error, You must pass indice name (i.e.: .ds-aex10-c01-logs-ueb-main-2025.04.03-000732)")
-        if not self.args.server:
-            print("Error, -s {server} (ie: aex10-c01-ess01-1) is required for this parameter.")
-        exit(1)
+    def _show_exclude_help(self):
+        """Display help screen for exclude command."""
+        from rich.panel import Panel
+        from rich.table import Table
+        from rich.text import Text
+
+        console = self.console
+        ss = self.es_client.style_system
+        tm = self.es_client.theme_manager
+
+        primary_style = ss.get_semantic_style("primary")
+        success_style = ss.get_semantic_style("success")
+        muted_style = ss._get_style('semantic', 'muted', 'dim')
+        border_style = ss._get_style('table_styles', 'border_style', 'white')
+        header_style = tm.get_theme_styles().get('header_style', 'bold white') if tm else 'bold white'
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        box_style = ss.get_table_box()
+
+        header_panel = Panel(
+            Text("Run ./escmd.py exclude <index> -s <server>", style="bold white"),
+            title=f"[{title_style}]🚫 Index Exclusion[/{title_style}]",
+            subtitle=Text.from_markup("[dim]Use[/dim] [cyan]--help[/cyan] [dim]for full options[/dim]"),
+            border_style=border_style,
+            padding=(1, 2),
+            expand=True,
+        )
+
+        table = Table(
+            show_header=True,
+            header_style=header_style,
+            border_style=border_style,
+            box=box_style,
+            show_lines=False,
+            expand=True,
+        )
+        table.add_column("Command / Option", style=primary_style, ratio=2)
+        table.add_column("Description", style="white", ratio=3)
+        table.add_column("Example", style=success_style, ratio=3)
+
+        rows = [
+            ("exclude <index> -s <host>", "Exclude index from a specific host", "exclude .ds-logs-2025.04.03-000732 -s ess01"),
+            ("exclude-reset <index>", "Reset exclusion settings for an index", "exclude-reset .ds-logs-2025.04.03-000732"),
+        ]
+        for i, (cmd, desc, ex) in enumerate(rows):
+            table.add_row(cmd, desc, f"./escmd.py {ex}", style=ss.get_zebra_style(i) if ss else None)
+
+        table.add_row(
+            Text("── Cluster-Level ──", style=muted_style),
+            Text("", style=muted_style),
+            Text("", style=muted_style),
+        )
+
+        cluster_rows = [
+            ("allocation exclude add <host>", "Exclude entire node from allocation", "allocation exclude add node-3"),
+            ("allocation exclude remove <host>", "Remove node exclusion", "allocation exclude remove node-3"),
+            ("allocation exclude reset", "Reset all node exclusions", "allocation exclude reset"),
+        ]
+        for i, (cmd, desc, ex) in enumerate(cluster_rows):
+            table.add_row(
+                Text(cmd, style=ss._get_style('semantic', 'secondary', 'magenta')),
+                desc,
+                Text(f"./escmd.py {ex}", style=muted_style),
+                style=ss.get_zebra_style(i) if ss else None,
+            )
+
+        console.print()
+        console.print(header_panel)
+        console.print()
+        console.print(table)
+        console.print()
 
     def _process_exclude(self):
         """Process index exclusion from specific server."""
@@ -368,9 +575,33 @@ This is a cluster-wide operation that cannot be undone easily."""
 
     def _process_exclude_reset(self):
         """Process resetting index exclusion settings."""
-        response, message = self.es_client.exclude_index_reset(self.args.indice)
+        from rich.panel import Panel
+        from rich.text import Text
+
+        ss = self.es_client.style_system
+        ts = ss._get_style('semantic', 'primary', 'bold cyan') if ss else 'bold cyan'
+        indice_name = self.args.indice
+
+        response, message = self.es_client.exclude_index_reset(indice_name)
         if response:
-            self.es_client.show_message_box("SUCCESS", f"Succesfully removed exclude settings from indice {self.args.indice}")
+            border = ss._get_style('table_styles', 'border_style', 'cyan') if ss else 'cyan'
+            panel = Panel(
+                Text(f"✅ Successfully removed exclude settings from {indice_name}", style="bold green", justify="center"),
+                title=f"[{ts}]🔄 Exclude Reset[/{ts}]",
+                border_style=border,
+                padding=(1, 2)
+            )
+            print()
+            self.console.print(panel)
+            print()
         else:
-            self.es_client.show_message_box("ERROR", message)
+            panel = Panel(
+                Text(f"❌ {message}", style="bold red", justify="center"),
+                title=f"[{ts}]🔄 Exclude Reset[/{ts}]",
+                border_style="red",
+                padding=(1, 2)
+            )
+            print()
+            self.console.print(panel)
+            print()
             exit(1)

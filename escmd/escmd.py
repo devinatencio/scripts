@@ -368,7 +368,9 @@ def handle_special_commands(args, config_manager, console):
         # Create password handler without ES client
         state_file_path = getattr(config_manager, "state_file_path", None)
         password_handler = PasswordCommands(
-            None, args, console, None, None, None, None, state_file_path=state_file_path
+            None, args, console, None, None, None, None,
+            state_file_path=state_file_path,
+            config_manager=config_manager
         )
 
         if command == "store-password":
@@ -508,6 +510,18 @@ def main():
     # Initialize console
     console = Console()
 
+    # Rewrite `action <name>` → `action run <name>` when <name> is not a known subcommand.
+    # This lets users type `action add-host` instead of `action run add-host`, and also
+    # prevents argparse from printing its own ugly error for unrecognised subcommands.
+    _ACTION_SUBCMDS = {"list", "show", "run", "-h", "--help"}
+    try:
+        _ai = sys.argv.index("action")
+        _after = sys.argv[_ai + 1] if _ai + 1 < len(sys.argv) else None
+        if _after is not None and not _after.startswith("-") and _after not in _ACTION_SUBCMDS:
+            sys.argv.insert(_ai + 1, "run")
+    except ValueError:
+        pass
+
     # Create argument parser
     parser = create_argument_parser()
 
@@ -600,11 +614,24 @@ def main():
             sys.exit(1)
         else:
             # This shouldn't happen for skip_default_connection=True, but handle gracefully
-            console.print(f"[bold red]Unexpected connection error:[/bold red] {str(e)}")
+            console.print(
+                Panel.fit(
+                    f"[bold white]Unexpected connection error:[/bold white]\n{str(e)}",
+                    title="[bold red]⚡ Connection Error[/bold red]",
+                    border_style="red",
+                    padding=(1, 2),
+                )
+            )
             sys.exit(1)
     except Exception as e:
-        # Handle other unexpected errors
-        console.print(f"[bold red]Unexpected error:[/bold red] {str(e)}")
+        console.print(
+            Panel.fit(
+                f"[bold white]An unexpected error occurred:[/bold white]\n{str(e)}",
+                title="[bold red]✗ Unexpected Error[/bold red]",
+                border_style="red",
+                padding=(1, 2),
+            )
+        )
         sys.exit(1)
 
     # Create and execute command handler
@@ -619,7 +646,16 @@ def main():
     except Exception as e:
         if logger:
             logger.error(f"Command {args.command} failed with error: {str(e)}")
-        raise
+        console.print(
+            Panel.fit(
+                f"[bold white]Command:[/bold white] [cyan]{args.command}[/cyan]\n"
+                f"[bold white]Error:[/bold white]   {str(e)}",
+                title="[bold red]✗ Command Failed[/bold red]",
+                border_style="red",
+                padding=(1, 2),
+            )
+        )
+        sys.exit(1)
 
 
 if __name__ == "__main__":

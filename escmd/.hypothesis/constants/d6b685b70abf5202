@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/security_help.py
-# hypothesis_version: 6.151.12
-
-['2. environment', '3. global.username', '4. global', '5. explicit password', 'Check session:', 'Clear cache:', 'List passwords:', 'Master key missing:', 'Multi-User Setup:', 'Session expired:', 'Set global username:', 'Set session timeout:', 'Show decrypted:', 'Single User Setup:', 'Store for user:', 'Use env password:', 'bold blue', 'bold bright_yellow', 'bold cyan', 'bold green', 'bold magenta', 'bold red', 'bold yellow', 'clear-session', 'command', 'description', 'dim white', 'example', 'generate-master-key', 'migrate-to-env-key', 'rotate-master-key', 'section_header', 'security', 'session-info', 'white', '👥 Multi-user support', '💾 Session caching', '🔄 Automatic expiry', '🔐 AES-128 encryption', '🔐 No disk storage', '🔑 Master key options']

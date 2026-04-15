@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/display/panel_renderer.py
-# hypothesis_version: 6.151.12
-
-['Error', 'Information', 'Success', 'Warning', 'blue', 'bold white', 'border_style', 'center', 'cyan', 'error', 'green', 'info', 'magenta', 'padding', 'panel_styles', 'red', 'secondary', 'success', 'title', 'warning', 'white', 'white on blue', 'width', 'yellow']

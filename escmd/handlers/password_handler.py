@@ -30,6 +30,7 @@ class PasswordCommands(BaseHandler):
         current_location,
         logger=None,
         state_file_path=None,
+        config_manager=None,
     ):
         """Initialize password handler with password manager."""
         super().__init__(
@@ -44,51 +45,84 @@ class PasswordCommands(BaseHandler):
         pm_path = state_file_path if state_file_path is not None else "escmd.json"
         self.password_manager = PasswordManager(pm_path)
 
+        # Build theme manager — prefer a passed config_manager, then try config_file
+        try:
+            from display.theme_manager import ThemeManager
+            from display.style_system import StyleSystem
+            if config_manager is None and config_file:
+                from configuration_manager import ConfigurationManager
+                config_manager = ConfigurationManager(config_file_path=config_file)
+            self._tm = ThemeManager(config_manager) if config_manager else None
+            self._ss = StyleSystem(self._tm) if self._tm else None
+        except Exception:
+            self._tm = None
+            self._ss = None
+
     def handle_store_password(self, args):
         """Handle store-password command"""
         environment = args.environment
         username = getattr(args, "username", None)
+        storage_key = f"{environment}.{username}" if username else environment
+        display_target = (
+            f"[bold cyan]{escape(environment)}[/bold cyan]"
+            + (f"  [dim](user: {escape(username)})[/dim]" if username else "")
+        )
 
         # Check if password is being piped from stdin
         password = None
         if not sys.stdin.isatty():
-            # Input is being piped, read from stdin
             try:
                 password = sys.stdin.read().strip()
                 if password:
-                    print(
-                        f"Password read from stdin for {environment}"
-                        + (f" (user: {username})" if username else "")
-                    )
+                    self.console.print(Panel(
+                        f"🔑 Password read from stdin for {display_target}",
+                        border_style="cyan",
+                        padding=(0, 2),
+                    ))
             except Exception as e:
-                print(f"Error reading from stdin: {e}")
+                self.console.print(Panel(
+                    f"[bold red]Error reading from stdin:[/bold red] {escape(str(e))}",
+                    title="[bold red]✗ Error[/bold red]",
+                    border_style="red",
+                    padding=(1, 2),
+                ))
                 return
 
         # If no password from stdin, prompt for it
         if not password:
-            password = getpass.getpass(
+            prompt_label = (
                 f"Enter password for {environment}"
                 + (f" (user: {username})" if username else "")
-                + ": "
+                + ""
             )
+            password = getpass.getpass(prompt_label + ": ")
 
         if not password:
-            print("Password cannot be empty")
+            self.console.print(Panel(
+                "[bold yellow]Password cannot be empty.[/bold yellow]",
+                title="[bold yellow]⚠ Cancelled[/bold yellow]",
+                border_style="yellow",
+                padding=(1, 2),
+            ))
             return
 
         try:
-            # Store the password
             self.password_manager.store_password(environment, password, username)
-
-            # Construct the storage key for display
-            storage_key = f"{environment}.{username}" if username else environment
-            print(f"Password stored successfully for '{storage_key}'")
+            self.console.print(Panel(
+                f"[bold green]✓[/bold green] Password stored successfully for {display_target}\n\n"
+                f"[dim]Key:[/dim] [cyan]{escape(storage_key)}[/cyan]",
+                title="[bold green]✓ Password Stored[/bold green]",
+                border_style="green",
+                padding=(1, 2),
+            ))
 
         except Exception as e:
-            print(f"Failed to store password: {e}")
-            import traceback
-
-            traceback.print_exc()
+            self.console.print(Panel(
+                f"[red]{escape(str(e))}[/red]",
+                title="[bold red]✗ Failed to Store Password[/bold red]",
+                border_style="red",
+                padding=(1, 2),
+            ))
 
     def handle_list_passwords(self, args):
         """Handle list-stored-passwords command with fancy styling"""
@@ -141,10 +175,46 @@ class PasswordCommands(BaseHandler):
     def handle_remove_password(self, args):
         """Handle remove-stored-password command"""
         environment = args.environment
-        if self.password_manager.remove_password(environment):
-            print(f"Password for '{environment}' removed successfully")
-        else:
-            print(f"No password found for '{environment}'")
+        username = getattr(args, "username", None)
+        storage_key = f"{environment}.{username}" if username else environment
+        try:
+            # Check it exists first
+            stored_keys = self.password_manager.list_stored_passwords(return_keys=True)
+            if storage_key not in stored_keys:
+                self.console.print(Panel(
+                    f"[yellow]No stored password found for [bold]{escape(storage_key)}[/bold].[/yellow]\n\n"
+                    f"[dim]Run [cyan]./escmd.py list-stored-passwords[/cyan] to see available entries.[/dim]",
+                    title="[bold yellow]🔐 Password Not Found[/bold yellow]",
+                    border_style="yellow",
+                    padding=(1, 2),
+                ))
+                return
+
+            assume_yes = bool(getattr(args, "yes", False))
+            if not assume_yes and not Confirm.ask(f"\n  Remove stored password for [bold cyan]{escape(storage_key)}[/bold cyan]?"):
+                self.console.print(Panel(
+                    "[yellow]No changes were made.[/yellow]",
+                    title="[bold yellow]🔐 Cancelled[/bold yellow]",
+                    border_style="yellow",
+                    padding=(1, 2),
+                ))
+                return
+
+            self.console.print()
+            if self.password_manager.remove_password(storage_key):
+                self.console.print(Panel(
+                    f"[green]Password for [bold]{escape(storage_key)}[/bold] removed successfully.[/green]",
+                    title="[bold green]🔐 Password Removed[/bold green]",
+                    border_style="green",
+                    padding=(1, 2),
+                ))
+        except Exception as e:
+            self.console.print(Panel(
+                f"[red]{escape(str(e))}[/red]",
+                title="[bold red]❌ Failed to Remove Password[/bold red]",
+                border_style="red",
+                padding=(1, 2),
+            ))
 
     def handle_clear_session(self, args):
         """Handle clear-session command"""
@@ -177,14 +247,22 @@ class PasswordCommands(BaseHandler):
     def handle_generate_master_key(self, args):
         """Handle generate-master-key command"""
         from cryptography.fernet import Fernet
-        import base64
+        from rich.text import Text
+        from rich.align import Align
 
-        # Generate a new key
         key = Fernet.generate_key()
         key_str = key.decode("utf-8")
 
-        self.console.print("\n🔑 [bold green]New Master Key Generated![/bold green]")
-        self.console.print(f"[yellow]{key_str}[/yellow]")
+        # Key — centered, bold, high contrast
+        key_text = Text(key_str, style="bold bright_yellow")
+        self.console.print()
+        self.console.print(Panel(
+            Align.center(key_text),
+            title="[bold bright_green]🔑  New Master Key[/bold bright_green]",
+            border_style="bright_green",
+            padding=(1, 6),
+            subtitle="[dim]copy this before continuing[/dim]",
+        ))
 
         if args.show_setup:
             self._show_key_setup_instructions(key_str)
@@ -193,76 +271,115 @@ class PasswordCommands(BaseHandler):
 
     def _show_basic_key_instructions(self, key_str):
         """Show basic instructions for setting up the master key."""
-        panel = Panel(
-            f"[bold white]🔐 Master Key Setup Instructions[/bold white]\n\n"
-            f"[yellow]1. Set environment variable:[/yellow]\n"
-            f"[cyan]export ESCMD_MASTER_KEY='{key_str}'[/cyan]\n\n"
-            f"[yellow]2. Add to your shell profile:[/yellow]\n"
-            f"[dim]echo 'export ESCMD_MASTER_KEY=\"{key_str}\"' >> ~/.zshrc[/dim]\n\n"
-            f"[yellow]3. Restart terminal or run:[/yellow]\n"
-            f"[cyan]source ~/.zshrc[/cyan]\n\n"
-            f"[green]✅ After setup, remove any 'master_key' entries from escmd.yml[/green]\n"
-            f"[red]🔶  Keep this key secure - anyone with it can decrypt your passwords![/red]",
-            title="[bold cyan]🔑 Environment Variable Setup[/bold cyan]",
+        from rich.text import Text
+
+        steps = Table.grid(padding=(0, 2))
+        steps.add_column(justify="right", style="bold cyan", width=3)
+        steps.add_column()
+
+        steps.add_row("1", Text.from_markup(
+            f"[yellow]Step 1 — Export the key[/yellow]\n"
+            f"[bright_cyan]export ESCMD_MASTER_KEY='{key_str}'[/bright_cyan]"
+        ))
+        steps.add_row("2", Text.from_markup(
+            f"[yellow]Step 2 — Persist to your shell profile[/yellow]\n"
+            f"[dim]echo 'export ESCMD_MASTER_KEY=\"{key_str}\"' >> ~/.zshrc[/dim]"
+        ))
+        steps.add_row("3", Text.from_markup(
+            f"[yellow]Step 3 — Reload your shell[/yellow]\n"
+            f"[bright_cyan]source ~/.zshrc[/bright_cyan]"
+        ))
+        steps.add_row("[green]✔[/green]", Text.from_markup(
+            "[green]Remove any [bold]master_key[/bold] entries from escmd.yml[/green]"
+        ))
+        steps.add_row("[red]![/red]", Text.from_markup(
+            "[red]Keep this key secure — anyone with it can decrypt your passwords[/red]"
+        ))
+
+        self.console.print(Panel(
+            steps,
+            title="[bold cyan]>> Setup Instructions[/bold cyan]",
             border_style="cyan",
             padding=(1, 2),
-        )
-        self.console.print(panel)
+        ))
 
     def _show_key_setup_instructions(self, key_str):
         """Show detailed setup instructions for different shells."""
+        from rich.text import Text
 
-        # Basic setup
         self._show_basic_key_instructions(key_str)
 
-        # Detailed shell instructions
-        shell_instructions = Table(
-            title="🐚 Shell-Specific Setup Instructions",
-            border_style="blue",
-            header_style="bold white on blue",
-        )
-        shell_instructions.add_column("Shell", style="bold yellow")
-        shell_instructions.add_column("Profile File", style="cyan")
-        shell_instructions.add_column("Command", style="green")
+        # Shell table — themed
+        ss, tm = self._theme()
+        full_theme = tm.get_full_theme_data() if tm else {}
+        table_styles = full_theme.get('table_styles', {})
+        t_border      = table_styles.get('border_style', 'bright_blue')
+        t_header      = table_styles.get('header_style', 'bold white on blue')
+        title_style   = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        primary_style = ss._get_style('semantic', 'primary', 'cyan') if ss else 'cyan'
+        success_style = ss._get_style('semantic', 'success', 'green') if ss else 'green'
+        warning_style = ss._get_style('semantic', 'warning', 'yellow') if ss else 'yellow'
+        box_style     = ss.get_table_box() if ss else None
 
-        shell_instructions.add_row(
-            "zsh",
-            "~/.zshrc",
+        shell_table = Table(
+            border_style=t_border,
+            header_style=t_header,
+            show_lines=False,
+            padding=(0, 1),
+            expand=False,
+            box=box_style,
+        )
+        shell_table.add_column("Shell",   style=f"bold {warning_style}", width=6,  no_wrap=True)
+        shell_table.add_column("Profile", style=primary_style,           width=26, no_wrap=True)
+        shell_table.add_column("Command", style=success_style)
+
+        shell_table.add_row(
+            "zsh",  "~/.zshrc",
             f"echo 'export ESCMD_MASTER_KEY=\"{key_str}\"' >> ~/.zshrc",
         )
-        shell_instructions.add_row(
-            "bash",
-            "~/.bashrc",
+        shell_table.add_row(
+            "bash", "~/.bashrc",
             f"echo 'export ESCMD_MASTER_KEY=\"{key_str}\"' >> ~/.bashrc",
         )
-        shell_instructions.add_row(
-            "fish",
-            "~/.config/fish/config.fish",
+        shell_table.add_row(
+            "fish", "~/.config/fish/config.fish",
             f"echo 'set -x ESCMD_MASTER_KEY \"{key_str}\"' >> ~/.config/fish/config.fish",
         )
 
-        self.console.print("\n")
-        self.console.print(shell_instructions)
-
-        # Security recommendations
-        security_panel = Panel(
-            "[bold red]🔒 Security Best Practices[/bold red]\n\n"
-            "[yellow]✅ DO:[/yellow]\n"
-            "• Set the environment variable in your shell profile\n"
-            "• Keep the key backed up in a secure location (password manager)\n"
-            "• Remove 'master_key' from escmd.yml after setting environment variable\n"
-            "• Use different keys for different environments/teams\n\n"
-            "[red]❌ DON'T:[/red]\n"
-            "• Share the key in chat/email\n"
-            "• Commit the key to version control\n"
-            "• Store the key in plain text files\n"
-            "• Use the same key across multiple systems",
-            title="[bold red]🔐 Security Guidelines[/bold red]",
-            border_style="red",
+        self.console.print(Panel(
+            shell_table,
+            title=f"[{title_style}]🐚  Shell Profile Commands[/{title_style}]",
+            border_style=t_border,
             padding=(1, 2),
+        ))
+
+        # Security DO / DON'T — table grid, full-width columns, readable text
+        sec = Table.grid(padding=(0, 4), expand=True)
+        sec.add_column(ratio=1)
+        sec.add_column(ratio=1)
+
+        do_col = Text.from_markup(
+            "[bold bright_green]✅  DO[/bold bright_green]\n\n"
+            "[green]• Store the key in your shell profile[/green]\n"
+            "[green]• Back it up in a password manager[/green]\n"
+            "[green]• Remove [bold]master_key[/bold] from escmd.yml[/green]\n"
+            "[green]• Use a unique key per environment[/green]"
         )
-        self.console.print("\n")
-        self.console.print(security_panel)
+        dont_col = Text.from_markup(
+            "[bold bright_red]❌  DON'T[/bold bright_red]\n\n"
+            "[red]• Share the key in chat or email[/red]\n"
+            "[red]• Commit the key to version control[/red]\n"
+            "[red]• Store it in plain text files[/red]\n"
+            "[red]• Reuse the same key across systems[/red]"
+        )
+        sec.add_row(do_col, dont_col)
+
+        self.console.print(Panel(
+            sec,
+            title="[bold red]🔒  Security Guidelines[/bold red]",
+            border_style="red",
+            padding=(1, 3),
+        ))
 
     def handle_rotate_master_key(self, args):
         """Handle rotate-master-key: backup state file, new Fernet key, re-encrypt passwords."""
@@ -275,12 +392,13 @@ class PasswordCommands(BaseHandler):
 
         if not assume_yes:
             self._show_rotate_master_key_confirmation(preview)
-            if not Confirm.ask(
-                "\n[yellow]Proceed with master key rotation?[/yellow]",
-                default=False,
-            ):
-                self._show_rotate_master_key_cancelled()
-                return
+            while True:
+                answer = self.console.input("\n[yellow]Proceed with master key rotation?[/yellow] [dim][y/n][/dim] ").strip().lower()
+                if answer in ("y", "yes"):
+                    break
+                if answer in ("n", "no", ""):
+                    self._show_rotate_master_key_cancelled()
+                    return
 
         ok, msg, details = self.password_manager.rotate_master_key()
         if not ok:
@@ -308,53 +426,67 @@ class PasswordCommands(BaseHandler):
         self.console.print(panel)
 
     def _show_rotate_master_key_confirmation(self, preview: dict) -> None:
-        summary = Table(
-            show_header=True,
-            header_style="bold white on blue",
-            border_style="blue",
-            title="[bold cyan]Planned rotation[/bold cyan]",
-        )
-        summary.add_column("Item", style="bold yellow", min_width=22)
-        summary.add_column("Value", style="white")
+        from rich.text import Text
+        from rich.columns import Columns
 
-        summary.add_row("State file", preview["state_path"])
-        summary.add_row("Backup path", preview["backup_path"])
-        summary.add_row(
-            "Stored password entries",
-            str(preview["entry_count"]),
-        )
-        summary.add_row("Decrypt using", preview["decrypt_key_source"])
+        ss, tm = self._theme()
+        full_theme = tm.get_full_theme_data() if tm else {}
+        table_styles = full_theme.get('table_styles', {})
+        border        = table_styles.get('border_style', 'bright_blue')
+        header_style  = table_styles.get('header_style', 'bold white on blue')
+        title_style   = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        primary_style = ss._get_style('semantic', 'primary',  'cyan')   if ss else 'cyan'
+        warning_style = ss._get_style('semantic', 'warning',  'yellow') if ss else 'yellow'
+        success_style = ss._get_style('semantic', 'success',  'green')  if ss else 'green'
+        muted_style   = ss._get_style('semantic', 'muted',    'dim')    if ss else 'dim'
+        box_style     = ss.get_table_box() if ss else None
+
+        # Details grid
+        details = Table(show_header=False, box=None, padding=(0, 2), expand=True)
+        details.add_column(style=f"bold {warning_style}", min_width=24, no_wrap=True)
+        details.add_column(style="white")
+        details.add_row("State file",              preview["state_path"])
+        details.add_row("Backup path",             preview["backup_path"])
+        details.add_row("Stored password entries", str(preview["entry_count"]))
+        details.add_row("Decrypt using",           preview["decrypt_key_source"])
+
+        # Keys list
+        keys = preview.get("storage_keys") or []
+        keys_grid = Table(show_header=False, box=None, padding=(0, 2), expand=True)
+        keys_grid.add_column(style=success_style)
+        max_rows = 25
+        for k in keys[:max_rows]:
+            keys_grid.add_row(f"  {k}")
+        if len(keys) > max_rows:
+            keys_grid.add_row(f"  [{muted_style}]… and {len(keys) - max_rows} more[/{muted_style}]")
+
+        # Compose everything into one panel
+        body = Table(show_header=False, box=None, padding=(0, 0), expand=True)
+        body.add_column()
+
+        body.add_row(Text.from_markup(
+            f"[{muted_style}]A new Fernet master key will be written to your state file.\n"
+            f"All stored passwords will be re-encrypted with the new key.[/{muted_style}]"
+        ))
+        body.add_row("")
+        body.add_row(Text.from_markup(f"[{title_style}]  Details[/{title_style}]"))
+        body.add_row(details)
+
+        if keys:
+            body.add_row("")
+            body.add_row(Text.from_markup(
+                f"[{title_style}]  Entries to re-encrypt[/{title_style}] "
+                f"[{muted_style}]({len(keys)})[/{muted_style}]"
+            ))
+            body.add_row(keys_grid)
 
         self.console.print()
-        intro = Panel(
-            "[dim]A new Fernet master key will be written to your state file. "
-            "All stored passwords will be decrypted with the current key and "
-            "re-encrypted with the new key.[/dim]",
-            title="[bold cyan]🔐 Rotate master key[/bold cyan]",
-            border_style="cyan",
+        self.console.print(Panel(
+            body,
+            title=f"[{title_style}]🔐 Rotate master key[/{title_style}]",
+            border_style=primary_style,
             padding=(1, 2),
-        )
-        self.console.print(intro)
-        self.console.print(summary)
-
-        keys = preview.get("storage_keys") or []
-        if keys:
-            keys_table = Table(
-                show_header=True,
-                header_style="bold white on blue",
-                border_style="bright_blue",
-                title=f"[bold cyan]Entries to re-encrypt ({len(keys)})[/bold cyan]",
-            )
-            keys_table.add_column("Storage key", style="green")
-            max_rows = 25
-            for k in keys[:max_rows]:
-                keys_table.add_row(k)
-            if len(keys) > max_rows:
-                keys_table.add_row(
-                    f"[dim]… and {len(keys) - max_rows} more[/dim]",
-                )
-            self.console.print()
-            self.console.print(keys_table)
+        ))
 
     def _show_rotate_master_key_success(self, details: dict) -> None:
         result = Table(
@@ -571,54 +703,82 @@ class PasswordCommands(BaseHandler):
 
         self.console.print(panel)
 
+    def _theme(self):
+        """Return (style_system, theme_manager)."""
+        ss = self._ss or getattr(self.es_client, 'style_system', None)
+        tm = self._tm or getattr(self.es_client, 'theme_manager', None)
+        return ss, tm
+
     def _show_no_passwords_panel(self):
         """Show a styled panel when no passwords are stored."""
-        panel = Panel(
-            "[yellow]📝 No stored passwords found[/yellow]\n\n"
-            "[dim]💡 Use[/dim] [bold cyan]store-password[/bold cyan] [dim]to add passwords:[/dim]\n"
-            "[dim]   • [/dim][cyan]./escmd.py store-password prod --username kibana_system[/cyan]\n"
-            "[dim]   • [/dim][cyan]./escmd.py store-password global[/cyan]",
-            title="[bold yellow]🔐 Stored Passwords[/bold yellow]",
-            border_style="yellow",
+        ss, tm = self._theme()
+        border = tm.get_theme_styles().get('border_style', 'yellow') if tm else 'yellow'
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        warning_style = ss._get_style('semantic', 'warning', 'yellow') if ss else 'yellow'
+        primary_style = ss._get_style('semantic', 'primary', 'cyan') if ss else 'cyan'
+        muted_style = ss._get_style('semantic', 'muted', 'dim') if ss else 'dim'
+
+        from rich.table import Table as InnerTable
+        from rich.text import Text
+        msg_table = InnerTable(show_header=False, box=None, padding=(0, 1))
+        msg_table.add_column("Icon", justify="center", width=3)
+        msg_table.add_column("Text")
+        msg_table.add_row("📭", Text("No stored passwords found", style=warning_style))
+        msg_table.add_row("", Text(""))
+        msg_table.add_row("💡", Text("Add a password with:", style=muted_style))
+        msg_table.add_row("", Text("./escmd.py store-password prod --username kibana_system", style=primary_style))
+        msg_table.add_row("", Text("./escmd.py store-password global", style=primary_style))
+
+        self.console.print(Panel(
+            msg_table,
+            title=f"[{title_style}]Stored Passwords[/{title_style}]",
+            border_style=warning_style,
             padding=(1, 2),
-        )
-        self.console.print(panel)
+        ))
 
     def _show_passwords_table(self, stored_keys, show_decrypted=False):
-        """Show stored passwords in a beautiful table with theme colors."""
+        """Show stored passwords in a table with theme colors."""
         from rich.table import Table
         from rich.text import Text
 
+        ss, tm = self._theme()
+        full_theme = tm.get_full_theme_data() if tm else {}
+        table_styles = full_theme.get('table_styles', {})
+        border = table_styles.get('border_style', 'bright_blue')
+        header_style = table_styles.get('header_style', 'bold white on blue')
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        primary_style = ss._get_style('semantic', 'primary', 'cyan') if ss else 'cyan'
+        success_style = ss._get_style('semantic', 'success', 'green') if ss else 'green'
+        warning_style = ss._get_style('semantic', 'warning', 'yellow') if ss else 'yellow'
+        secondary_style = ss._get_style('semantic', 'secondary', 'magenta') if ss else 'magenta'
+        box_style = ss.get_table_box() if ss else None
+        zebra = ss.get_zebra_style(1) if ss else "on grey11"
+
         if show_decrypted:
-            # When showing passwords, create a table without width constraints
             table = Table(
                 title="Stored Password Environments",
-                title_style="bold cyan",
-                border_style="bright_blue",
-                header_style="bold white on blue",
+                title_style=title_style,
+                border_style=border,
+                header_style=header_style,
                 show_header=True,
-                show_lines=True,
                 expand=True,
                 show_edge=False,
+                box=box_style,
             )
-
-            # Single wide column for all content - no width limit
             table.add_column("Details", style="white", no_wrap=False)
         else:
-            # Normal table without passwords
             table = Table(
                 title="Stored Password Environments",
-                title_style="bold cyan",
-                border_style="bright_blue",
-                header_style="bold white on blue",
+                title_style=title_style,
+                border_style=border,
+                header_style=header_style,
                 show_header=True,
-                show_lines=True,
                 expand=True,
+                box=box_style,
             )
-
-            table.add_column("Environment", style="bold green", width=20)
-            table.add_column("Username", style="bold yellow", width=25)
-            table.add_column("Type", style="bold magenta", width=12)
+            table.add_column("Environment", style=success_style, width=20)
+            table.add_column("Username", style=warning_style, width=25)
+            table.add_column("Type", style=secondary_style, width=12)
 
         # Group passwords by environment for better display
         env_groups = {}
@@ -639,8 +799,9 @@ class PasswordCommands(BaseHandler):
         cached_keys = session_info.get("cached_environments", [])
 
         # Add rows to table
-        for env in sorted(env_groups.keys()):
+        for env_index, env in enumerate(sorted(env_groups.keys())):
             passwords = env_groups[env]
+            env_row_style = zebra if env_index % 2 != 0 else ""
 
             for i, (pwd_type, username, full_key) in enumerate(passwords):
                 # Environment column - only show for first entry
@@ -676,7 +837,6 @@ class PasswordCommands(BaseHandler):
                             decrypted_password = self.password_manager.get_password(env)
 
                         if decrypted_password:
-                            # Ensure full password is displayed without truncation
                             password_text = f"[bold red]🔓 Password:[/bold red]\n{decrypted_password}"
                         else:
                             password_text = (
@@ -687,7 +847,6 @@ class PasswordCommands(BaseHandler):
                             f"[dim red]🔓 Password: Decrypt error - {str(e)}[/dim red]"
                         )
 
-                    # Combine all info in one cell
                     if env_display:
                         content = (
                             f"{env_text}\n{user_text}\n{type_text}\n{password_text}"
@@ -695,20 +854,20 @@ class PasswordCommands(BaseHandler):
                     else:
                         content = f"{user_text}\n{type_text}\n{password_text}"
 
-                    table.add_row(content)
+                    table.add_row(content, style=env_row_style)
                 else:
-                    # Normal table layout
                     table.add_row(
-                        f"[green]{env_display}[/green]",
-                        f"[yellow]{username_display}[/yellow]",
-                        f"[magenta]{type_display}[/magenta]",
+                        Text(env_display, style=success_style),
+                        Text(username_display, style=warning_style),
+                        Text(type_display, style=secondary_style),
+                        style=env_row_style,
                     )
 
         # Wrap in a panel
         panel = Panel(
             table,
-            title=f"[bold cyan]Password Storage ({len(stored_keys)} entries)[/bold cyan]",
-            border_style="bright_blue",
+            title=f"[{title_style}]Password Storage ({len(stored_keys)} entries)[/{title_style}]",
+            border_style=border,
             padding=(0, 1),
         )
 
@@ -727,31 +886,48 @@ class PasswordCommands(BaseHandler):
         cached_count = len(session_info.get("cached_environments", []))
 
         if remaining > 0:
+            ss, tm = self._theme()
+            border = tm.get_theme_styles().get('border_style', 'green') if tm else 'green'
+            success_style = ss._get_style('semantic', 'success', 'green') if ss else 'green'
+            warning_style = ss._get_style('semantic', 'warning', 'yellow') if ss else 'yellow'
+            info_style = ss._get_style('semantic', 'info', 'cyan') if ss else 'cyan'
+
             mins, secs = divmod(remaining, 60)
             time_str = f"{mins}m {secs}s" if mins > 0 else f"{secs}s"
 
-            summary = Panel(
-                f"[green]💾 Session Cache Active[/green] • "
-                f"[yellow]{cached_count}[/yellow] passwords cached • "
-                f"[cyan]{time_str}[/cyan] remaining",
-                border_style="green",
-                padding=(0, 2),
-            )
-            self.console.print(summary)
+            from rich.text import Text
+            line = Text()
+            line.append("Session Cache Active", style=success_style)
+            line.append(" • ", style="default")
+            line.append(str(cached_count), style=warning_style)
+            line.append(" passwords cached • ", style="default")
+            line.append(time_str, style=info_style)
+            line.append(" remaining", style="default")
+
+            self.console.print(Panel(line, border_style=success_style, padding=(0, 2)))
 
     def _show_password_footer(self):
         """Show helpful commands footer."""
-        footer_text = (
-            "[dim]💡 Available commands:[/dim]\n"
-            "[cyan]  • store-password <env> [--username <user>][/cyan] [dim]- Store new password[/dim]\n"
-            "[cyan]  • session-info[/cyan] [dim]- Show cache status[/dim]\n"
-            "[cyan]  • clear-session[/cyan] [dim]- Clear password cache[/dim]"
-        )
+        ss, tm = self._theme()
+        border = tm.get_theme_styles().get('border_style', 'white') if tm else 'white'
+        title_style = tm.get_themed_style('panel_styles', 'title', 'bold white') if tm else 'bold white'
+        primary_style = ss._get_style('semantic', 'primary', 'cyan') if ss else 'cyan'
+        muted_style = ss._get_style('semantic', 'muted', 'dim') if ss else 'dim'
 
-        footer = Panel(
-            footer_text,
-            title="[bold white]🚀 Quick Actions[/bold white]",
-            border_style="dim white",
+        from rich.table import Table as InnerTable
+        from rich.text import Text
+        footer_table = InnerTable(show_header=False, box=None, padding=(0, 1))
+        footer_table.add_column("Icon", justify="center", width=3)
+        footer_table.add_column("Command", style=primary_style, no_wrap=True)
+        footer_table.add_column("Description", style=muted_style)
+
+        footer_table.add_row("+", "store-password <env> [--username <user>]", "Store new password")
+        footer_table.add_row(">", "session-info", "Show cache status")
+        footer_table.add_row("-", "clear-session", "Clear password cache")
+
+        self.console.print(Panel(
+            footer_table,
+            title=f"[{title_style}]Quick Actions[/{title_style}]",
+            border_style=border,
             padding=(0, 1),
-        )
-        self.console.print(footer)
+        ))

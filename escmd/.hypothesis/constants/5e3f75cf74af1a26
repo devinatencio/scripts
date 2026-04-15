@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/display/style_system.py
-# hypothesis_version: 6.151.12
-
-[1024.0, 100, 'B', 'GB', 'KB', 'MB', 'N/A', 'PB', 'TB', 'active', 'blue', 'bold white', 'border_style', 'bright_cyan', 'connected', 'count', 'critical', 'cyan', 'date', 'default', 'degraded', 'dim white', 'disconnected', 'double', 'error', 'failed', 'green', 'header_style', 'healthy', 'heavy', 'horizontals', 'info', 'magenta', 'minimal', 'muted', 'name', 'neutral', 'none', 'normal', 'panel_styles', 'partial', 'percentage', 'primary', 'red', 'rounded', 'row_styles', 'running', 'secondary', 'simple', 'size', 'status', 'subtitle', 'success', 'table_box', 'table_styles', 'title', 'unknown', 'warning', 'white', 'yellow', '█', '░', '✅', '❌', '⭕', '📊', '🔴', '🔵', '🔶', '🟡', '🟢']

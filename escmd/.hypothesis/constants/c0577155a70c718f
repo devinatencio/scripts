@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/indices_s3_estimate_help.py
-# hypothesis_version: 6.151.12
-
-['--buffer-percent P', '--format json|table', '--include-undated', '--within-days N', 'Human table or JSON', 'JSON for scripts', 'Pattern + 10% buffer', 'bold cyan', 'command', 'description', 'dim white', 'example', 'green', 'indices-s3-estimate', 'regex (positional)', 'white']

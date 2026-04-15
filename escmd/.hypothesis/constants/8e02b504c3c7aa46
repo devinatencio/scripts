@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/display/../metrics/metrics_client.py
-# hypothesis_version: 6.151.12
-
-[200, 204, '"', '&', ',', '/', '=', '?', 'Authorization', 'Content-Type', 'InfluxDB', 'VictoriaMetrics', '\\ ', '\\"', '\\,', '\\=', 'escmd', 'fields', 'influxdb', 'influxdb2', 'measurement', 'session', 'source', 'tags', 'test', 'test_connection', 'timestamp', 'victoriametrics']

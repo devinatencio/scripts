@@ -31,7 +31,7 @@ performance:
     status_interval: 0
 theme:
   auto_detect: true
-  current: cyberpunk 
+  current: nord 
   fallback: ocean
 theme_preferences:
   brightness: 1.0

@@ -384,6 +384,100 @@ esterm_themes:
       example_style: "bright_cyan"
       footer_style: "dim bright_black"
 
+  # Nord theme - arctic, north-bluish color palette
+  nord:
+    banner:
+      title_style: "bold sky_blue1"
+      subtitle_style: "light_steel_blue"
+      version_style: "pale_turquoise1"
+      welcome_style: "cornflower_blue"
+      border_style: "steel_blue1"
+
+    prompt:
+      connected_cluster_style: "pale_turquoise1"
+      disconnected_style: "indian_red"
+      warning_cluster_style: "light_goldenrod2"
+      prompt_symbol_style: "bold sky_blue1"
+      prompt_symbol: "➤"
+
+    status:
+      title_style: "bold sky_blue1"
+      label_style: "bold cornflower_blue"
+      value_style: "light_steel_blue"
+      success_style: "pale_turquoise1"
+      warning_style: "light_goldenrod2"
+      error_style: "indian_red"
+      info_style: "cornflower_blue"
+      border_style: "steel_blue1"
+
+    messages:
+      success_style: "pale_turquoise1"
+      error_style: "indian_red"
+      warning_style: "light_goldenrod2"
+      info_style: "cornflower_blue"
+      progress_style: "cornflower_blue"
+
+    panels:
+      title_style: "bold sky_blue1"
+      subtitle_style: "dim light_steel_blue"
+      border_style: "steel_blue1"
+      content_style: "light_steel_blue"
+
+    help:
+      title_style: "bold sky_blue1"
+      section_header_style: "bold cornflower_blue"
+      command_style: "light_goldenrod2"
+      description_style: "light_steel_blue"
+      example_style: "pale_turquoise1"
+      footer_style: "dim grey70"
+
+  # Solarized theme - precision colors for machines and people
+  solarized:
+    banner:
+      title_style: "bold cyan3"
+      subtitle_style: "light_cyan3"
+      version_style: "dark_sea_green2"
+      welcome_style: "dark_cyan"
+      border_style: "dark_cyan"
+
+    prompt:
+      connected_cluster_style: "dark_sea_green2"
+      disconnected_style: "red3"
+      warning_cluster_style: "yellow3"
+      prompt_symbol_style: "bold cyan3"
+      prompt_symbol: "➤"
+
+    status:
+      title_style: "bold cyan3"
+      label_style: "bold dark_cyan"
+      value_style: "light_cyan3"
+      success_style: "dark_sea_green2"
+      warning_style: "yellow3"
+      error_style: "red3"
+      info_style: "dark_cyan"
+      border_style: "dark_cyan"
+
+    messages:
+      success_style: "dark_sea_green2"
+      error_style: "red3"
+      warning_style: "yellow3"
+      info_style: "dark_cyan"
+      progress_style: "dark_cyan"
+
+    panels:
+      title_style: "bold cyan3"
+      subtitle_style: "dim light_cyan3"
+      border_style: "dark_cyan"
+      content_style: "light_cyan3"
+
+    help:
+      title_style: "bold cyan3"
+      section_header_style: "bold dark_cyan"
+      command_style: "yellow3"
+      description_style: "light_cyan3"
+      example_style: "dark_sea_green2"
+      footer_style: "dim grey70"
+
 # Default theme configuration
 default_theme: "rich"
 
@@ -428,3 +522,13 @@ theme_info:
     name: "Corporate Professional"
     description: "Professional grays and blues"
     best_for: "Business and enterprise environments"
+
+  nord:
+    name: "Nord Arctic"
+    description: "Slate blues and muted greens from the Arctic palette"
+    best_for: "Power users who love the Nord color scheme"
+
+  solarized:
+    name: "Solarized Dark"
+    description: "Precision-crafted teal and warm tones"
+    best_for: "Developers who prefer the classic Solarized palette"

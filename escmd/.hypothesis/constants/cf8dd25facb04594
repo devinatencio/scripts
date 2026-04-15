@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/handlers/template_handler.py
-# hypothesis_version: 6.151.12
-
-[1024, '%Y-%m-%d %H:%M:%S', '+00:00', '-', 'Backup Date', 'Cluster', 'DRY RUN - ', 'File Name', 'File Size', 'Template Backups', 'Template Name', 'Type', 'Unknown', 'Z', 'all', 'auto', 'backup', 'backup_created', 'backup_dir', 'backup_file', 'backup_timestamp', 'backups', 'blue', 'cluster', 'cluster_name', 'component', 'component_template', 'composable', 'created_count', 'created_templates', 'cyan', 'definition', 'delete', 'dry_run', 'failed_count', 'failed_templates', 'field', 'file', 'file_name', 'file_size', 'found', 'green', 'index_template', 'json', 'legacy', 'magenta', 'name', 'new_value', 'operation', 'original_value', 'set', 'success', 'template_data', 'template_name', 'template_renderer', 'template_type', 'type', 'value', 'white', 'yellow']

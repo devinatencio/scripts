@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/actions_help.py
-# hypothesis_version: 6.151.12
-
-['--compact', '--dry-run', '--max-lines N', '--native-output', '--no-json', 'Actions', 'Conditional Steps:', 'Execute action:', 'Execute an action', 'List all actions:', 'Multiple parameters:', 'Output Formats:', 'Parameter Types:', 'Run Options:', 'Safety Features:', 'Show action details:', 'Show minimal output', 'Template Variables:', 'actions', 'blue', 'content', 'escmd action list', 'title', '💡 Examples', '📋 Overview', '🔧 Commands', '🚀 Advanced Features']

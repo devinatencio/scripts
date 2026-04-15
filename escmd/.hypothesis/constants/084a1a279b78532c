@@ -1,4 +1,0 @@
-# file: /Users/devin/Documents/Git/scripts/escmd/display/../metrics/dangling_metrics.py
-# hypothesis_version: 6.151.12
-
-[1000000000, 'ESCMD_METRICS_BUCKET', 'ESCMD_METRICS_ORG', 'ESCMD_METRICS_TOKEN', 'ESCMD_METRICS_TYPE', 'InfluxDB', 'VictoriaMetrics', 'additional_tags', 'bucket', 'cluster', 'cluster_name', 'dangling_indices', 'database', 'deleted', 'endpoint', 'environment', 'escmd', 'fields', 'found', 'influxdb', 'measurement', 'node_ids', 'nodes_affected', 'org', 'password', 'status', 'success', 'tags', 'timestamp', 'token', 'true', 'type', 'username', 'verify_ssl', 'victoriametrics']

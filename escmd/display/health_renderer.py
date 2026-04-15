@@ -293,9 +293,10 @@ class HealthRenderer:
 
         table.add_row("📊 Shard Health:", shard_health)
 
+        title_style = styles.get('panel_styles', {}).get('title', 'bold white')
         return Panel(
             table,
-            title=f"[{styles.get('panel_styles', {}).get('title', 'bold cyan')}]📋 Cluster Overview[/{styles.get('panel_styles', {}).get('title', 'bold cyan')}]",
+            title=f"[{title_style}]📋 Cluster Overview[/{title_style}]",
             border_style=styles.get('border_style', theme_color),
             padding=(1, 2)
         )
@@ -343,12 +344,13 @@ class HealthRenderer:
             other_nodes = total_nodes - data_nodes
 
         # Add node info rows
-        table.add_row("💻 Total Nodes:", Text(str(total_nodes), style=styles.get('value_style', 'bold white')))
-        table.add_row("📚 Data Nodes:", Text(str(data_nodes), style=styles.get('success_style', 'bold green')))
+        ss = self.style_system
+        table.add_row("💻 Total Nodes:", Text(str(total_nodes), style=ss.get_semantic_style("neutral") if ss else 'bold white'))
+        table.add_row("📚 Data Nodes:", Text(str(data_nodes), style=ss.get_semantic_style("success") if ss else 'bold green'))
         if other_nodes > 0:
-            table.add_row("🔩 Master Nodes:", Text(str(other_nodes), style=styles.get('warning_style', 'bold yellow')))
+            table.add_row("🔩 Master Nodes:", Text(str(other_nodes), style=ss.get_semantic_style("warning") if ss else 'bold yellow'))
         if client_nodes > 0:
-            table.add_row("🔗 Client Nodes:", Text(str(client_nodes), style=styles.get('info_style', 'bold cyan')))
+            table.add_row("🔗 Client Nodes:", Text(str(client_nodes), style=ss.get_semantic_style("info") if ss else 'bold cyan'))
 
         # Create data node ratio with progress bar
         if total_nodes > 0:
@@ -359,9 +361,8 @@ class HealthRenderer:
 
             # Create ratio text with progress bar using theme-aware colors
             ratio_text = Text()
-            # Use theme-aware progress bar colors
-            progress_style = styles.get('success_style', 'bold green')
-            empty_style = styles.get('muted_style', 'dim')
+            progress_style = ss.get_semantic_style("success") if ss else 'bold green'
+            empty_style = ss.get_semantic_style("muted") if ss else 'dim'
 
             ratio_text.append("█" * filled, style=progress_style)
             ratio_text.append("░" * empty, style=empty_style)
@@ -369,9 +370,10 @@ class HealthRenderer:
 
             table.add_row("📈 Data Ratio:", ratio_text)
 
+        title_style = styles.get('panel_styles', {}).get('title', 'bold white')
         return Panel(
             table,
-            title=f"[{styles.get('panel_styles', {}).get('title', 'bold green')}]💻 Node Information[/{styles.get('panel_styles', {}).get('title', 'bold green')}]",
+            title=f"[{title_style}]💻 Node Information[/{title_style}]",
             border_style=styles.get('border_style', theme_color),
             padding=(1, 2)
         )
@@ -424,9 +426,10 @@ class HealthRenderer:
             assigned_style = styles.get('health_styles', {}).get('green', {}).get('text', 'bold green')
             table.add_row("✅ Status:", Text("All assigned!", style=assigned_style))
 
+        title_style = styles.get('panel_styles', {}).get('title', 'bold white')
         return Panel(
             table,
-            title=f"[{styles.get('panel_styles', {}).get('title', 'bold blue')}]🔄 Shard Status[/{styles.get('panel_styles', {}).get('title', 'bold blue')}]",
+            title=f"[{title_style}]🔄 Shard Status[/{title_style}]",
             border_style=styles.get('border_style', theme_color),
             padding=(1, 2)
         )
@@ -448,9 +451,10 @@ class HealthRenderer:
         styles = self.theme_manager.get_theme_styles()
 
         # Create inner table with 3 columns: Label, Value, Status
+        ss = self.style_system
         table = Table.grid(padding=(0, 1))
         table.add_column(style="bold white", no_wrap=True)
-        table.add_column(style=styles.get('row_styles', {}).get('normal', 'bold white'), justify="right", width=16)
+        table.add_column(style=ss.get_semantic_style("neutral") if ss else styles.get('row_styles', {}).get('normal', 'bold white'), justify="right", width=16)
         table.add_column(style="", no_wrap=True)
 
         pending_tasks = health_data.get('number_of_pending_tasks', 0)
@@ -459,18 +463,18 @@ class HealthRenderer:
 
         # Pending tasks
         if pending_tasks == 0:
-            pending_status = Text("✅", style=styles.get('success_style', 'bold green'))
+            pending_status = Text("✅", style=ss.get_semantic_style("success") if ss else 'bold green')
         else:
-            pending_status = Text("🔶", style=styles.get('warning_style', 'bold yellow'))
+            pending_status = Text("🔶", style=ss.get_semantic_style("warning") if ss else 'bold yellow')
         table.add_row("⏳ Pending Tasks:", str(pending_tasks), pending_status)
 
         # In-flight fetches
         if in_flight == 0:
-            inflight_status = Text("✅", style=styles.get('success_style', 'bold green'))
+            inflight_status = Text("✅", style=ss.get_semantic_style("success") if ss else 'bold green')
         elif in_flight < 5:
-            inflight_status = Text("📊", style=styles.get('info_style', 'bold blue'))
+            inflight_status = Text("📊", style=ss.get_semantic_style("info") if ss else 'bold blue')
         else:
-            inflight_status = Text("🔶", style=styles.get('warning_style', 'bold yellow'))
+            inflight_status = Text("🔶", style=ss.get_semantic_style("warning") if ss else 'bold yellow')
         table.add_row("🔄 In-Flight:", str(in_flight), inflight_status)
 
         # Recovery jobs
@@ -478,37 +482,38 @@ class HealthRenderer:
             recovery_count = len(recovery_status)
             total_shards = sum(len(shards) for shards in recovery_status.values())
             recovery_value = f"{recovery_count}i, {total_shards}s"
-            recovery_status_icon = Text("⚡", style=styles.get('warning_style', 'bold orange'))
+            recovery_status_icon = Text("⚡", style=ss.get_semantic_style("warning") if ss else 'bold yellow')
         else:
             recovery_value = "0"
-            recovery_status_icon = Text("✅", style=styles.get('success_style', 'bold green'))
+            recovery_status_icon = Text("✅", style=ss.get_semantic_style("success") if ss else 'bold green')
         table.add_row("🔧 Recovery Jobs:", recovery_value, recovery_status_icon)
 
         # Delayed unassigned shards
         if delayed_unassigned == 0:
-            delayed_status = Text("✅", style=styles.get('success_style', 'bold green'))
+            delayed_status = Text("✅", style=ss.get_semantic_style("success") if ss else 'bold green')
         else:
-            delayed_status = Text("🔶", style=styles.get('warning_style', 'bold yellow'))
+            delayed_status = Text("🔶", style=ss.get_semantic_style("warning") if ss else 'bold yellow')
         table.add_row("🕐 Delayed:", str(delayed_unassigned), delayed_status)
 
         # Overall performance indicator
         has_recovery = recovery_status and len(recovery_status) > 0
         if pending_tasks == 0 and delayed_unassigned == 0 and not has_recovery:
             status_text = "OPTIMAL"
-            status_icon = Text("✨", style=styles.get('success_style', 'bold green'))
+            status_icon = Text("✨", style=ss.get_semantic_style("success") if ss else 'bold green')
         elif pending_tasks < 10 and delayed_unassigned < 5 and (not has_recovery or len(recovery_status) < 3):
             status_text = "GOOD"
-            status_icon = Text("👍", style=styles.get('warning_style', 'bold yellow'))
+            status_icon = Text("👍", style=ss.get_semantic_style("warning") if ss else 'bold yellow')
         else:
             status_text = "NEEDS ATTENTION"
-            status_icon = Text("🔶", style=styles.get('error_style', 'bold red'))
+            status_icon = Text("🔶", style=ss.get_semantic_style("error") if ss else 'bold red')
 
         # Add overall status
         table.add_row("🎯 Overall:", status_text, status_icon)
 
+        title_style = styles.get('panel_styles', {}).get('title', 'bold white')
         return Panel(
             table,
-            title=f"[{styles.get('panel_styles', {}).get('title', 'bold yellow')}]⚡ Performance[/{styles.get('panel_styles', {}).get('title', 'bold yellow')}]",
+            title=f"[{title_style}]⚡ Performance[/{title_style}]",
             border_style=styles.get('border_style', theme_color),
             padding=(1, 2),
             width=50
@@ -546,9 +551,10 @@ class HealthRenderer:
         table.add_row("📸 Snapshots:", "N/A")
         table.add_row("📊 Status:", "Check configuration")
 
+        title_style = styles.get('panel_styles', {}).get('title', 'bold white')
         return Panel(
             table,
-            title=f"[{styles.get('panel_styles', {}).get('title', 'bold magenta')}]📸 Snapshots[/{styles.get('panel_styles', {}).get('title', 'bold magenta')}]",
+            title=f"[{title_style}]📸 Snapshots[/{title_style}]",
             border_style=styles.get('border_style', theme_color),
             padding=(1, 2)
         )
@@ -565,128 +571,94 @@ class HealthRenderer:
         """
         from rich.panel import Panel
         from rich.text import Text
-        from rich.columns import Columns
-        from rich.table import Table as InnerTable
 
         try:
-            master_node = None
+            ss = self.style_system
+            ts = ss._get_style('semantic', 'primary', 'bold cyan') if ss else 'bold cyan'
 
-            # Find the master node details
+            master_node = None
             for node in nodes_data:
                 if node.get('name') == master_node_id:
                     master_node = node
                     break
 
+            # Get cluster context
+            cluster_name = health_data.get('cluster_name', 'Unknown')
+            status = health_data.get('status', 'unknown')
+            total_nodes = health_data.get('number_of_nodes', 0)
+            data_nodes = health_data.get('number_of_data_nodes', 0)
+
+            status_icon = "🟢" if status == 'green' else "🟡" if status == 'yellow' else "🔴" if status == 'red' else "⚪"
+            status_style_key = "success" if status == 'green' else "warning" if status == 'yellow' else "error" if status == 'red' else "muted"
+
             if not master_node:
-                # Fallback if we can't find detailed info
-                simple_panel = Panel(
-                    Text(f"👑 {master_node_id}", style="bold yellow", justify="center"),
-                    title="👑 Current Cluster Master",
-                    border_style="cyan",
+                # Fallback — no detailed node info
+                subtitle_rich = Text()
+                subtitle_rich.append("Cluster: ", style="default")
+                subtitle_rich.append(cluster_name, style=ss._get_style('semantic', 'info', 'cyan') if ss else "cyan")
+                subtitle_rich.append(" | Status: ", style="default")
+                subtitle_rich.append(f"{status_icon} {status.capitalize()}", style=ss._get_style('semantic', status_style_key, 'white') if ss else "white")
+
+                panel = Panel(
+                    Text(f"✅ {master_node_id} (Active Master)", style="bold green", justify="center"),
+                    title=f"[{ts}]👑 Current Cluster Master[/{ts}]",
+                    subtitle=subtitle_rich,
+                    border_style=ss._get_style('table_styles', 'border_style', 'cyan') if ss else "cyan",
                     padding=(1, 2)
                 )
                 print()
-                self.console.print(simple_panel)
+                self.console.print(panel)
+                print()
                 return
 
-            # Create title panel
-            title_panel = Panel(
-                Text("👑 Current Cluster Master", style="bold cyan", justify="center"),
-                subtitle=f"Active master node: {master_node_id}",
-                border_style="cyan",
-                padding=(1, 2)
-            )
-
-            # Master node details panel
-            master_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-            master_table.add_column("Label", style="bold", no_wrap=True)
-            master_table.add_column("Icon", justify="left", width=3)
-            master_table.add_column("Value", no_wrap=True)
-
-            # Basic information
+            # Extract master node details
             name = master_node.get('name', 'Unknown')
             hostname = master_node.get('hostname', 'Unknown')
-            node_id = master_node.get('node', 'Unknown')
             roles = master_node.get('roles', [])
 
-            master_table.add_row("Node Name:", "📛", name)
-            master_table.add_row("Hostname:", "🌐", hostname)
-            if node_id != 'Unknown':
-                master_table.add_row("Node ID:", "🆔", node_id[:16] + "..." if len(node_id) > 16 else node_id)
+            # Determine if dedicated master
+            is_data = any(role.startswith('data') for role in roles)
+            is_ingest = 'ingest' in roles
+            role_parts = []
+            if is_data:
+                role_parts.append("Data")
+            if is_ingest:
+                role_parts.append("Ingest")
 
-            # Role information
-            master_table.add_row("Master Role:", "👑", "✅ Active Master")
-
-            # Check if it has other roles
-            other_roles = []
-            if any(role.startswith('data') for role in roles):
-                other_roles.append("💾 Data")
-            if 'ingest' in roles:
-                other_roles.append("🔄 Ingest")
-
-            if other_roles:
-                master_table.add_row("Additional Roles:", "🔩", " + ".join(other_roles))
+            if role_parts:
+                node_type = "Master + " + " + ".join(role_parts)
             else:
-                master_table.add_row("Node Type:", "🔧", "Dedicated Master")
+                node_type = "Dedicated Master"
 
-            master_details_panel = Panel(
-                master_table,
-                title="📋 Master Node Details",
-                border_style="cyan",
+            # Body: master name centered
+            body_text = f"✅ {name} (Active Master)"
+
+            # Subtitle bar
+            subtitle_rich = Text()
+            subtitle_rich.append("Cluster: ", style="default")
+            subtitle_rich.append(cluster_name, style=ss._get_style('semantic', 'info', 'cyan') if ss else "cyan")
+            subtitle_rich.append(" | Status: ", style="default")
+            subtitle_rich.append(f"{status_icon} {status.capitalize()}", style=ss._get_style('semantic', status_style_key, 'white') if ss else "white")
+            subtitle_rich.append(" | Nodes: ", style="default")
+            subtitle_rich.append(str(total_nodes), style=ss._get_style('semantic', 'primary', 'bright_magenta') if ss else "bright_magenta")
+            subtitle_rich.append(" | Data: ", style="default")
+            subtitle_rich.append(str(data_nodes), style=ss._get_style('semantic', 'info', 'cyan') if ss else "cyan")
+            subtitle_rich.append(" | Host: ", style="default")
+            subtitle_rich.append(hostname, style=ss._get_style('semantic', 'info', 'cyan') if ss else "cyan")
+            subtitle_rich.append(" | Roles: ", style="default")
+            subtitle_rich.append(node_type, style=ss._get_style('semantic', 'secondary', 'magenta') if ss else "magenta")
+
+            panel = Panel(
+                Text(body_text, style="bold green", justify="center"),
+                title=f"[{ts}]👑 Current Cluster Master[/{ts}]",
+                subtitle=subtitle_rich,
+                border_style=ss._get_style('table_styles', 'border_style', 'cyan') if ss else "cyan",
                 padding=(1, 2)
             )
 
-            # Cluster status panel
-            try:
-                status = health_data.get('status', 'unknown').upper()
-
-                # Determine status styling
-                if status == 'GREEN':
-                    status_icon = "🟢"
-                    status_color = "green"
-                elif status == 'YELLOW':
-                    status_icon = "🟡"
-                    status_color = "yellow"
-                elif status == 'RED':
-                    status_icon = "🔴"
-                    status_color = "red"
-                else:
-                    status_icon = "⚪"
-                    status_color = "cyan"
-
-                cluster_name = health_data.get('cluster_name', 'Unknown')
-                total_nodes = health_data.get('number_of_nodes', 0)
-                data_nodes = health_data.get('number_of_data_nodes', 0)
-
-                status_table = InnerTable(show_header=False, box=None, padding=(0, 1))
-                status_table.add_column("Label", style="bold", no_wrap=True)
-                status_table.add_column("Icon", justify="left", width=3)
-                status_table.add_column("Value", no_wrap=True)
-
-                status_table.add_row("Cluster Name:", "🏢", cluster_name)
-                status_table.add_row("Cluster Status:", status_icon, status)
-                status_table.add_row("Total Nodes:", "💻", str(total_nodes))
-                status_table.add_row("Data Nodes:", "💾", str(data_nodes))
-
-                cluster_status_panel = Panel(
-                    status_table,
-                    title="📊 Cluster Status",
-                    border_style=status_color,
-                    padding=(1, 2)
-                )
-
-                # Display everything
-                print()
-                self.console.print(title_panel)
-                print()
-                self.console.print(Columns([master_details_panel, cluster_status_panel], expand=True))
-
-            except Exception:
-                # If we can't get cluster status, just show master details
-                print()
-                self.console.print(title_panel)
-                print()
-                self.console.print(master_details_panel)
+            print()
+            self.console.print(panel)
+            print()
 
         except Exception as e:
             self.console.print(f"[red]❌ Error retrieving master node details: {str(e)}[/red]")
