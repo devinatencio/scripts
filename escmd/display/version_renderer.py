@@ -29,6 +29,13 @@ class VersionRenderer:
         """
         self.console = console or Console()
         self.theme_manager = theme_manager
+        self.style_system = None
+        if theme_manager:
+            try:
+                from display.style_system import StyleSystem
+                self.style_system = StyleSystem(theme_manager)
+            except ImportError:
+                pass
 
     def render_version_info(self, version_data):
         """
@@ -58,8 +65,14 @@ class VersionRenderer:
             return self.theme_manager.get_themed_style("panel_styles", "title", fallback)
         return fallback
 
+    def _sem(self, semantic: str, fallback: str = "white") -> str:
+        """Return a semantic style from the style system."""
+        if self.style_system:
+            return self.style_system.get_semantic_style(semantic)
+        return fallback
+
     def _render_banner(self, version_data):
-        """Render gradient ASCII art banner."""
+        """Render gradient ASCII art banner using theme colors."""
         tool_name = version_data.get("tool_name", "ESTERM")
         letters = [
             " ███████╗███████╗████████╗███████╗██████╗ ███╗   ███╗",
@@ -69,18 +82,21 @@ class VersionRenderer:
             " ███████╗███████║   ██║   ███████╗██║  ██║██║ ╚═╝ ██║",
             " ╚══════╝╚══════╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝",
         ]
-        colours = [
-            "bold cyan", "bold cyan",
-            "bold blue", "bold blue",
-            "bold magenta", "bold magenta",
-        ]
+        # Use theme colors for the gradient: info → primary → secondary
+        c_info = f"bold {self._sem('info', 'cyan')}"
+        c_primary = f"bold {self._sem('primary', 'blue')}"
+        c_secondary = f"bold {self._sem('secondary', 'magenta')}"
+        colours = [c_info, c_info, c_primary, c_primary, c_secondary, c_secondary]
+
         banner = Text()
         for line, colour in zip(letters, colours):
             banner.append(line + "\n", style=colour)
         self.console.print(Align.center(banner))
+
+        subtitle_bg = self._sem('primary', 'dark_blue')
         self.console.print(
             Align.center(
-                Text("⚡  Elasticsearch Commander Terminal  ⚡", style="bold white on dark_blue")
+                Text("⚡  Elasticsearch Commander Terminal  ⚡", style=f"bold white on {subtitle_bg}")
             )
         )
         self.console.print()
@@ -91,31 +107,40 @@ class VersionRenderer:
         date = version_data.get("date", "04/14/2026")
         commit_hash = version_data.get("hash", "")
 
+        label_style = f"bold {self._sem('primary', 'cyan')}"
+        value_style = self._sem('neutral', 'white')
+        success_style = f"bold {self._sem('success', 'green')}"
+        muted_style = self._sem('muted', 'dim')
+        info_style = self._sem('info', 'cyan')
+
         info = Table.grid(padding=(0, 2))
-        info.add_column(style="bold cyan", no_wrap=True, min_width=14)
-        info.add_column(style="white")
+        info.add_column(style=label_style, no_wrap=True, min_width=14)
+        info.add_column(style=value_style)
 
         version_cell = Text()
-        version_cell.append(version, style="bold green")
+        version_cell.append(version, style=success_style)
         if commit_hash:
-            version_cell.append(f"  ({commit_hash})", style="dim")
+            version_cell.append(f"  ({commit_hash})", style=muted_style)
         info.add_row("📦 Version",  version_cell)
-        info.add_row("📅 Released", f"[bold cyan]{date}[/bold cyan]")
+        info.add_row("📅 Released", Text(date, style=f"bold {info_style}"))
         info.add_row("🎯 Purpose",  "Advanced ES CLI Management & Monitoring")
         info.add_row("👥 Team",     "Monitoring Team US")
-        info.add_row("🐍 Python",   f"[dim]{sys.version.split()[0]}[/dim]")
-        info.add_row("💻 Platform", f"[dim]{platform.system()} v{platform.mac_ver()[0]} {platform.machine()}[/dim]")
+        info.add_row("🐍 Python",   Text(sys.version.split()[0], style=muted_style))
+        info.add_row("💻 Platform", Text(f"{platform.system()} v{platform.mac_ver()[0]} {platform.machine()}", style=muted_style))
 
         # Merge performance rows
         info.add_row("", "")  # spacer
 
+        warning_style = self._sem('warning', 'yellow')
+        error_style = self._sem('error', 'red')
+
         def _bar(percent: float, width: int = 20) -> Text:
             filled = int(percent / 100 * width)
             empty  = width - filled
-            colour = "bold green" if percent < 60 else ("bold yellow" if percent < 85 else "bold red")
+            colour = success_style if percent < 60 else (f"bold {warning_style}" if percent < 85 else f"bold {error_style}")
             bar = Text()
             bar.append("█" * filled, style=colour)
-            bar.append("░" * empty,  style="dim")
+            bar.append("░" * empty,  style=muted_style)
             bar.append(f"  {percent:.1f}%", style=colour)
             return bar
 
@@ -125,14 +150,14 @@ class VersionRenderer:
             mem  = psutil.virtual_memory()
             disk = psutil.disk_usage("/")
             info.add_row("💻 CPU",    _bar(cpu))
-            info.add_row("🧠 Memory", Text.assemble(_bar(mem.percent),  (" ", ""), (f"{mem.available // (1024**3)} GB free", "dim")))
-            info.add_row("💾 Disk",   Text.assemble(_bar(disk.percent), (" ", ""), (f"{disk.free // (1024**3)} GB free", "dim")))
+            info.add_row("🧠 Memory", Text.assemble(_bar(mem.percent),  (" ", ""), (f"{mem.available // (1024**3)} GB free", muted_style)))
+            info.add_row("💾 Disk",   Text.assemble(_bar(disk.percent), (" ", ""), (f"{disk.free // (1024**3)} GB free", muted_style)))
         except ImportError:
-            info.add_row("📊 Metrics", Text("Install psutil for live system metrics", style="dim"))
+            info.add_row("📊 Metrics", Text("Install psutil for live system metrics", style=muted_style))
         except Exception:
-            info.add_row("📊 Status", Text("System monitoring temporarily unavailable", style="dim"))
+            info.add_row("📊 Status", Text("System monitoring temporarily unavailable", style=muted_style))
 
-        info.add_row("🕐 Time", Text(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), style="bold white"))
+        info.add_row("🕐 Time", Text(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), style=f"bold {value_style}"))
 
         self.console.print(Align.center(info))
 
@@ -157,15 +182,19 @@ class VersionRenderer:
 
     def _render_footer(self):
         """Render helpful footer with quick start information."""
-        footer_text = Text(justify="center")
-        footer_text.append("💡 ", style="bold yellow")
-        footer_text.append("Quick Start: ", style="bold white")
-        footer_text.append("./esterm", style="bold cyan")
-        footer_text.append("  for interactive mode  │  ", style="dim")
-        footer_text.append("./escmd.py help", style="bold cyan")
-        footer_text.append("  for command reference", style="dim")
+        info_style = self._sem('info', 'cyan')
+        muted_style = self._sem('muted', 'dim')
+        warning_style = self._sem('warning', 'yellow')
 
-        self.console.print(Panel(Align.center(footer_text), border_style="dim", padding=(0, 2)))
+        footer_text = Text(justify="center")
+        footer_text.append("💡 ", style=f"bold {warning_style}")
+        footer_text.append("Quick Start: ", style="bold white")
+        footer_text.append("./esterm", style=f"bold {info_style}")
+        footer_text.append("  for interactive mode  │  ", style=muted_style)
+        footer_text.append("./escmd.py help", style=f"bold {info_style}")
+        footer_text.append("  for command reference", style=muted_style)
+
+        self.console.print(Panel(Align.center(footer_text), border_style=muted_style, padding=(0, 2)))
 
     def _generate_enhanced_command_stats_table(self):
         """Generate enhanced command statistics table with better presentation."""

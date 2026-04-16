@@ -87,7 +87,7 @@ class RepositoriesRenderer:
         # Body: status centered
         repo_word = "Repository" if total_repos == 1 else "Repositories"
         status_text = f"✅ {total_repos} {repo_word} Configured"
-        body_style = "bold green"
+        body_style = f"bold {ss.get_semantic_style('success')}" if ss else "bold green"
         border = border_color
 
         # Subtitle bar

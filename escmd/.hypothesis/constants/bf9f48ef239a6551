@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/health_help.py
+# hypothesis_version: 6.151.12
+
+['   All clusters:', '   Check status:', '   Compare two:', '   Cron / CI:', '   Full detail:', '   Group by region:', '   Group view:', '   JSON for alert:', '   Morning check:', './escmd.py health', 'health', 'health --format json', 'health-detail', '📊 Daily Monitoring:', '🔄 Multi-Cluster Ops:', '🚀 Health Examples', '🚨 Incident Response:']

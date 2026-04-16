@@ -36,27 +36,24 @@ class HealthHandler(BaseHandler):
                 from rich.table import Table
                 from rich.text import Text
                 from rich.console import Console
+                from rich.rule import Rule
 
                 console = self.console if hasattr(self.console, 'print') else Console()
-                tm = self.es_client.theme_manager
                 ss = self.es_client.style_system
-                styles = tm.get_theme_styles()
 
-                # Resolve styles
-                primary     = ss.get_semantic_style("primary")
-                success     = ss.get_semantic_style("success")
-                warning     = ss.get_semantic_style("warning")
-                error       = ss.get_semantic_style("error")
-                info        = ss.get_semantic_style("info")
-                muted       = ss.get_semantic_style("muted")
-                border      = styles.get('border_style', 'white')
-                label_style = "bold white"
-                health_styles = styles.get('health_styles', {})
-                type_styles   = styles.get('type_styles', {})
-                row_styles    = styles.get('row_styles', {})
-                normal        = row_styles.get('normal', 'bright_white')
-                primary_shard = type_styles.get('primary', {}).get('text', 'bright_cyan')
-                replica_shard = type_styles.get('replica', {}).get('text', 'bright_blue')
+                # Semantic styles — no raw styles.get() chains
+                primary    = ss.get_semantic_style("primary")
+                success    = ss.get_semantic_style("success")
+                warning    = ss.get_semantic_style("warning")
+                error      = ss.get_semantic_style("error")
+                info       = ss.get_semantic_style("info")
+                muted      = ss.get_semantic_style("muted")
+                secondary  = ss.get_semantic_style("secondary")
+                neutral    = ss.get_semantic_style("neutral")
+                title_s    = self.es_client.theme_manager.get_themed_style(
+                    "panel_styles", "title", "bold cyan"
+                )
+                label_s    = f"bold {primary}"
 
                 # Data
                 status       = health_data.get('status', 'unknown')
@@ -74,114 +71,137 @@ class HealthHandler(BaseHandler):
                 index_count  = health_data.get('number_of_indices')
                 timed_out    = health_data.get('timed_out', False)
 
-                if status == 'green':
-                    status_icon  = "🟢"
-                    status_style = health_styles.get('green', {}).get('text', success)
-                elif status == 'yellow':
-                    status_icon  = "🟡"
-                    status_style = health_styles.get('yellow', {}).get('text', warning)
-                elif status == 'red':
-                    status_icon  = "🔴"
-                    status_style = health_styles.get('red', {}).get('text', error)
-                else:
-                    status_icon  = "⚪"
-                    status_style = muted
+                # Status mapping
+                status_map = {
+                    'green':  ("🟢", "success"),
+                    'yellow': ("🟡", "warning"),
+                    'red':    ("🔴", "error"),
+                }
+                status_icon, sem_key = status_map.get(status, ("⚪", "muted"))
+                status_sem = ss.get_semantic_style(sem_key)
 
-                from rich.rule import Rule
+                # ── Panel title with inline cluster name + status ──
+                panel_title = Text()
+                panel_title.append("⚡ ", style=title_s)
+                panel_title.append(cluster_name, style=f"bold {primary}")
+                panel_title.append(f"  {status_icon} {status.upper()}", style=f"bold {status_sem}")
 
-                def make_section():
+                # ── Helpers ──
+                def _section():
                     t = Table.grid(padding=(0, 2))
-                    t.add_column(justify="left", no_wrap=True, width=4)   # icon
-                    t.add_column(justify="left", no_wrap=True, width=16)  # label
-                    t.add_column(justify="left")                           # value
+                    t.add_column(justify="left", no_wrap=True, min_width=4)
+                    t.add_column(justify="left", no_wrap=True, min_width=16, style=label_s)
+                    t.add_column(justify="left")
                     return t
 
-                def add_row(t, icon, label, value_text):
-                    t.add_row(icon, Text(label, style=label_style), value_text)
+                def _bar(filled, total, width=16):
+                    pct = (filled / total * 100) if total else 0
+                    f = int(pct / 100 * width)
+                    e = width - f
+                    if pct >= 95:
+                        c = f"bold {success}"
+                    elif pct >= 70:
+                        c = f"bold {warning}"
+                    else:
+                        c = f"bold {error}"
+                    b = Text()
+                    b.append("█" * f, style=c)
+                    b.append("░" * e, style=muted)
+                    b.append(f" {pct:.0f}%", style=c)
+                    return b
 
-                # Single-column outer table — Rule rows span full width here
                 outer = Table.grid(padding=(0, 0))
                 outer.add_column(ratio=1)
 
-                # ── Cluster + Nodes ──────────────────────────────────────
-                s1 = make_section()
-                cluster_val = Text()
-                cluster_val.append(cluster_name, style=primary)
+                # ── Cluster ──
+                s1 = _section()
                 if version_str:
-                    cluster_val.append(f"  v{version_str}", style=muted)
-                add_row(s1, "🏢", "Cluster", cluster_val)
+                    s1.add_row("🔧", "Version", Text(f"v{version_str}", style=info))
 
-                status_val = Text()
-                status_val.append(f"{status_icon} {status.upper()}", style=status_style)
-                add_row(s1, "📊", "Status", status_val)
-
-                nodes_val = Text()
-                nodes_val.append(str(total_nodes), style=normal)
-                nodes_val.append("  data: ", style=muted)
-                nodes_val.append(str(data_nodes), style=success)
-                other = total_nodes - data_nodes
-                if other > 0:
-                    nodes_val.append("  master: ", style=muted)
-                    nodes_val.append(str(other), style=warning)
-                add_row(s1, "💻", "Nodes", nodes_val)
+                other_nodes = total_nodes - data_nodes
+                nodes_val = Text.assemble(
+                    (str(total_nodes), f"bold {neutral}"),
+                    (" total  ", muted),
+                    (str(data_nodes), f"bold {success}"),
+                    (" data", muted),
+                )
+                if other_nodes > 0:
+                    nodes_val.append("  ", style=muted)
+                    nodes_val.append(str(other_nodes), style=f"bold {warning}")
+                    nodes_val.append(" master/coord", style=muted)
+                s1.add_row("💻", "Nodes", nodes_val)
                 outer.add_row(s1)
 
-                # ── Indices + Shards ──────────────────────────────────────
+                # ── Indices + Shards ──
                 outer.add_row(Rule(style=muted))
-                s2 = make_section()
-                if index_count is not None:
-                    add_row(s2, "📂", "Indices", Text(f"{index_count:,}", style=normal))
+                s2 = _section()
 
-                shards_val = Text()
-                shards_val.append(str(total_shards), style=normal)
-                shards_val.append("  primary: ", style=muted)
-                shards_val.append(str(primary_s), style=primary_shard)
-                shards_val.append("  replicas: ", style=muted)
-                shards_val.append(str(replicas), style=replica_shard)
-                add_row(s2, "🔵", "Shards", shards_val)
+                if index_count is not None:
+                    s2.add_row("📂", "Indices", Text(f"{index_count:,}", style=f"bold {neutral}"))
+
+                shards_val = Text.assemble(
+                    (f"{total_shards:,}", f"bold {neutral}"),
+                    ("  pri ", muted),
+                    (f"{primary_s:,}", f"bold {secondary}"),
+                    ("  rep ", muted),
+                    (f"{replicas:,}", f"bold {info}"),
+                )
+                s2.add_row("🔵", "Shards", shards_val)
 
                 if relocating > 0:
-                    add_row(s2, "🔀", "Relocating", Text(f"{relocating:,}", style=warning))
+                    s2.add_row("🔀", "Relocating", Text(f"{relocating:,}", style=f"bold {warning}"))
                 if initializing > 0:
-                    add_row(s2, "⏳", "Initializing", Text(f"{initializing:,}", style=info))
+                    s2.add_row("⏳", "Initializing", Text(f"{initializing:,}", style=f"bold {info}"))
 
+                # Assignment bar
+                assigned = total_shards - unassigned
                 if unassigned > 0:
-                    unassigned_val = Text()
-                    unassigned_val.append(str(unassigned), style=error)
-                    unassigned_val.append("  ⚠ not assigned", style=warning)
-                    add_row(s2, "🔴", "Unassigned", unassigned_val)
+                    assign_text = Text.assemble(
+                        _bar(assigned, total_shards),
+                        ("  ", ""),
+                        (f"  {unassigned:,} unassigned", f"bold {error}"),
+                    )
+                    s2.add_row("🔴", "Assignment", assign_text)
                     try:
                         reasons = self.es_client.health_commands.get_unassigned_shard_reasons()
                         if reasons:
                             reason_str = ", ".join(
                                 f"{r}: {c}" for r, c in sorted(reasons.items(), key=lambda x: -x[1])
                             )
-                            add_row(s2, "  ", "", Text(f"└─ {reason_str}", style=warning))
+                            s2.add_row("", "", Text(f"└─ {reason_str}", style=warning))
                     except Exception:
                         pass
                 else:
-                    add_row(s2, "✅", "Unassigned", Text("0  all assigned", style=success))
+                    assign_text = Text.assemble(
+                        _bar(assigned, total_shards),
+                        ("  ", ""),
+                        ("all assigned", success),
+                    )
+                    s2.add_row("✅", "Assignment", assign_text)
                 outer.add_row(s2)
 
                 if timed_out:
                     outer.add_row(Rule(style=error))
-                    s3 = make_section()
-                    add_row(s3, "⚠️ ", "Timed Out", Text("health check incomplete", style=error))
+                    s3 = _section()
+                    s3.add_row("⚠️ ", "Timed Out", Text("health check incomplete", style=f"bold {error}"))
                     outer.add_row(s3)
 
-                title_style = styles.get('panel_styles', {}).get('title', 'bold white')
-                if status == 'green':
-                    panel_border = 'green'
-                elif status == 'yellow':
-                    panel_border = 'yellow'
-                elif status == 'red':
-                    panel_border = 'red'
-                else:
-                    panel_border = border
+                # ── Footer hint ──
+                outer.add_row(Rule(style=muted))
+                footer = Text()
+                footer.append("💡 ", style=f"bold {warning}")
+                footer.append("Run ", style=muted)
+                footer.append("health-detail", style=f"bold {info}")
+                footer.append(" for full dashboard with snapshots, recovery & performance", style=muted)
+                ft = Table.grid()
+                ft.add_column(ratio=1)
+                ft.add_row(footer)
+                outer.add_row(ft)
+
                 panel = Panel(
                     outer,
-                    title=f"[{title_style}]⚡ Cluster Health[/{title_style}]",
-                    border_style=panel_border,
+                    title=panel_title,
+                    border_style=status_sem,
                     padding=(1, 3),
                 )
 
@@ -741,15 +761,15 @@ class HealthHandler(BaseHandler):
         # Top panel: centered status line (bold green / yellow / red) per ui-standards
         if has_ilm_errors:
             body_line = "❌ ILM Errors Detected — Review Details Below"
-            body_style = "bold red"
+            body_style = f"bold {ss.get_semantic_style('error')}" if ss else "bold red"
             title_border = err_style
         elif has_issues:
             body_line = "🔶 Health Warnings — Review Details Below"
-            body_style = "bold yellow"
+            body_style = f"bold {ss.get_semantic_style('warning')}" if ss else "bold yellow"
             title_border = warn_style
         else:
             body_line = "✅ Cluster Healthy — All Checks Passed"
-            body_style = "bold green"
+            body_style = f"bold {ss.get_semantic_style('success')}" if ss else "bold green"
             title_border = ss._get_style('table_styles', 'border_style', 'cyan') if ss else 'cyan'
 
         ts = ss._get_style('semantic', 'primary', 'bold cyan') if ss else 'bold cyan'
@@ -822,7 +842,7 @@ class HealthHandler(BaseHandler):
             info_panel = Panel(
                 Text(info_text, style="bright_blue", justify="left"),
                 title="🔵 ILM Checks Skipped",
-                border_style="blue",
+                border_style=ss.get_semantic_style('info') if ss else "blue",
                 padding=(1, 2),
                 expand=True,
             )
@@ -833,7 +853,7 @@ class HealthHandler(BaseHandler):
             info_panel = Panel(
                 Text(info_text, style="bright_blue", justify="left"),
                 title="🔵 ILM Not Available",
-                border_style="blue",
+                border_style=ss.get_semantic_style('info') if ss else "blue",
                 padding=(1, 2),
                 expand=True,
             )
@@ -876,7 +896,7 @@ class HealthHandler(BaseHandler):
                 error_panel = Panel(
                     error_table,
                     title=f"❌ ILM Errors ({len(ilm_errors)} indices)",
-                    border_style="red",
+                    border_style=ss.get_semantic_style('error') if ss else "red",
                     padding=(1, 2),
                     expand=True,
                 )

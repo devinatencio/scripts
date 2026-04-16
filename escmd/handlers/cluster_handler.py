@@ -90,16 +90,16 @@ class ClusterHandler(BaseHandler):
                 status_icon = "🟢" if cluster_status == 'green' else "🟡" if cluster_status == 'yellow' else "🔴"
                 if cluster_status == 'green':
                     status_text = f"{status_icon} Connected - {cluster_name} ({cluster_status.title()})"
-                    body_style = "bold green"
-                    border = style_system._get_style('table_styles', 'border_style', 'cyan')
+                    body_style = f"bold {style_system.get_semantic_style('success')}" if style_system else "bold green"
+                    border = style_system._get_style('table_styles', 'border_style', 'cyan') if style_system else 'cyan'
                 elif cluster_status == 'yellow':
                     status_text = f"{status_icon} Connected - {cluster_name} ({cluster_status.title()})"
-                    body_style = "bold yellow"
-                    border = "yellow"
+                    body_style = f"bold {style_system.get_semantic_style('warning')}" if style_system else "bold yellow"
+                    border = style_system.get_semantic_style('warning') if style_system else "yellow"
                 else:
                     status_text = f"{status_icon} Connected - {cluster_name} ({cluster_status.title()})"
-                    body_style = "bold red"
-                    border = "red"
+                    body_style = f"bold {style_system.get_semantic_style('error')}" if style_system else "bold red"
+                    border = style_system.get_semantic_style('error') if style_system else "red"
 
                 ts = style_system._get_style('semantic', 'primary', 'bold cyan')
                 title_panel = Panel(

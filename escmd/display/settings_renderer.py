@@ -105,10 +105,10 @@ class SettingsRenderer:
 
         if default_cluster:
             status_text = f"✅ Connected to {default_cluster}"
-            body_style = "bold green"
+            body_style = f"bold {self.style_system.get_semantic_style('success')}" if self.style_system else "bold green"
         else:
             status_text = "🔶 No Default Cluster Configured"
-            body_style = "bold yellow"
+            body_style = f"bold {self.style_system.get_semantic_style('warning')}" if self.style_system else "bold yellow"
 
         ts = self._sem("primary")
         title_panel = Panel(
@@ -162,28 +162,37 @@ class SettingsRenderer:
         table.add_column("Description", style=self._sem("muted"))
 
         # Default cluster row
+        row_idx = 0
         default_cluster = settings_data.get('default_cluster')
         table.add_row(
             "Default Server",
             Text(default_cluster or "None", style=self._sem("success") if default_cluster else self._sem("warning")),
             "Currently active cluster",
+            style=self.style_system.get_zebra_style(row_idx) if self.style_system else None,
         )
+        row_idx += 1
 
         descriptions = self._get_setting_descriptions()
         for key, value in settings_data.get('settings', {}).items():
             if key == 'dangling_cleanup' and isinstance(value, dict):
                 for sub_key, sub_value in value.items():
                     full_key = f"dangling_cleanup.{sub_key}"
-                    table.add_row(full_key, self._fmt_value(sub_value), descriptions.get(full_key, ""))
+                    table.add_row(full_key, self._fmt_value(sub_value), descriptions.get(full_key, ""),
+                                  style=self.style_system.get_zebra_style(row_idx) if self.style_system else None)
+                    row_idx += 1
             else:
-                table.add_row(key, self._fmt_value(value), descriptions.get(key, "Configuration setting"))
+                table.add_row(key, self._fmt_value(value), descriptions.get(key, "Configuration setting"),
+                              style=self.style_system.get_zebra_style(row_idx) if self.style_system else None)
+                row_idx += 1
 
         for override_key, info in settings_data.get('environment_overrides', {}).items():
             table.add_row(
                 f"{override_key} (override)",
                 Text(info['value'], style=self._sem("warning")),
                 f"Env var {info['variable']} active",
+                style=self.style_system.get_zebra_style(row_idx) if self.style_system else None,
             )
+            row_idx += 1
 
         self.console.print(Panel(
             table,
@@ -220,7 +229,7 @@ class SettingsRenderer:
         table.add_column("SSL",          style=self._sem("warning"),     justify="center")
         table.add_column("Auth",         style=self._sem("error"),       justify="center")
 
-        for cluster in clusters:
+        for i, cluster in enumerate(clusters):
             name = (
                 Text(f"★ {cluster['name']}", style=self._sem("success"))
                 if cluster['is_default']
@@ -229,7 +238,8 @@ class SettingsRenderer:
             ssl_text  = Text("✓", style=self._sem("success")) if cluster['use_ssl']            else Text("✗", style=self._sem("muted"))
             auth_text = Text("✓", style=self._sem("success")) if cluster['has_authentication'] else Text("✗", style=self._sem("muted"))
 
-            table.add_row(name, cluster['environment'], cluster['hostname'], str(cluster['port']), ssl_text, auth_text)
+            zebra = self.style_system.get_zebra_style(i) if self.style_system else None
+            table.add_row(name, cluster['environment'], cluster['hostname'], str(cluster['port']), ssl_text, auth_text, style=zebra)
 
         self.console.print(Panel(
             table,
@@ -264,13 +274,14 @@ class SettingsRenderer:
         table.add_column("Username",        style=self._sem("secondary"))
         table.add_column("Password Source", style=self._sem("warning"))
 
-        for auth in auth_data:
+        for i, auth in enumerate(auth_data):
             cluster_name = (
                 Text(f"★ {auth['cluster_name']}", style=self._sem("success"))
                 if auth['is_default']
                 else Text(auth['cluster_name'], style=self._sem("neutral"))
             )
-            table.add_row(cluster_name, auth['username_source'], auth['username'], auth['password_source'])
+            zebra = self.style_system.get_zebra_style(i) if self.style_system else None
+            table.add_row(cluster_name, auth['username_source'], auth['username'], auth['password_source'], style=zebra)
 
         self.console.print(Panel(
             table,

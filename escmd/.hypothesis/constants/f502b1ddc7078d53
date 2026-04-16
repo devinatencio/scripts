@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/base_help_content.py
+# hypothesis_version: 6.151.12
+
+['  machine output', '--format json', '-l <cluster>', './escmd.py help', ':', 'Command', 'Description', 'Example', 'bold cyan', 'bold white on grey23', 'bold yellow', 'border', 'border_style', 'center', 'command', 'cyan', 'description', 'dim', 'dim italic', 'double', 'example', 'header_style', 'heavy', 'help_styles', 'horizontals', 'info', 'minimal', 'none', 'on ', 'on grey7', 'panel_styles', 'rounded', 'row_styles', 'secondary', 'section_header', 'simple', 'table_box', 'title', 'white', 'zebra']

@@ -658,18 +658,20 @@ class EsTopRenderer:
             table.add_column("Store Size", justify="right")
             table.add_column("Session Docs", justify="right")
             table.add_column("Session Searches", justify="right")
-            for idx in data.top_indices:
+            for i, idx in enumerate(data.top_indices):
                 is_abnormal = idx.index_name in data.abnormal_indices
                 name_text = Text()
                 if is_abnormal:
                     name_text.append("⚠ ", style="bold yellow")
                 name_text.append(idx.index_name, style="bold yellow" if is_abnormal else "white")
+                zebra = self.style_system.get_zebra_style(i) if self.style_system else None
                 table.add_row(
                     name_text,
                     Text(str(idx.total_docs), style="bold yellow" if is_abnormal else "white"),
                     Text(idx.store_size, style="bold yellow" if is_abnormal else "white"),
                     Text(str(idx.session_docs), style="bold yellow" if is_abnormal else "white"),
                     Text(str(idx.session_searches), style="bold yellow" if is_abnormal else "white"),
+                    style=zebra,
                 )
             note = Text("Rates available after next poll", style="dim white")
             body = Group(table, note)
@@ -708,6 +710,8 @@ class EsTopRenderer:
                 suffix = self._hot_prefix(rank, mode)
                 if suffix:
                     name_text.append(f" {suffix}")
+            zebra = self.style_system.get_zebra_style(rank) if self.style_system else None
+            combined_style = f"{row_style} {zebra}" if zebra and row_style != "white" else zebra or row_style
             table.add_row(
                 name_text,
                 Text(f"{idx.docs_per_sec:.2f}", style="bold yellow" if is_abnormal else row_style),
@@ -716,6 +720,7 @@ class EsTopRenderer:
                 Text(str(idx.session_searches), style="bold yellow" if is_abnormal else row_style),
                 Text(str(idx.total_docs), style="bold yellow" if is_abnormal else row_style),
                 Text(idx.store_size, style="bold yellow" if is_abnormal else row_style),
+                style=zebra,
             )
         abnormal_count = sum(1 for idx in data.top_indices if idx.index_name in data.abnormal_indices)
         title_suffix = (
@@ -839,7 +844,8 @@ class EsTopDashboard:
 
     def __init__(self, es_client, interval=30, top_nodes=5, top_indices=10, console=None,
                  hot_indicator="emoji", collect=False, collect_dir=None, current_location=None,
-                 new_session: bool = False, join_latest: bool = False, label=None):
+                 new_session: bool = False, join_latest: bool = False, label=None,
+                 readonly: bool = False):
         self.interval = max(10, interval)
         self.top_nodes = top_nodes
         self.top_indices = top_indices
@@ -850,9 +856,11 @@ class EsTopDashboard:
         self.new_session = new_session
         self.join_latest = join_latest
         self.label = label
+        self.readonly = readonly
         self._stopped = False
         self._poller = EsTopPoller(es_client)
         self._delta_calc = DeltaCalculator()
+        self._console = console
         theme_manager = getattr(es_client, 'theme_manager', None)
         self._renderer = EsTopRenderer(theme_manager)
         self._abnormal_indices = self._fetch_abnormal_indices(es_client)
@@ -866,6 +874,7 @@ class EsTopDashboard:
             from datetime import timezone
             from pathlib import Path
             from processors.indices_watch import (
+                _is_sample_file,
                 default_run_dir,
                 index_watch_storage_slug,
                 utc_today_iso,
@@ -914,6 +923,129 @@ class EsTopDashboard:
                         session_id=self._collect_out_dir.name,
                         label=self.label,
                     )
+
+            # When joining an existing session, pick up the sequence counter
+            # where it left off so new samples continue the numbering.
+            if self._collect_out_dir and self._collect_out_dir.is_dir():
+                self._collect_seq = sum(
+                    1 for p in self._collect_out_dir.iterdir()
+                    if p.is_file() and _is_sample_file(p)
+                )
+
+            # When joining an existing session that has samples, replay them
+            # through the DeltaCalculator so session totals, poll count, and
+            # the prior snapshot are all seeded.  The first live poll will then
+            # compute rates immediately instead of showing "first poll".
+            if self._collect_out_dir and self._collect_seq > 0:
+                self._load_session_history(self._collect_out_dir)
+
+        # --readonly: replay session history (for poll count, session totals,
+        # and an immediate hot-list) but never write new samples to disk.
+        if self.readonly and self._collect_out_dir is None:
+            from pathlib import Path
+            from processors.indices_watch import (
+                _is_sample_file,
+                index_watch_storage_slug,
+                utc_today_iso,
+            )
+            cm = getattr(es_client, 'configuration_manager', None)
+            raw_loc = current_location or "default"
+            self._collect_cluster = (
+                index_watch_storage_slug(raw_loc, cm) if cm is not None else raw_loc
+            )
+            day_iso = utc_today_iso()
+            from processors.indices_watch import pick_or_create_session_dir
+            import sys
+            session_dir, _is_new = pick_or_create_session_dir(
+                self._collect_cluster,
+                day_iso,
+                new_session=False,
+                join_latest=True,
+                label=self.label,
+                console=console,
+                is_tty=sys.stdin.isatty(),
+            )
+            if session_dir and session_dir.is_dir():
+                seq = sum(
+                    1 for p in session_dir.iterdir()
+                    if p.is_file() and _is_sample_file(p)
+                )
+                if seq > 0:
+                    self._collect_out_dir = session_dir
+                    self._collect_seq = seq
+                    self._load_session_history(session_dir)
+
+        # Suppress disk writes for readonly
+        if self.readonly:
+            self.collect = False
+
+    def _load_session_history(self, session_dir) -> None:
+        """Replay saved samples into DeltaCalculator so a resumed session
+        starts with accurate session totals, poll count, and a valid prior
+        snapshot (enabling rate computation on the very first live poll).
+        """
+        from processors.indices_watch import load_samples
+
+        samples = load_samples(session_dir)
+        if not samples:
+            return
+
+        loaded_count = len(samples)
+
+        # Parse the session start time from the first sample
+        first_ts = self._parse_sample_ts(samples[0])
+        if first_ts:
+            self._delta_calc._session_start = first_ts
+
+        # Replay each sample as a synthetic PollSnapshot through the calculator.
+        # Only cat_indices is available from saved data; cluster_health and
+        # nodes_stats will be populated by the first live poll.
+        for sample in samples:
+            ts = self._parse_sample_ts(sample)
+            if ts is None:
+                continue
+            synthetic = PollSnapshot(
+                timestamp=ts,
+                cluster_health=sample.get("cluster_health"),
+                nodes_stats=sample.get("nodes_stats"),
+                cat_indices=sample.get("indices"),
+            )
+            self._delta_calc.process(
+                synthetic,
+                interval=self.interval,
+                top_nodes=self.top_nodes,
+                top_indices=self.top_indices,
+                abnormal_indices=self._abnormal_indices,
+                hot_indicator=self.hot_indicator,
+            )
+
+        # Perform a silent baseline poll so the first rendered poll diffs
+        # against *current* cluster data rather than stale historical values.
+        # Without this, the gap between the last saved sample and now gets
+        # compressed into one interval, producing massively inflated doc/s.
+        # The baseline poll is not rendered or saved — it only sets _prior.
+        baseline = self._poller.poll()
+        self._delta_calc._prior = baseline
+
+        if self._console:
+            self._console.print(
+                f"[bold]Loaded {loaded_count} previous sample{'s' if loaded_count != 1 else ''}"
+                f" from session[/bold] → resuming at Pull #{self._collect_seq + 1}"
+            )
+
+    @staticmethod
+    def _parse_sample_ts(sample: Dict[str, Any]) -> Optional[datetime]:
+        """Parse a sample's captured_at ISO string into a datetime."""
+        raw = sample.get("captured_at", "")
+        if not raw:
+            return None
+        try:
+            s = str(raw).replace("Z", "+00:00")
+            dt = datetime.fromisoformat(s)
+            # Strip tzinfo so it's consistent with datetime.now() used elsewhere
+            return dt.replace(tzinfo=None)
+        except (TypeError, ValueError):
+            return None
 
     def _fetch_abnormal_indices(self, es_client) -> frozenset:
         """Run indices-analyze once at startup to get the set of abnormal index names."""
@@ -968,6 +1100,8 @@ class EsTopDashboard:
                             captured_at=captured_at,
                             host_used=getattr(self._es_client, 'host1', None),
                             sequence=self._collect_seq,
+                            nodes_stats=snapshot.nodes_stats,
+                            cluster_health=snapshot.cluster_health,
                         )
 
             except Exception as e:

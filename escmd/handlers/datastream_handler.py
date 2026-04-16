@@ -141,16 +141,16 @@ class DatastreamHandler(BaseHandler):
 
         if red_count > 0:
             status_text = f"🔴 {red_count} Datastream{'s' if red_count != 1 else ''} Critical"
-            body_style = "bold red"
-            border = "red"
+            body_style = f"bold {ss.get_semantic_style('error')}" if ss else "bold red"
+            border = ss.get_semantic_style('error') if ss else "red"
         elif yellow_count > 0:
             status_text = f"🟡 {yellow_count} Datastream{'s' if yellow_count != 1 else ''} Warning"
-            body_style = "bold yellow"
-            border = "yellow"
+            body_style = f"bold {ss.get_semantic_style('warning')}" if ss else "bold yellow"
+            border = ss.get_semantic_style('warning') if ss else "yellow"
         else:
             ds_word = "Datastream" if total_datastreams == 1 else "Datastreams"
             status_text = f"✅ {total_datastreams} {ds_word} Healthy"
-            body_style = "bold green"
+            body_style = f"bold {ss.get_semantic_style('success')}" if ss else "bold green"
             border = ss._get_style('table_styles', 'border_style', 'cyan') if ss else 'cyan'
 
         ts = ss._get_style('semantic', 'primary', 'bold cyan') if ss else 'bold cyan'

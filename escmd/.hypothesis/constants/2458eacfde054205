@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/display/../template_utils/template_backup.py
+# hypothesis_version: 6.151.12
+
+['%Y%m%d_%H%M%S', '*.json', '.escmd', '1.0', '3.0.3', 'backup_directory', 'backup_timestamp', 'cluster_name', 'count', 'created_date', 'escmd_version', 'file_name', 'file_path', 'file_size', 'inf', 'latest_backup', 'metadata', 'mtime', 'newest_backup', 'oldest_backup', 'path', 'r', 'template_backups', 'template_data', 'template_name', 'template_type', 'templates', 'timestamp', 'total_backups', 'total_size_bytes', 'types', 'unknown', 'utf-8', 'w']

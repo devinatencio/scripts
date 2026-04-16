@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/indices_watch_collect_help.py
+# hypothesis_version: 6.151.12
+
+['   5 min every 30s:', '   Analyze results:', '   Default path:', '   Failover:', '   Filter + health:', '   Fixed folder:', '   Multi-cluster:', '   Retry order:', '--duration SEC', '--interval SEC', '--output-dir PATH', '--retries N', '--retry-delay SEC', '<regex> (positional)', '📋 Overview:', '🚀 Quick Examples:']

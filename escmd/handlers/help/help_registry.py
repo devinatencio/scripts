@@ -38,6 +38,7 @@ class HelpRegistry:
             from .actions_help import ActionsHelp
             from .indices_watch_collect_help import IndicesWatchCollectHelpContent
             from .indices_watch_report_help import IndicesWatchReportHelpContent
+            from .indices_watch_sessions_help import IndicesWatchSessionsHelpContent
             from .indices_analyze_help import IndicesAnalyzeHelpContent
             from .indices_s3_estimate_help import IndicesS3EstimateHelpContent
             from .template_backup_help import TemplateBackupHelpContent
@@ -65,6 +66,7 @@ class HelpRegistry:
             self.register(ActionsHelp)
             self.register(IndicesWatchCollectHelpContent)
             self.register(IndicesWatchReportHelpContent)
+            self.register(IndicesWatchSessionsHelpContent)
             self.register(IndicesAnalyzeHelpContent)
             self.register(IndicesS3EstimateHelpContent)
             self.register(TemplateBackupHelpContent)

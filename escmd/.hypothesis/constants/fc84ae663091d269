@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/storage_handler.py
+# hypothesis_version: 6.151.12
+
+['*', 'Error', 'UNASSIGNED', 'bold white', 'json', 'node', 'pager', 'red', 'state', 'unassigned', 'white on blue']

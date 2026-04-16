@@ -1370,7 +1370,7 @@ class IndexHandler(BaseHandler):
         from processors.indices_watch import (
             default_run_dir,
             index_watch_storage_slug,
-            list_indices_stats_with_failover,
+            collect_indices_and_nodes_with_failover,
             pick_or_create_session_dir,
             save_sample_file,
             utc_today_iso,
@@ -1449,12 +1449,17 @@ class IndexHandler(BaseHandler):
         # When joining an existing session, pick up the sequence counter where it left off
         from processors.indices_watch import _is_sample_file
         seq = sum(1 for p in out_dir.iterdir() if p.is_file() and _is_sample_file(p)) if out_dir.is_dir() else 0
+        if seq > 0:
+            self.console.print(
+                f"[bold]Loaded {seq} previous sample{'s' if seq != 1 else ''}"
+                f" from session[/bold] → resuming at Pull #{seq + 1}"
+            )
         start = time.time()
         while not stop_flag["stop"]:
             if duration is not None and (time.time() - start) >= duration:
                 break
             loop_start = time.time()
-            data, host = list_indices_stats_with_failover(
+            data, nodes_stats, cluster_health, host = collect_indices_and_nodes_with_failover(
                 self.es_client,
                 pattern=pattern,
                 status=status,
@@ -1475,6 +1480,8 @@ class IndexHandler(BaseHandler):
                     captured_at=now,
                     host_used=host,
                     sequence=seq,
+                    nodes_stats=nodes_stats,
+                    cluster_health=cluster_health,
                 )
                 self.console.print(
                     f"  saved {path.name}  ({len(data)} indices) host={host}"

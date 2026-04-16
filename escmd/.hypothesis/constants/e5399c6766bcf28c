@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/commands/replica_commands.py
+# hypothesis_version: 6.151.12
+
+['cancelled', 'data', 'error', 'indices_to_update', 'json', 'plan', 'replica', 'result', 'success', 'table', 'theme_manager', 'y', 'yes']

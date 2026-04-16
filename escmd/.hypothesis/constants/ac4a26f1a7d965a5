@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/commands/settings_commands.py
+# hypothesis_version: 6.151.12
+
+[' | Transient: ', '*', 'Persistent: ', 'Setting', 'Value', 'blue', 'body', 'bold', 'bold cyan', 'bold green', 'bold red', 'bold white', 'border_style', 'bright_magenta', 'center', 'cyan', 'default', 'dim italic', 'error', 'get', 'green', 'header_style', 'index', 'info', 'null', 'panel_styles', 'persistent', 'policy', 'primary', 'red', 'semantic', 'settings', 'success', 'table_styles', 'template', 'title', 'transient', 'white', '⚡', '📌']

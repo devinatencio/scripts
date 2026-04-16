@@ -23,6 +23,7 @@ class EsTopHandler(BaseHandler):
         new_session = getattr(self.args, 'new_session', False) or False
         join_latest = getattr(self.args, 'join_latest', False) or False
         label = getattr(self.args, 'label', None)
+        readonly = getattr(self.args, 'readonly', False) or False
 
         if config_manager:
             interval = max(10, cli_interval if cli_interval is not None else config_manager.get_estop_interval())
@@ -48,5 +49,6 @@ class EsTopHandler(BaseHandler):
             new_session=new_session,
             join_latest=join_latest,
             label=label,
+            readonly=readonly,
         )
         dashboard.run()

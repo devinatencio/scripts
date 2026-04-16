@@ -71,6 +71,7 @@ NO_CONNECTION_COMMANDS = {
     "locations",
     "get-default",
     "set-default",
+    "set-username",
     "show-settings",
     "help",
     "themes",
@@ -85,6 +86,9 @@ NO_CONNECTION_COMMANDS = {
     "migrate-to-env-key",
     "rotate-master-key",
     "indices-watch-report",
+    "indices-watch-sessions",
+    "list-backups",
+    "cluster-groups"
 }
 
 
@@ -304,7 +308,7 @@ def handle_special_commands(args, config_manager, console):
     command = args.command
 
     if command == "version":
-        handle_version(VERSION, DATE)
+        handle_version(VERSION, DATE, config_manager)
         return True
 
     elif command == "locations":
@@ -341,6 +345,12 @@ def handle_special_commands(args, config_manager, console):
         from processors.indices_watch import run_indices_watch_report
 
         run_indices_watch_report(args, console, config_manager)
+        return True
+
+    elif command == "indices-watch-sessions":
+        from processors.indices_watch import run_indices_watch_sessions
+
+        run_indices_watch_sessions(args, console, config_manager)
         return True
 
     elif command == "themes":

@@ -129,7 +129,7 @@ class TestEsTopPollerSuccess(unittest.TestCase):
         self.es_client.es.cluster.health.assert_called_once()
         self.es_client.es.nodes.stats.assert_called_once_with(metric='indices,os,jvm,fs')
         self.es_client.es.cat.indices.assert_called_once_with(
-            h='index,docs.count,search.query_total,store.size,pri,rep',
+            h='index,docs.count,search.query_total,store.size,pri,rep,indexing.index_total',
             format='json',
         )
 

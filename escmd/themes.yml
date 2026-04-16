@@ -193,8 +193,8 @@ themes:
           icon: bright_yellow bold
           text: bright_yellow bold
         RELOCATING:
-          icon: bright_cyan bold
-          text: bright_cyan bold
+          icon: medium_purple bold
+          text: medium_purple bold
         UNASSIGNED:
           icon: bright_red bold
           text: bright_red bold
@@ -210,9 +210,9 @@ themes:
           text: bright_cyan bold
       row_styles:
         normal: bright_white
-        zebra: grey19
+        zebra: "color(53)"
         hot: bright_red
-        frozen: bright_cyan
+        frozen: medium_purple
         critical_health: bright_red
         warning_health: bright_yellow
         healthy: bright_white
@@ -223,17 +223,17 @@ themes:
       warning: bright_yellow
       error: bright_red
       info: bright_cyan
-      secondary: bright_cyan
+      secondary: medium_purple
     help_styles:
       title: bold bright_magenta
-      section_header: bold bright_cyan
+      section_header: bold medium_purple
       command: bright_yellow
       description: bright_white
       example: bright_cyan
       footer: dim bright_white
     semantic_styles:
       primary: bright_magenta
-      secondary: bright_cyan
+      secondary: medium_purple
       success: bright_green
       warning: bright_yellow
       error: bright_red
@@ -377,14 +377,14 @@ themes:
       warning: yellow
       error: red
       info: blue
-      secondary: magenta
+      secondary: dodger_blue1
     help_styles:
       title: bold blue
       section_header: bold cyan
       command: yellow bold
       description: cyan
       example: blue
-      footer: dim magenta
+      footer: dim deep_sky_blue1
     semantic_styles:
       primary: deep_sky_blue1
       secondary: dodger_blue1
@@ -397,7 +397,7 @@ themes:
   midnight:
     table_styles:
       border_style: slate_blue1
-      header_style: bold silver on grey11
+      header_style: bold grey84 on grey11
       table_box: heavy
       health_styles:
         green:
@@ -430,25 +430,25 @@ themes:
           icon: light_coral bold
           text: light_coral bold
         default:
-          icon: silver bold
-          text: silver bold
+          icon: grey74 bold
+          text: grey74 bold
       type_styles:
         primary:
-          icon: lavender bold
-          text: lavender bold
+          icon: "color(189) bold"
+          text: "color(189) bold"
         replica:
           icon: light_steel_blue1 bold
           text: light_steel_blue1 bold
       row_styles:
-        normal: silver
+        normal: grey74
         zebra: grey15
         hot: light_coral
         frozen: light_steel_blue1
         critical_health: light_coral
         warning_health: khaki1
-        healthy: silver
+        healthy: grey74
     panel_styles:
-      title: bold lavender
+      title: "bold color(189)"
       subtitle: dim light_steel_blue1
       success: pale_green1
       warning: khaki1
@@ -456,14 +456,14 @@ themes:
       info: light_steel_blue1
       secondary: plum1
     help_styles:
-      title: bold lavender
+      title: "bold color(189)"
       section_header: bold light_steel_blue1
       command: khaki1 bold
-      description: silver
+      description: grey74
       example: light_steel_blue1
       footer: dim grey70
     semantic_styles:
-      primary: lavender
+      primary: "color(189)"
       secondary: plum1
       success: pale_green1
       warning: khaki1
@@ -702,155 +702,116 @@ themes:
       info: green
 
   # 🧊 Nord Theme - Arctic, north-bluish color palette
+  # Official Nord palette: https://www.nordtheme.com
+  # Polar Night: #2e3440 #3b4252 #434c5e #4c566a
+  # Snow Storm:  #d8dee9 #e5e9f0 #eceff4
+  # Frost:       #8fbcbb #88c0d0 #81a1c1 #5e81ac
+  # Aurora:      #bf616a #d08770 #ebcb8b #a3be8c #b48ead
   nord:
     table_styles:
-      border_style: steel_blue1
-      header_style: bold white on grey23
-      table_box: heavy
+      border_style: "#81a1c1"
+      header_style: "bold #eceff4 on #3b4252"
+      table_box: rounded
       health_styles:
-        green:
-          icon: pale_turquoise1 bold
-          text: pale_turquoise1 bold
-        yellow:
-          icon: light_goldenrod2 bold
-          text: light_goldenrod2 bold
-        red:
-          icon: indian_red bold
-          text: indian_red bold
+        green:  { icon: "#8fbcbb bold",  text: "#8fbcbb bold"  }
+        yellow: { icon: "#ebcb8b bold", text: "#ebcb8b bold" }
+        red:    { icon: "#bf616a bold", text: "#bf616a bold" }
       status_styles:
-        open:
-          icon: cornflower_blue bold
-          text: cornflower_blue bold
-        close:
-          icon: indian_red bold
-          text: indian_red bold
+        open:  { icon: "#a3be8c bold", text: "#a3be8c bold" }
+        close: { icon: "#bf616a bold", text: "#bf616a bold" }
       state_styles:
-        STARTED:
-          icon: pale_turquoise1 bold
-          text: pale_turquoise1 bold
-        INITIALIZING:
-          icon: light_goldenrod2 bold
-          text: light_goldenrod2 bold
-        RELOCATING:
-          icon: cornflower_blue bold
-          text: cornflower_blue bold
-        UNASSIGNED:
-          icon: indian_red bold
-          text: indian_red bold
-        default:
-          icon: light_steel_blue bold
-          text: light_steel_blue bold
+        STARTED:      { icon: "#a3be8c bold", text: "#a3be8c bold" }
+        INITIALIZING: { icon: "#ebcb8b bold", text: "#ebcb8b bold" }
+        RELOCATING:   { icon: "#5e81ac bold", text: "#5e81ac bold" }
+        UNASSIGNED:   { icon: "#bf616a bold", text: "#bf616a bold" }
       type_styles:
-        primary:
-          icon: sky_blue1 bold
-          text: sky_blue1 bold
-        replica:
-          icon: steel_blue1 bold
-          text: steel_blue1 bold
+        primary: { icon: "#88c0d0 bold", text: "#88c0d0 bold" }
+        replica: { icon: "#81a1c1 bold", text: "#81a1c1 bold" }
       row_styles:
-        normal: light_steel_blue
-        zebra: grey15
-        hot: indian_red
-        frozen: cornflower_blue
-        critical_health: indian_red
-        warning_health: light_goldenrod2
-        healthy: light_steel_blue
+        normal: "#d8dee9"
+        zebra: "#434c5e"
+        hot: "#d08770"
+        frozen: "#b48ead"
+        critical_health: "#bf616a"
+        warning_health: "#ebcb8b"
+        healthy: "#d8dee9"
     panel_styles:
-      title: bold sky_blue1
-      subtitle: dim light_steel_blue
-      success: pale_turquoise1
-      warning: light_goldenrod2
-      error: indian_red
-      info: cornflower_blue
-      secondary: steel_blue1
+      title: "bold #88c0d0"
+      subtitle: "dim #d8dee9"
+      success: "#a3be8c"
+      warning: "#ebcb8b"
+      error: "#bf616a"
+      info: "#5e81ac"
+      secondary: "#b48ead"
     help_styles:
-      title: bold sky_blue1
-      section_header: bold cornflower_blue
-      command: light_goldenrod2 bold
-      description: light_steel_blue
-      example: pale_turquoise1
-      footer: dim grey70
+      title: "bold #88c0d0"
+      section_header: "bold #81a1c1"
+      command: "#ebcb8b bold"
+      description: "#d8dee9"
+      example: "#8fbcbb"
+      footer: "dim #4c566a"
     semantic_styles:
-      primary: sky_blue1
-      secondary: steel_blue1
-      success: pale_turquoise1
-      warning: light_goldenrod2
-      error: indian_red
-      info: cornflower_blue
+      primary: "#88c0d0"
+      secondary: "#b48ead"
+      success: "#a3be8c"
+      warning: "#ebcb8b"
+      error: "#bf616a"
+      info: "#5e81ac"
 
   # ☀️ Solarized Theme - Precision colors for machines and people
+  # Official Solarized palette: https://ethanschoonover.com/solarized/
+  # Base:    base03 #002b36  base02 #073642  base01 #586e75  base00 #657b83
+  #          base0  #839496  base1  #93a1a1  base2  #eee8d5  base3  #fdf6e3
+  # Accents: yellow #b58900  orange #cb4b16  red    #dc322f  magenta #d33682
+  #          violet #6c71c4  blue   #268bd2  cyan   #2aa198  green   #859900
   solarized:
     table_styles:
-      border_style: dark_cyan
-      header_style: bold white on dark_slate_gray3
+      border_style: "#2aa198"
+      header_style: "bold #eee8d5 on #073642"
       table_box: heavy
       health_styles:
-        green:
-          icon: dark_sea_green2 bold
-          text: dark_sea_green2 bold
-        yellow:
-          icon: yellow3 bold
-          text: yellow3 bold
-        red:
-          icon: red3 bold
-          text: red3 bold
+        green:  { icon: "#859900 bold", text: "#859900 bold" }
+        yellow: { icon: "#b58900 bold", text: "#b58900 bold" }
+        red:    { icon: "#dc322f bold", text: "#dc322f bold" }
       status_styles:
-        open:
-          icon: dark_cyan bold
-          text: dark_cyan bold
-        close:
-          icon: red3 bold
-          text: red3 bold
+        open:  { icon: "#268bd2 bold", text: "#268bd2 bold" }
+        close: { icon: "#dc322f bold", text: "#dc322f bold" }
       state_styles:
-        STARTED:
-          icon: dark_sea_green2 bold
-          text: dark_sea_green2 bold
-        INITIALIZING:
-          icon: yellow3 bold
-          text: yellow3 bold
-        RELOCATING:
-          icon: dark_cyan bold
-          text: dark_cyan bold
-        UNASSIGNED:
-          icon: red3 bold
-          text: red3 bold
-        default:
-          icon: light_cyan3 bold
-          text: light_cyan3 bold
+        STARTED:      { icon: "#859900 bold", text: "#859900 bold" }
+        INITIALIZING: { icon: "#b58900 bold", text: "#b58900 bold" }
+        RELOCATING:   { icon: "#268bd2 bold", text: "#268bd2 bold" }
+        UNASSIGNED:   { icon: "#dc322f bold", text: "#dc322f bold" }
+        default:      { icon: "#839496 bold", text: "#839496 bold" }
       type_styles:
-        primary:
-          icon: cyan3 bold
-          text: cyan3 bold
-        replica:
-          icon: dark_cyan bold
-          text: dark_cyan bold
+        primary: { icon: "#268bd2 bold", text: "#268bd2 bold" }
+        replica: { icon: "#2aa198 bold", text: "#2aa198 bold" }
       row_styles:
-        normal: light_cyan3
-        zebra: grey11
-        hot: red3
-        frozen: dark_cyan
-        critical_health: red3
-        warning_health: yellow3
-        healthy: light_cyan3
+        normal: "#839496"
+        zebra: "#073642"
+        hot: "#cb4b16"
+        frozen: "#6c71c4"
+        critical_health: "#dc322f"
+        warning_health: "#b58900"
+        healthy: "#839496"
     panel_styles:
-      title: bold cyan3
-      subtitle: dim light_cyan3
-      success: dark_sea_green2
-      warning: yellow3
-      error: red3
-      info: dark_cyan
-      secondary: dark_slate_gray3
+      title: "bold #2aa198"
+      subtitle: "dim #839496"
+      success: "#859900"
+      warning: "#b58900"
+      error: "#dc322f"
+      info: "#268bd2"
+      secondary: "#6c71c4"
     help_styles:
-      title: bold cyan3
-      section_header: bold dark_cyan
-      command: yellow3 bold
-      description: light_cyan3
-      example: dark_sea_green2
-      footer: dim grey70
+      title: "bold #2aa198"
+      section_header: "bold #268bd2"
+      command: "#b58900 bold"
+      description: "#839496"
+      example: "#2aa198"
+      footer: "dim #586e75"
     semantic_styles:
-      primary: cyan3
-      secondary: dark_cyan
-      success: dark_sea_green2
-      warning: yellow3
-      error: red3
-      info: dark_cyan
+      primary: "#2aa198"
+      secondary: "#6c71c4"
+      success: "#859900"
+      warning: "#b58900"
+      error: "#dc322f"
+      info: "#268bd2"

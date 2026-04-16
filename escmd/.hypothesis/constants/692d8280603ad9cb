@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/allocation_help.py
+# hypothesis_version: 6.151.12
+
+['   Bypass Safety:', '   Disable:', '   Display Settings:', '   Enable:', '   Exclude Node:', '   Explain:', '   Purpose:', '   Remove Node:', '   Safe Reset:', '   Safety:', '   Warning:', 'Disable allocation:', 'Enable allocation:', 'Exclude node:', 'Explain allocation:', 'Remove exclusion:', 'Reset all exclusions', 'Reset exclusions:', 'Show settings:', 'allocation', '🔀 allocation disable', '🔀 allocation enable', '🔍 Troubleshooting:', '🔶 DANGER: Reset All:', '🚫 Node Exclusions:']

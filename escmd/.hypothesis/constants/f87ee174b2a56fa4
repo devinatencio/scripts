@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/repositories_help.py
+# hypothesis_version: 6.151.12
+
+['   After Changes:', '   Azure Blob:', '   Before Backup:', '   Check Config:', '   Check Settings:', '   Check Types:', '   Filesystem Repo:', '   Filesystem:', '   Google Cloud:', '   HDFS:', '   List Configs:', '   Monitor Status:', '   Purpose:', '   Regular Audit:', '   S3 Repositories:', '   S3 Repository:', '   Verify All Nodes:', 'Dry run creation:', 'ESterm usage:', 'JSON format:', 'Verify repository:', 'Verify with JSON:', 'repositories', 'repositories create', 'repositories list', 'repositories verify', '⚡ Quick Reference:', '🔧 Troubleshooting:', '🚀 Repository Types:']

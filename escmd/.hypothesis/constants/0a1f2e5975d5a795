@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/shards_help.py
+# hypothesis_version: 6.151.12
+
+['./escmd.py shards', 'Check colocation:', 'JSON output:', 'Set by pattern:', 'Set replicas:', 'View shards:', 'shards', '🔄 shards', '🔗 shard-colocation', '🔢 set-replicas', '🚀 Shard Examples']

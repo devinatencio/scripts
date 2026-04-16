@@ -63,6 +63,40 @@ class PanelRenderer:
             
         return Panel(content, title=title, subtitle=subtitle, border_style=border_style, **kwargs)
     
+    # Map raw color names to semantic style keys so callers that pass
+    # panel_style="red" or border_style="green" get theme-appropriate colors.
+    _COLOR_TO_SEMANTIC = {
+        "red": "error",
+        "bold red": "error",
+        "bright_red": "error",
+        "green": "success",
+        "bold green": "success",
+        "bright_green": "success",
+        "dim green": "success",
+        "yellow": "warning",
+        "bold yellow": "warning",
+        "bright_yellow": "warning",
+        "blue": "info",
+        "bold blue": "info",
+        "bright_blue": "info",
+        "cyan": "info",
+        "bold cyan": "info",
+        "magenta": "secondary",
+        "bold magenta": "secondary",
+    }
+
+    def _resolve_semantic_color(self, raw_color: str) -> str:
+        """Resolve a raw color name to a theme-aware semantic color.
+        
+        If the raw color maps to a known semantic role (e.g. 'red' → 'error'),
+        the theme's semantic style is returned. Otherwise the raw color is
+        returned unchanged so explicit/unusual colors still work.
+        """
+        semantic_key = self._COLOR_TO_SEMANTIC.get(raw_color)
+        if semantic_key:
+            return self._get_themed_style('semantic_styles', semantic_key, raw_color)
+        return raw_color
+
     def show_message_box(self, 
                         title: str, 
                         message: str, 
@@ -89,15 +123,19 @@ class PanelRenderer:
             if theme_color:
                 message_style = theme_color
                 border_style = self._get_border_style()
-        
+
+        # Resolve message_style through the theme when it's a known color
+        message_style = self._resolve_message_style(message_style)
+
         # Handle backward compatibility: convert panel_style to border_style if needed
         if border_style is None:
-            if panel_style in ["red", "green", "blue", "yellow", "magenta", "cyan", "white"]:
-                border_style = panel_style
-            elif panel_style == "white on blue":
-                border_style = "blue"
-            else:
-                border_style = panel_style or self._get_border_style()
+            border_style = self._resolve_semantic_color(panel_style) if panel_style else self._get_border_style()
+            if panel_style == "white on blue":
+                border_style = self._resolve_semantic_color("blue")
+            elif panel_style == "white":
+                border_style = self._get_border_style()
+        else:
+            border_style = self._resolve_semantic_color(border_style)
         
         message_text = Text(f"{message}", style=message_style, justify="center")
         
@@ -118,6 +156,20 @@ class PanelRenderer:
         self.console.print("\n")
         self.console.print(panel, markup=True)
         self.console.print("\n")
+
+    def _resolve_message_style(self, style: str) -> str:
+        """Resolve message_style, preserving 'bold' prefix with themed color."""
+        if style.startswith("bold "):
+            base = style[5:]  # strip 'bold '
+            semantic_key = self._COLOR_TO_SEMANTIC.get(base)
+            if semantic_key:
+                themed = self._get_themed_style('semantic_styles', semantic_key, base)
+                return f"bold {themed}"
+        else:
+            semantic_key = self._COLOR_TO_SEMANTIC.get(style)
+            if semantic_key:
+                return self._get_themed_style('semantic_styles', semantic_key, style)
+        return style
     
     def create_status_panel(self, 
                           content: Any, 
@@ -136,8 +188,8 @@ class PanelRenderer:
         Returns:
             Panel: Status-styled Rich panel
         """
-        # Map status to border colors
-        status_colors = {
+        # Map status to semantic theme colors with hardcoded fallbacks
+        fallback_colors = {
             'success': 'green',
             'error': 'red',
             'warning': 'yellow',
@@ -145,7 +197,8 @@ class PanelRenderer:
             'secondary': 'magenta'
         }
         
-        border_style = status_colors.get(status, self._get_border_style())
+        fallback = fallback_colors.get(status, 'white')
+        border_style = self._get_themed_style('semantic_styles', status, fallback)
         title_style = status
         
         return self.create_themed_panel(

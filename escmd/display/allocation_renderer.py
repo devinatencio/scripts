@@ -219,12 +219,12 @@ class AllocationRenderer:
             # Body: allocation status centered
             if allocation_enabled:
                 status_text = "✅ Enabled - All Shards Allocated"
-                body_style = "bold green"
+                body_style = f"bold {style_system.get_semantic_style('success')}" if style_system else "bold green"
                 border_style = style_system._get_style('table_styles', 'border_style', 'cyan') if style_system else "cyan"
             else:
                 status_text = "🔶 Disabled - Primaries Only"
-                body_style = "bold yellow"
-                border_style = "yellow"
+                body_style = f"bold {style_system.get_semantic_style('warning')}" if style_system else "bold yellow"
+                border_style = style_system.get_semantic_style('warning') if style_system else "yellow"
 
             # Subtitle: node stats bar
             subtitle_rich = Text()

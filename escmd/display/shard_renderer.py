@@ -118,11 +118,11 @@ class ShardRenderer:
         unassigned_count = stats['state_counts'].get('UNASSIGNED', 0)
         if unassigned_count > 0:
             status_text = "🔶 Warning - Unassigned Shards Detected"
-            title_style = "bold yellow"
-            border_style = "yellow"
+            title_style = f"bold {self.style_system.get_semantic_style('warning')}" if self.style_system else "bold yellow"
+            border_style = self.style_system.get_semantic_style('warning') if self.style_system else "yellow"
         else:
             status_text = "✅ Good - All Shards Assigned"
-            title_style = "bold cyan"
+            title_style = f"bold {self.style_system._get_style('semantic', 'info', 'cyan')}" if self.style_system else "bold cyan"
             border_style = styles.get('border_style', 'white')
 
         # Create colorized subtitle with theme-based styling for statistics
@@ -247,7 +247,8 @@ class ShardRenderer:
             # UNASSIGNED always gets a red background to stand out;
             # otherwise alternate by index group for visual grouping.
             if shard_state == "UNASSIGNED":
-                row_style = "on dark_red"
+                error_color = self.style_system._get_style('table_styles', 'row_styles.critical_health', 'dark_red') if self.style_system else 'dark_red'
+                row_style = f"on {error_color}"
             else:
                 zebra = self.style_system.get_zebra_style(group_counter) if self.style_system else None
                 row_style = zebra  # None = default background for even groups

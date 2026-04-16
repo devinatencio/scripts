@@ -116,15 +116,15 @@ class IndexRenderer:
             # Body: health-aware status
             if health == 'red':
                 status_text = f"🔴 {indice_name} - {unassigned_count} Unassigned Shard{'s' if unassigned_count != 1 else ''}"
-                body_style = "bold red"
-                border = "red"
+                body_style = f"bold {ss.get_semantic_style('error')}" if ss else "bold red"
+                border = ss.get_semantic_style('error') if ss else "red"
             elif health == 'yellow':
                 status_text = f"🟡 {indice_name} - {unassigned_count} Unassigned Replica{'s' if unassigned_count != 1 else ''}"
-                body_style = "bold yellow"
-                border = "yellow"
+                body_style = f"bold {ss.get_semantic_style('warning')}" if ss else "bold yellow"
+                border = ss.get_semantic_style('warning') if ss else "yellow"
             else:
                 status_text = f"🟢 {indice_name} - Healthy (All Shards Assigned)"
-                body_style = "bold green"
+                body_style = f"bold {ss.get_semantic_style('success')}" if ss else "bold green"
                 border = ss._get_style('table_styles', 'border_style', 'bright_magenta') if ss else "bright_magenta"
 
             # Subtitle bar
@@ -534,11 +534,11 @@ class IndexRenderer:
         # Body: status text centered
         if flagged > 0:
             status_text = f"🔶 {flagged} Outlier{'s' if flagged != 1 else ''} Detected"
-            body_style = "bold yellow"
-            border = "yellow"
+            body_style = f"bold {style_system.get_semantic_style('warning')}" if style_system else "bold yellow"
+            border = style_system.get_semantic_style('warning') if style_system else "yellow"
         else:
             status_text = "✅ No Outliers - All Indices Within Normal Range"
-            body_style = "bold green"
+            body_style = f"bold {style_system.get_semantic_style('success')}" if style_system else "bold green"
             border = self.get_themed_style("table_styles", "border_style", "cyan")
 
         ts = style_system._get_style('semantic', 'primary', 'bold cyan') if style_system else 'bold cyan'
@@ -675,69 +675,123 @@ class IndexRenderer:
             else lambda b: str(b)
         )
 
-        table = Table(title="S3 storage estimate (primary bytes)", show_header=False)
-        table.add_column("Field", style="bold cyan", min_width=28)
-        table.add_column("Value", style="white")
+        # --- Theme access (§3) ---
+        try:
+            from display.style_system import StyleSystem
+            ss = StyleSystem(self.theme_manager) if self.theme_manager else None
+        except ImportError:
+            ss = None
 
-        table.add_row("Est. month 1 (USD)", f"{cost.get('estimated_monthly_usd', 0):,.4f}")
+        if ss:
+            border_style = ss._get_style('table_styles', 'border_style', 'bright_magenta')
+            info_style = ss._get_style('semantic', 'info', 'cyan')
+            muted_style = ss._get_style('semantic', 'muted', 'dim')
+            success_style = ss.get_semantic_style("success")
+            warning_style = ss.get_semantic_style("warning")
+        else:
+            border_style = self.get_themed_style("table_styles", "border_style", "bright_blue")
+            info_style = "cyan"
+            muted_style = "dim"
+            success_style = "green"
+            warning_style = "yellow"
+
+        title_style = (
+            self.theme_manager.get_themed_style('panel_styles', 'title', 'bold white')
+            if self.theme_manager else 'bold white'
+        )
+
+        # --- Title panel (§1) ---
+        m1_usd = cost.get("estimated_monthly_usd", 0)
+        n_dated = counts.get("indices_matched_dated", 0)
+        n_undated = counts.get("indices_undated_skipped", 0) or counts.get("indices_undated_included", 0)
+        total_pri = bytes_info.get("total_pri", 0)
+        within_days = assumptions.get("within_days", 30)
+
+        subtitle_rich = Text()
+        subtitle_rich.append("Indices: ", style="default")
+        subtitle_rich.append(str(n_dated), style=info_style)
+        subtitle_rich.append(" | Primary: ", style="default")
+        subtitle_rich.append(fmt(total_pri), style=info_style)
+        subtitle_rich.append(" | Window: ", style="default")
+        subtitle_rich.append(f"{within_days}d", style=info_style)
+        subtitle_rich.append(" | Price: ", style="default")
+        subtitle_rich.append(f"${assumptions.get('price_per_gib_month_usd', 0)}/GiB-mo", style=info_style)
+
+        title_panel = Panel(
+            Text(
+                f"💰 Est. ${m1_usd:,.4f} / month",
+                style="bold green",
+                justify="center",
+            ),
+            title=f"[{title_style}]💾 S3 Storage Estimate[/{title_style}]",
+            subtitle=subtitle_rich,
+            border_style=border_style,
+            padding=(1, 2),
+        )
+
+        # --- Inner panel table (§4) ---
+        table = Table(show_header=False, box=None, padding=(0, 1))
+        table.add_column("Label", style="bold", no_wrap=True)
+        table.add_column("Icon", justify="left", width=3)
+        table.add_column("Value", no_wrap=True)
+
+        table.add_row("Est. month 1 (USD):", "💰", f"${m1_usd:,.4f}")
         m2_usd = cost.get("estimated_month_2_usd")
         m3_usd = cost.get("estimated_month_3_usd")
         if m2_usd is not None and m3_usd is not None:
-            table.add_row("Est. month 2 cumulative (USD)", f"{m2_usd:,.4f}")
-            table.add_row("Est. month 3 cumulative (USD)", f"{m3_usd:,.4f}")
-        table.add_row("Primary size (sum)", fmt(bytes_info.get("total_pri", 0)))
-        table.add_row("After buffer (sum)", fmt(bytes_info.get("buffered_pri", 0)))
+            table.add_row("Est. month 2 cumulative:", "💰", f"${m2_usd:,.4f}")
+            table.add_row("Est. month 3 cumulative:", "💰", f"${m3_usd:,.4f}")
+        table.add_row("", "", "")
+        table.add_row("Primary size (sum):", "💾", fmt(bytes_info.get("total_pri", 0)))
+        table.add_row("After buffer (sum):", "💾", fmt(bytes_info.get("buffered_pri", 0)))
         b2 = bytes_info.get("cumulative_buffered_pri_month_2")
         b3 = bytes_info.get("cumulative_buffered_pri_month_3")
         if b2 is not None and b3 is not None:
-            table.add_row("Cumulative buffered (mo 2)", fmt(b2))
-            table.add_row("Cumulative buffered (mo 3)", fmt(b3))
-        table.add_row("Primary (GiB)", f"{cost.get('total_pri_gib', 0):,.6f}")
-        table.add_row("Buffered (GiB, month-1 slice)", f"{cost.get('buffered_pri_gib', 0):,.6f}")
+            table.add_row("Cumulative buffered (mo 2):", "💾", fmt(b2))
+            table.add_row("Cumulative buffered (mo 3):", "💾", fmt(b3))
+        table.add_row("Primary (GiB):", "📊", f"{cost.get('total_pri_gib', 0):,.6f}")
+        table.add_row("Buffered (GiB, mo 1):", "📊", f"{cost.get('buffered_pri_gib', 0):,.6f}")
         cg2 = cost.get("cumulative_buffered_pri_gib_month_2")
         cg3 = cost.get("cumulative_buffered_pri_gib_month_3")
         if cg2 is not None and cg3 is not None:
-            table.add_row("Cumulative buffered GiB (mo 2)", f"{cg2:,.6f}")
-            table.add_row("Cumulative buffered GiB (mo 3)", f"{cg3:,.6f}")
-        table.add_row("Indices (dated, in window)", str(counts.get("indices_matched_dated", 0)))
+            table.add_row("Cumulative GiB (mo 2):", "📊", f"{cg2:,.6f}")
+            table.add_row("Cumulative GiB (mo 3):", "📊", f"{cg3:,.6f}")
+        table.add_row("", "", "")
+        table.add_row("Indices (dated, in window):", "📋", str(counts.get("indices_matched_dated", 0)))
         table.add_row(
-            "Dated before cutoff (excluded)",
+            "Dated before cutoff:",
+            "🚫",
             str(counts.get("indices_excluded_dated_before_cutoff", 0)),
         )
         if assumptions.get("include_undated"):
-            table.add_row(
-                "Undated included",
-                str(counts.get("indices_undated_included", 0)),
-            )
+            table.add_row("Undated included:", "📋", str(counts.get("indices_undated_included", 0)))
         else:
-            table.add_row(
-                "Undated skipped (no YYYY.MM.DD in name)",
-                str(counts.get("indices_undated_skipped", 0)),
-            )
-        table.add_row("Within last N days (UTC)", str(assumptions.get("within_days", "")))
-        table.add_row("Buffer %", str(assumptions.get("buffer_percent", 0)))
-        table.add_row("Price (USD / GiB-mo)", str(assumptions.get("price_per_gib_month_usd", "")))
-        table.add_row("As-of date (UTC)", str(assumptions.get("as_of_date_utc", "")))
-        table.add_row("Rollover cutoff (UTC)", str(assumptions.get("rollover_date_cutoff_utc", "")))
+            table.add_row("Undated skipped:", "🚫", str(counts.get("indices_undated_skipped", 0)))
+        table.add_row("", "", "")
+        table.add_row("Window (days):", "📅", str(assumptions.get("within_days", "")))
+        table.add_row("Buffer %:", "📈", str(assumptions.get("buffer_percent", 0)))
+        table.add_row("Price (USD/GiB-mo):", "💰", str(assumptions.get("price_per_gib_month_usd", "")))
+        table.add_row("As-of date (UTC):", "📅", str(assumptions.get("as_of_date_utc", "")))
+        table.add_row("Rollover cutoff (UTC):", "📅", str(assumptions.get("rollover_date_cutoff_utc", "")))
 
-        console.print()
-        console.print(
-            Panel(
-                table,
-                title="[bold]indices-s3-estimate[/bold]",
-                subtitle="[dim]Rough planning figure; not an AWS bill[/dim]",
-                border_style=self.get_themed_style(
-                    "table_styles", "border_style", "bright_blue"
-                ),
-                padding=(1, 2),
-            )
+        detail_panel = Panel(
+            table,
+            border_style=border_style,
+            padding=(1, 2),
         )
+
+        # --- Layout (§9) ---
         console.print()
+        console.print(title_panel)
+        console.print()
+        console.print(detail_panel)
+        console.print()
+
         mm = assumptions.get("multi_month_model")
         if mm:
-            console.print(f"[dim]{mm}[/dim]")
+            console.print(f"[{muted_style}]{mm}[/{muted_style}]")
             console.print()
         note = assumptions.get("note")
         if note:
-            console.print(f"[dim]{note}[/dim]")
+            console.print(f"[{muted_style}]{note}[/{muted_style}]")
             console.print()

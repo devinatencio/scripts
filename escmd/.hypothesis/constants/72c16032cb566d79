@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/indices_watch_sessions_help.py
+# hypothesis_version: 6.151.12
+
+['   Clean up old day:', '   JSON for scripts:', '   Lookup:', '   One date only:', '   See everything:', '   Session IDs:', '   Storage:', '--cluster NAME', '--date YYYY-MM-DD', '--force', '--format json', '📋 Overview:', '🚀 Quick Examples:']

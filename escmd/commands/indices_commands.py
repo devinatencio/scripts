@@ -545,15 +545,15 @@ class IndicesCommands(BaseCommand):
 
         if red_count > 0:
             status_text = f"🔴 Critical - {red_count} Indic{'es' if red_count != 1 else 'e'} Red"
-            body_style = "bold red"
-            border = "red"
+            body_style = f"bold {style_system.get_semantic_style('error')}"
+            border = style_system.get_semantic_style('error')
         elif yellow_count > 0:
             status_text = f"🟡 Warning - {yellow_count} Indic{'es' if yellow_count != 1 else 'e'} Yellow"
-            body_style = "bold yellow"
-            border = "yellow"
+            body_style = f"bold {style_system.get_semantic_style('warning')}"
+            border = style_system.get_semantic_style('warning')
         else:
             status_text = f"✅ Cluster Healthy - {green_count} of {total_indices} Indices Green"
-            body_style = "bold green"
+            body_style = f"bold {style_system.get_semantic_style('success')}"
             border = style_system._get_style('table_styles', 'border_style', 'bright_magenta')
 
         # Build cluster subtitle
@@ -573,17 +573,18 @@ class IndicesCommands(BaseCommand):
         )
 
         # Create enhanced indices table with semantic styling
+        normal_style = style_system._get_style('table_styles', 'row_styles.normal', 'white')
         table = style_system.create_standard_table(
             title=None,
             style_variant='dashboard'
         )
-        table.add_column("Index Name", no_wrap=False, min_width=40)
+        table.add_column("Index Name", style=normal_style, no_wrap=False, min_width=40)
         table.add_column("Health", justify="left", no_wrap=True)
         table.add_column("Status", justify="left", no_wrap=True)
-        table.add_column("Docs", justify="right", width=10)
-        table.add_column("Shards", justify="right", width=10)
-        table.add_column("Primary", justify="right", width=10)
-        table.add_column("Total", justify="right", width=10)
+        table.add_column("Docs", style=normal_style, justify="right", width=10)
+        table.add_column("Shards", style=normal_style, justify="right", width=10)
+        table.add_column("Primary", style=normal_style, justify="right", width=10)
+        table.add_column("Total", style=normal_style, justify="right", width=10)
 
         for indice in data_dict:
             # Health formatting with semantic styling
@@ -625,16 +626,16 @@ class IndicesCommands(BaseCommand):
             # Determine foreground color based on health and index state
             health = indice['health']
             if health == 'red':
-                fg_style = 'red'
+                fg_style = style_system.get_semantic_style('error')
             elif health == 'yellow':
-                fg_style = 'yellow'
+                fg_style = style_system.get_semantic_style('warning')
             else:
-                fg_style = 'white'
+                fg_style = style_system._get_style('table_styles', 'row_styles.normal', 'white')
 
             # Check if hot and add flame indicator
             if indice_name in cluster_indices_hot_indexes:
                 indice_name = f"{indice_name} 🔥"
-                fg_style = 'bright_red'
+                fg_style = style_system._get_style('table_styles', 'row_styles.hot', 'bright_red')
 
             # Check if frozen and add snowflake indicator
             index_settings = cluster_all_settings.get(indice['index'], {})
@@ -643,7 +644,7 @@ class IndicesCommands(BaseCommand):
                 if frozen_status == "true":
                     indice_name = f"{indice_name} 🧊"
                     if not indice_name.endswith("🔥 🧊"):  # Only set frozen if not already hot
-                        fg_style = 'bright_blue'
+                        fg_style = style_system._get_style('table_styles', 'row_styles.frozen', 'bright_blue')
 
             # Combine foreground with theme-aware zebra background
             zebra_bg = style_system.get_zebra_style(data_dict.index(indice))

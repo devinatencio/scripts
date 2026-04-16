@@ -466,16 +466,16 @@ class NodesCommands(BaseCommand):
         # Status body text
         if cluster_status == 'RED':
             status_text = f"🔴 Critical - {unassigned_shards} Unassigned Shards"
-            body_style = "bold red"
-            border = "red"
+            body_style = f"bold {style_system.get_semantic_style('error')}" if style_system else "bold red"
+            border = style_system.get_semantic_style('error') if style_system else "red"
         elif cluster_status == 'YELLOW':
             status_text = f"🟡 Warning - {unassigned_shards} Unassigned Shard{'s' if unassigned_shards != 1 else ''}"
-            body_style = "bold yellow"
-            border = "yellow"
+            body_style = f"bold {style_system.get_semantic_style('warning')}" if style_system else "bold yellow"
+            border = style_system.get_semantic_style('warning') if style_system else "yellow"
         else:
             status_text = f"🟢 All Nodes Healthy - {total_nodes} Node{'s' if total_nodes != 1 else ''} Online"
-            body_style = "bold green"
-            border = style_system._get_style('table_styles', 'border_style', 'bright_magenta')
+            body_style = f"bold {style_system.get_semantic_style('success')}" if style_system else "bold green"
+            border = style_system._get_style('table_styles', 'border_style', 'bright_magenta') if style_system else 'bright_magenta'
 
         # Build cluster subtitle matching indices format
         cluster_subtitle = Text()
@@ -548,7 +548,7 @@ class NodesCommands(BaseCommand):
 
         sorted_nodes = sorted(nodes, key=node_sort_key)
 
-        for node in sorted_nodes:
+        for node_idx, node in enumerate(sorted_nodes):
             name = node.get('name', 'Unknown')
             hostname = node.get('hostname', 'Unknown')
             node_id = node.get('nodeid', 'Unknown')[:12]  # Truncate for display
@@ -661,7 +661,7 @@ class NodesCommands(BaseCommand):
                 f"{status_icon} {status_text}" if not style_system else f"{status_icon} {status_text}"
             ])
 
-            table.add_row(*row_data, style=row_style)
+            table.add_row(*row_data, style=style_system.get_zebra_style(node_idx) if style_system else row_style)
 
         # Display everything
         console.print()

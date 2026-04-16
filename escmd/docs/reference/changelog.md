@@ -1,16 +1,90 @@
-## [Unreleased] - 2026-04-14
+## [3.12.1] - 2026-04-15
+
+### Theme system — dot-notation fix and theme palette corrections
+
+#### Bug fix — `ThemeManager.get_themed_style()` dot-notation resolution
+
+- **`display/theme_manager.py`** — `get_themed_style()` was doing a flat dictionary lookup for nested keys like `row_styles.zebra`, treating the entire dotted string as a single key name. It never matched, so every nested style silently fell back to the hardcoded default (e.g. `grey23` for zebra). The method now splits on `.` and traverses into nested dicts, so `get_themed_style('table_styles', 'row_styles.zebra', 'grey23')` correctly resolves `table_styles` → `row_styles` → `zebra` from the theme file. This fix affects all themes, not just cyberpunk — any `row_styles.*` lookup was previously broken.
+
+#### Bug fix — `create_standard_table` missing `border_style`
+
+- **`display/style_system.py`** — `create_standard_table()` was not passing `border_style` to the `Table()` constructor, so Rich used its own default color for table borders. The table border now reads `border_style` from the active theme, matching the title panel above it. This affects every command that uses `create_standard_table` (indices, nodes, shards, templates, traffic analysis, etc.).
+
+#### Cyberpunk theme — palette alignment with genre conventions
+
+Based on research across multiple color palette references ([ColorMagic](https://colormagic.app/palette/explore/cyberpunk), [media.io](https://www.media.io/color-palette/cyberpunk-color-palette.html), [Piktochart](https://piktochart.com/tips/cyberpunk-color-palette), [color-hex.com](https://www.color-hex.com/color-palette/14887)), the canonical cyberpunk palette centers on neon magenta + electric cyan as the dominant duo, with deep purple/violet as the key tertiary color.
+
+- **`themes.yml` — cyberpunk**: Introduced `medium_purple` as the tertiary color to bridge the magenta-cyan gap, replacing duplicate `bright_cyan` usage:
+  - `semantic_styles.secondary`: `bright_cyan` → `medium_purple`
+  - `panel_styles.secondary`: `bright_cyan` → `medium_purple`
+  - `help_styles.section_header`: `bold bright_cyan` → `bold medium_purple`
+  - `state_styles.RELOCATING`: `bright_cyan` → `medium_purple`
+  - `row_styles.frozen`: `bright_cyan` → `medium_purple`
+- **`themes.yml` — cyberpunk**: Zebra row color changed from `grey19` (neutral grey, no theme identity) → `color(53)` (`#5f005f`, very dark magenta-purple). Provides a subtle neon-noir underglow on alternating rows that's clearly distinct from the `bright_magenta` borders.
+
+#### Midnight theme — broken color names fixed
+
+- **`themes.yml` — midnight**: `lavender` is not a valid Rich color name and was silently failing. Replaced with `color(189)` (`#d7d7ff`) — a proper soft lavender. Affected: `type_styles.primary`, `panel_styles.title`, `help_styles.title`, `semantic_styles.primary`.
+- **`themes.yml` — midnight**: `silver` is not a valid Rich color name and was silently failing. Replaced with `grey74` (`#bcbcbc`). Affected: `header_style`, `state_styles.default`, `row_styles.normal`, `row_styles.healthy`, `help_styles.description`.
+
+#### Solarized theme — rewritten with official hex codes
+
+The solarized theme was using Rich named color approximations that drifted significantly from Ethan Schoonover's official palette. Rewritten to use exact hex codes from [the official spec](https://ethanschoonover.com/solarized/), matching the same approach used by the Nord theme.
+
+Key corrections:
+- Cyan (`#2aa198`) and blue (`#268bd2`) are now properly distinct (were both `dark_cyan`)
+- Yellow is the correct warm amber `#b58900` (was `yellow3` / `#d7d700`, too bright/green)
+- Green is the proper olive `#859900` (was `dark_sea_green2` / `#afffaf`, too pastel)
+- Violet (`#6c71c4`) now used for `secondary` and `frozen` (was missing entirely)
+- Base text is `#839496` (was `light_cyan3` / `#afd7d7`, too cyan-tinted)
+- Zebra uses `#073642` (base02) for authentic Solarized dark background layering (was `grey11`)
+
+#### Ocean theme — removed off-palette magenta
+
+- **`themes.yml` — ocean**: `panel_styles.secondary`: `magenta` → `dodger_blue1` — magenta is not an ocean color. Now stays within the blue/teal family.
+- **`themes.yml` — ocean**: `help_styles.footer`: `dim magenta` → `dim deep_sky_blue1` — same rationale.
+
+### Hardcoded color removal — theme-aware styling across all commands
+
+Systematic removal of hardcoded color strings that bypassed the theme system. Previously, switching themes had no effect on panel borders, status text, row foregrounds, and message boxes in most commands.
+
+#### `show_message_box` — automatic semantic color resolution (~200 call sites)
+
+- **`display/panel_renderer.py`** — Added `_COLOR_TO_SEMANTIC` mapping and `_resolve_semantic_color()` / `_resolve_message_style()` methods. `show_message_box()` now automatically maps raw color names passed as `panel_style` or `border_style` to the active theme's semantic equivalents: `"red"` → theme error, `"green"` → theme success, `"yellow"` → theme warning, `"blue"` / `"cyan"` → theme info, `"magenta"` → theme secondary. Message text styles with `bold` prefix are preserved (e.g. `"bold red"` → `"bold <theme_error>"`). This covers ~200 `show_message_box` calls across `lifecycle_handler` (101), `dangling_handler` (64), `allocation_handler` (51), `snapshot_handler` (29), `password_handler` (24), and others — all without modifying any call site.
+- **`display/panel_renderer.py`** — `create_status_panel()` now reads border colors from `semantic_styles` in the theme instead of a hardcoded `status_colors` dict.
+
+#### Title panel `body_style` / `border` — status colors (10 files)
+
+Replaced the `body_style = "bold red"` / `border = "red"` pattern with `style_system.get_semantic_style('error')` (and equivalent for warning/success) in:
+
+- **`handlers/cluster_handler.py`** — ping command status (green/yellow/red)
+- **`handlers/datastream_handler.py`** — datastreams listing status
+- **`handlers/health_handler.py`** — health dashboard status, cluster-check panel borders
+- **`handlers/lifecycle_handler.py`** — rollover status
+- **`commands/nodes_commands.py`** — nodes listing status
+- **`commands/indices_commands.py`** — indices listing status (done in prior commit)
+- **`display/index_renderer.py`** — index detail status, traffic analysis status
+- **`display/allocation_renderer.py`** — allocation settings status
+- **`display/repositories_renderer.py`** — repositories listing status
+- **`display/settings_renderer.py`** — settings overview status
+
+#### Row-level foreground colors — indices and shards
+
+- **`commands/indices_commands.py`** — Per-row foreground color for health (`red`, `yellow`, `white`) now uses `semantic error/warning` and `row_styles.normal` from the theme. Hot index foreground uses `row_styles.hot`, frozen uses `row_styles.frozen`.
+- **`commands/indices_commands.py`** — Data column styles (`Index Name`, `Docs`, `Shards`, `Primary`, `Total`) now use `row_styles.normal` from the theme instead of Rich's default white.
+- **`display/shard_renderer.py`** — `UNASSIGNED` row background (`on dark_red`) now uses `row_styles.critical_health` from the theme. Shard title panel warning/healthy status uses semantic styles.
 
 ### Visual improvements — zebra striping and header panels
 
 #### `./escmd.py shards`
 
 - **NEW**: Group-by-index zebra striping — rows are now visually grouped by index name. Each time the index changes, the group counter increments and odd groups receive the theme's `row_styles.zebra` background. Primary/Replica pairs for the same index share the same background, making it easy to scan across a row.
-- **NEW**: `UNASSIGNED` rows always render with an `on dark_red` background regardless of their index group, making problem shards immediately visible. The existing red bold text color is preserved on top of the background.
+- **NEW**: `UNASSIGNED` rows always render with a themed `critical_health` background regardless of their index group, making problem shards immediately visible. The existing red bold text color is preserved on top of the background.
 - Both changes are implemented in `display/shard_renderer.py` — `_create_detailed_shards_table`.
 
 #### `./escmd.py indices`
 
-- **NEW**: Theme-aware zebra striping applied to the indices table. The existing health-based foreground color (`white`, `yellow`, `red`, `bright_red`, `bright_blue`) is preserved and combined with the zebra background — e.g. a yellow-health index on an odd row renders as `yellow on grey11` (or the equivalent for the active theme).
+- **NEW**: Theme-aware zebra striping applied to the indices table. The existing health-based foreground color is preserved and combined with the zebra background — e.g. a yellow-health index on an odd row renders as `<theme_warning> on <theme_zebra>`.
 - `get_zebra_style()` reads `row_styles.zebra` from the active theme, so the stripe color automatically matches whichever of the 11 themes is selected.
 - Change is in `commands/indices_commands.py` — `print_table_indices`.
 
@@ -82,10 +156,6 @@ All 13 help topic files that had custom `show_help()` implementations bypassing 
 `freeze`, `unfreeze`, `indice-add-metadata`, `indices-analyze`, `indices-s3-estimate`, `indices-watch-collect`, `indices-watch-report`, `store-password`, `template-backup`, `template-modify`, `template-restore`, `security`, `estop` / `es-top`, `actions`.
 
 Every topic now uses the 3-column commands table, stacked workflow panels, themed borders, and the shared footer. No per-topic changes needed for future theme additions.
-
----
-
-## [Unreleased] - 2026-04-14
 
 ### Theme system improvements
 

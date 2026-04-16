@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/indice_add_metadata_help.py
+# hypothesis_version: 6.151.12
+
+['   Add Project:', '   Add Source:', '   Behavior:', '   Benefits:', '   Display:', '   Index Check:', '   JSON Validation:', '   Maintenance:', '   Nested Objects:', '   Performance:', '   Permission Check:', '   Pipeline Info:', '   Quality Check:', '   Set Ownership:', '   View Result:', 'Direct format', 'Wrapped format', 'indice-add-metadata', '✅ Metadata Merging:']

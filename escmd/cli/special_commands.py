@@ -37,7 +37,7 @@ def show_welcome_screen(console, version=None, date=None):
     console.print()
     console.print(Align.center(banner))
     console.print(Align.center(Text(
-        f"v{display_version}  ·  Elasticsearch CLI Management & Monitoring", style="dim"
+        f"v{display_version}  ·  Elasticsearch CLI Management & Monitoring", style="bold white"
     )))
     console.print()
 
@@ -101,10 +101,11 @@ def show_welcome_screen(console, version=None, date=None):
             ("snapshots",             "Manage snapshots"),
             ("repositories",          "Snapshot repos"),
             ("dangling",              "Dangling indices"),
-            ("indices-analyze",       "Rollover series outlier analysis"),
+            ("indices-analyze",       "Indices analysis"),
             ("indices-s3-estimate",   "S3 cost estimate"),
-            ("indices-watch-collect", "Sample index stats to JSON"),
-            ("indices-watch-report",  "Summarize watch samples"),
+            ("indices-watch-collect",  "Store Cluster Stats"),
+            ("indices-watch-report",   "Summarize watch samples"),
+            ("indices-watch-sessions", "Manage watch sessions"),
             ("list-backups",          "List template backups"),
         ]),
         # row 2
@@ -255,6 +256,7 @@ def _get_static_command_descriptions():
         "indices-s3-estimate": "Estimate monthly S3 cost from primary sizes in a rollover-date UTC window",
         "indices-watch-collect": "Sample index stats on an interval to JSON files (per cluster/date directory)",
         "indices-watch-report": "Summarize watch samples (docs/s, HOT vs peer median) without Elasticsearch",
+        "indices-watch-sessions": "List, inspect, and delete stored watch sessions",
         "list-backups": "List available template backups",
         "list-stored-passwords": "List all stored password environments",
         "locations": "Display All Configured Locations",
@@ -444,10 +446,11 @@ def _get_static_command_info():
     }
 
 
-def handle_version(version=None, date=None):
+def handle_version(version=None, date=None, configuration_manager=None):
     """Display enhanced version information using the VersionRenderer."""
     from display.version_renderer import VersionRenderer
     from display.version_data import VersionDataCollector
+    from display.theme_manager import ThemeManager
 
     console = Console()
 
@@ -456,7 +459,8 @@ def handle_version(version=None, date=None):
     version_data = data_collector.collect_version_data(version, date)
 
     # Render version information
-    renderer = VersionRenderer(console)
+    theme_manager = ThemeManager(configuration_manager) if configuration_manager else None
+    renderer = VersionRenderer(console, theme_manager)
     renderer.render_version_info(version_data)
     console.print()
 
@@ -745,7 +749,9 @@ def handle_locations(configuration_manager):
     locations_data = data_collector.collect_locations_data(configuration_manager)
 
     # Render locations information
-    renderer = LocationsRenderer(console)
+    from display.theme_manager import ThemeManager
+    theme_manager = ThemeManager(configuration_manager)
+    renderer = LocationsRenderer(console, theme_manager)
     renderer.render_locations_table(locations_data, styles)
 
 
@@ -929,7 +935,9 @@ def handle_show_settings(configuration_manager, format_output=None):
     settings_data = data_collector.collect_settings_data(configuration_manager)
 
     # Render settings information
-    renderer = SettingsRenderer(console)
+    from display.theme_manager import ThemeManager
+    theme_manager = ThemeManager(configuration_manager)
+    renderer = SettingsRenderer(console, theme_manager)
 
     if format_output == "json":
         renderer.render_json_settings(settings_data)

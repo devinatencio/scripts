@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/actions_help.py
+# hypothesis_version: 6.151.12
+
+['   --dry-run:', '   Compact output:', '   Concatenation:', '   Defined in:', '   Dry run first:', '   Execute action:', '   Jinja2 syntax:', '   List all actions:', '   Supports:', '   Use cases:', '   Validation:', '   choice:', '   confirm: true:', '   integer:', '   string:', '"{{ host }}-*"', 'Execute an action', 'Show minimal output', 'action list', 'action run <name>', 'action show <name>', 'actions', '💡 Best Practices:', '💡 Common Examples:', '📋 Overview:', '🔒 Safety Features:', '🔧 Actions Commands', '🚀 Parameter Types:']

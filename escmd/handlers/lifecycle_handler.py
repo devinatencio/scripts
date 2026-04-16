@@ -77,12 +77,12 @@ class LifecycleHandler(BaseHandler):
 
             if rolled_over:
                 status_text = f"✅ Rollover Successful - {new_index}"
-                body_style = "bold green"
+                body_style = f"bold {ss.get_semantic_style('success')}" if ss else "bold green"
                 border = ss._get_style('table_styles', 'border_style', 'cyan') if ss else "cyan"
             else:
                 status_text = "🔵 Rollover Not Required - Conditions Not Met"
-                body_style = "bold yellow"
-                border = "yellow"
+                body_style = f"bold {ss.get_semantic_style('warning')}" if ss else "bold yellow"
+                border = ss.get_semantic_style('warning') if ss else "yellow"
 
             title_panel = Panel(
                 Text(status_text, style=body_style, justify="center"),

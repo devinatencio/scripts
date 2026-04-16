@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/display/../processors/index_processor.py
+# hypothesis_version: 6.151.12
+
+['$', '%Y.%m.%d', '*', '.', '.*', '.ds-', '?', '\\$', '\\(', '\\)', '\\*', '\\+', '\\.\\*', '\\.\\+', '\\?', '\\[.*\\]', '\\\\[a-zA-Z]', '\\^', '\\{.*\\}', '\\|', '^', 'date', 'health', 'index', 'latest_indices', 'other', 'patterns', 'status_breakdown', 'suffix', 'total_count', 'unknown']

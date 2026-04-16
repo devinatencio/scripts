@@ -103,6 +103,9 @@ class ThemeManager:
         """
         Get themed style for specific UI elements.
         
+        Supports dot-notation for nested keys, e.g. style_type='row_styles.zebra'
+        will traverse into row_styles -> zebra within the category dict.
+        
         Args:
             category: Style category ('panel_styles', 'help_styles', etc.)
             style_type: Specific style within category ('title', 'success', etc.)
@@ -112,7 +115,20 @@ class ThemeManager:
             str: Style string for Rich formatting
         """
         full_theme = self.get_full_theme_data()
-        return full_theme.get(category, {}).get(style_type, default)
+        category_data = full_theme.get(category, {})
+        
+        # Support dot-notation for nested keys (e.g. 'row_styles.zebra')
+        parts = style_type.split('.')
+        current = category_data
+        for part in parts:
+            if isinstance(current, dict):
+                current = current.get(part)
+            else:
+                return default
+            if current is None:
+                return default
+        
+        return current if isinstance(current, str) else default
     
     def clear_cache(self):
         """Clear the theme cache to force reload on next access."""

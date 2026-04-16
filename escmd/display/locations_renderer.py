@@ -298,7 +298,7 @@ class LocationsRenderer:
         theme_box = styles.get('table_box')
         table_box = table_box_mapping.get(theme_box, box.ROUNDED)
 
-        zebra = ss.get_zebra_style(1) or "on grey11"
+        zebra = ss.get_zebra_style(1)
 
         locations_table = Table(
             title="🌐 Elasticsearch Configured Clusters by Environment",
@@ -333,12 +333,11 @@ class LocationsRenderer:
     def _populate_locations_table(self, locations_table, locations_data, panel_styles):
         """Populate the locations table with data."""
         from display.style_system import StyleSystem
-        zebra = StyleSystem(self.theme_manager).get_zebra_style(1) or "on grey11"
-        zebra_styles = ["", zebra]
+        ss = StyleSystem(self.theme_manager)
 
         for env_idx, env_name in enumerate(locations_data['environment_names']):
             env_data = locations_data['environments'][env_name]
-            row_style = zebra_styles[env_idx % 2]
+            row_style = ss.get_zebra_style(env_idx)
             env_displayed = False
 
             for server in env_data['servers']:

@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/freeze_help.py
+# hypothesis_version: 6.151.12
+
+['   Already frozen:', '   Archive Old Logs:', '   Archive Storage:', '   Auto Patterns:', '   Auto Regex:', '   Automation:', '   Batch Freeze:', '   Cancel Operation:', '   Exact Match:', '   Explicit Regex:', '   Force Exact:', '   Manual Override:', '   Memory Pressure:', '   Memory Savings:', '   Multiple Indices:', '   Old Indices:', '   Search Impact:', '   Single Index:', '   Smart Detection:', '   Write Status:', 'freeze', 'freeze <index>', 'freeze <pattern>', 'freeze <pattern> -e', 'freeze <pattern> -r', 'freeze <pattern> -y', '🎯 Pattern Matching:', '🔶 Common Issues:', '🔶 Safety Features:', '🚀 Common Workflows:', '🤖 Auto-Detection:', '🧊 When to Freeze:']

@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/display/panel_renderer.py
+# hypothesis_version: 6.151.12
+
+['Error', 'Information', 'Success', 'Warning', 'blue', 'bold ', 'bold blue', 'bold cyan', 'bold green', 'bold magenta', 'bold red', 'bold white', 'bold yellow', 'border_style', 'bright_blue', 'bright_green', 'bright_red', 'bright_yellow', 'center', 'cyan', 'dim green', 'error', 'green', 'info', 'magenta', 'padding', 'panel_styles', 'red', 'secondary', 'semantic_styles', 'success', 'title', 'warning', 'white', 'white on blue', 'width', 'yellow']

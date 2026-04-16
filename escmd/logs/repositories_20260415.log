@@ -1,6 +1,0 @@
-2026-04-15 09:04:27,953 - escmd_repositories - INFO - [escmd.py:547] - Starting escmd command: repositories
-2026-04-15 09:04:28,015 - escmd_repositories - INFO - [command_handler.py:316] - Executing command: repositories
-2026-04-15 09:04:28,047 - escmd_repositories - INFO - [escmd.py:645] - Command repositories completed successfully
-2026-04-15 09:07:33,747 - escmd_repositories - INFO - [escmd.py:547] - Starting escmd command: repositories
-2026-04-15 09:07:33,820 - escmd_repositories - INFO - [command_handler.py:316] - Executing command: repositories
-2026-04-15 09:07:33,853 - escmd_repositories - INFO - [escmd.py:645] - Command repositories completed successfully

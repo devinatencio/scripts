@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/template_modify_help.py
+# hypothesis_version: 6.151.12
+
+['   Auto-backup:', '   Delete a field:', '   Dry run first:', '   Dry run:', '   Index patterns:', '   Legacy replicas:', '   Multiple values:', '   No backup:', '   No duplicates:', '   Partial remove:', '   Priority:', '   Refresh interval:', '   Restore path:', '   append:', '   delete:', '   remove:', '   set:', 'index_patterns', 'priority', 'template-modify', '🔒 Safety Features:', '🚀 Common Examples:']

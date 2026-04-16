@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/estop_help.py
+# hypothesis_version: 6.151.12
+
+['   Alias:', '   Cluster Header:', '   Custom dir:', '   Default path:', '   Exit:', '   Hot Indicator:', '   Index Hot List:', '   Index hot list:', '   Modelled after:', '   Panels:', '   Step 1 — collect:', '   Step 2 — exit:', '   Step 3 — analyze:', '   Top Nodes:', '   es_top.interval:', '   es_top.top_nodes:', './escmd.py es-top', './escmd.py top', 'Ctrl+C', 'Same — short alias', 'Unix top command', 'es-top', 'es-top --collect', 'es-top --top-nodes N', 'top', '📊 Dashboard Panels:', '📋 Overview:']

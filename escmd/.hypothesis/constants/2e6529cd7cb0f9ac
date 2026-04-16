@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/unfreeze_help.py
+# hypothesis_version: 6.151.12
+
+['   Automation:', '   Batch Unfreeze:', '   Cancel Operation:', '   Exact Match:', '   Index not frozen:', '   Memory Usage:', '   Multiple Indices:', '   Performance:', '   Regex Pattern:', '   Restore Old Data:', '   Resume Writing:', '   Search Speed:', '   Single Index:', '   Temporary Access:', '   Write Status:', 'unfreeze', 'unfreeze <index>', '🎯 Pattern Matching:', '🔥 When to Unfreeze:', '🔶 Common Issues:', '🔶 Safety Features:', '🚀 Common Workflows:']

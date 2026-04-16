@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/display/../processors/replica_processor.py
+# hypothesis_version: 6.151.12
+
+[0.1, ',', '_all', 'current_replicas', 'error', 'failed_updates', 'failure_count', 'index', 'indices_to_update', 'new_replicas', 'no_replicas_only', 'number_of_replicas', 'pattern', 'previous_replicas', 'reason', 'settings', 'skipped_indices', 'success_count', 'successful_updates', 'target_count', 'target_replicas', 'timestamp', 'total_attempted', 'total_candidates', 'total_updates_needed', 'unknown']

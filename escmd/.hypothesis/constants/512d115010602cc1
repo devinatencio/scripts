@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/indices_watch_report_help.py
+# hypothesis_version: 6.151.12
+
+['   Custom dir:', '   No ES needed:', '   Offline:', '   Peer compare:', '   Rate stats:', '   Step 1 — collect:', '   Step 2 — report:', '   What it does:', '   ⚠ flag:', '--cluster NAME', '--date YYYY-MM-DD', '--dir PATH', '--docs-peer-ratio R', '--format json|table', '--hot-ratio R', '--min-docs-delta N', '--min-peers N', '--top N', 'Examples', 'Workflows', 'indices-watch-report', '📋 Overview:', '🚀 Quick Start:']

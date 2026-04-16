@@ -32,7 +32,7 @@ settings:
     enable_progress_bar: true
     confirmation_required: true
   # Elasticsearch Creds
-  elastic_username: kibana_system
+  elastic_username: devin.acosta
   show_hidden_datastreams: true
   
 # Logical groupings of clusters for easier management

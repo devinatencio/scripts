@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/help/template_backup_help.py
+# hypothesis_version: 6.151.12
+
+['   Auto order:', '   Backup each:', '   Default Location:', '   Filename Pattern:', '   List templates:', '   Step 1:', '   Step 2:', '   Use --type:', '   Verify backups:', 'template-backup', '🔄 Before Modifying:']

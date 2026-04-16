@@ -160,6 +160,7 @@ class StyleSystem:
             expand=True,
             show_header=True,
             header_style=self._get_style("table_styles", "header_style", "bold white"),
+            border_style=self._get_style("table_styles", "border_style", "white"),
         )
 
     def add_themed_column(

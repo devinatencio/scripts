@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/display/progress_display.py
+# hypothesis_version: 6.151.12
+
+[100.0, 100, 'blue', 'complete', 'cyan', 'dim', 'done', 'error', 'failed', 'finalize', 'green', 'in_progress', 'index', 'init', 'magenta', 'muted', 'pending', 'red', 'start', 'state_styles', 'success', 'translog', 'unknown', 'warning', 'white', 'yellow']

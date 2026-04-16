@@ -65,6 +65,7 @@ _COMMANDS = [
     ("📊 Analytics",         "yellow",       "indices-s3-estimate",     "S3 monthly cost estimate",                       "./escmd.py indices-s3-estimate"),
     ("📊 Analytics",         "yellow",       "indices-watch-collect",   "Sample index stats to JSON on interval",         "./escmd.py indices-watch-collect"),
     ("📊 Analytics",         "yellow",       "indices-watch-report",    "Summarize collected watch samples",              "./escmd.py indices-watch-report"),
+    ("📊 Analytics",         "yellow",       "indices-watch-sessions",  "Manage stored watch sessions",                   "./escmd.py indices-watch-sessions list"),
     ("📊 Analytics",         "yellow",       "es-top",                  "Live auto-refreshing cluster dashboard",         "./escmd.py es-top"),
 
     ("🔄 ILM & Lifecycle",   "yellow",       "ilm",                     "ILM policies & status",                          "./escmd.py ilm"),

@@ -1,0 +1,4 @@
+# file: /Users/devin/Documents/Git/scripts/escmd/handlers/settings_handler.py
+# hypothesis_version: 6.151.12
+
+['--dry-run', '--format json', '--yes', '.', 'Description', 'Example', 'JSON output', 'RESET', 'SET', 'Usage / Option', 'acknowledged', 'bold white', 'border_style', 'dim', 'dry_run', 'error', 'green', 'header_style', 'json', 'magenta', 'muted', 'null', 'panel_styles', 'persistent', 'primary', 'red', 'reset', 'secondary', 'semantic', 'set', 'setting_key', 'setting_type', 'setting_value', 'success', 'table_styles', 'title', 'transient', 'white', 'yellow', 'yes', '── Options ──']

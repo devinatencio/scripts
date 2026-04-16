@@ -8,11 +8,13 @@ Written by Devin Acosta
 
 import warnings
 import urllib3
+from dataclasses import dataclass
 from requests.auth import HTTPBasicAuth
 from elasticsearch import Elasticsearch, ConnectionTimeout
 from collections import defaultdict
 from rich import print
-from rich.console import Console
+from rich.align import Align
+from rich.console import Console, Group
 from rich.layout import Layout
 from rich.table import Table
 from rich.panel import Panel
@@ -26,6 +28,7 @@ from rich.box import Box
 import getpass
 import argparse
 import datetime
+from io import StringIO
 import pickle
 import re
 import requests
@@ -38,14 +41,114 @@ import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
+from typing import Optional
 
 # Import unified configuration components
 from configuration_manager import ConfigurationManager
 from security.password_manager import PasswordManager
+from display.theme_manager import ThemeManager
+from display.style_system import StyleSystem
 
 # VERSION/DATE INFO
-VERSION = "2.0.3"
-DATE = "01/14/2026"
+VERSION = "2.1.0"
+DATE = "04/16/2026"
+
+
+@dataclass
+class UnfreezeUI:
+    """Shared console + theme wiring for escmd.json + themes.yml."""
+
+    console: Console
+    theme_manager: ThemeManager
+    style_system: StyleSystem
+
+
+def make_configuration_manager(script_directory: str) -> ConfigurationManager:
+    """Load escmd.yml + elastic_servers.yml when present so themes_file resolves."""
+    state_file = os.path.join(script_directory, "escmd.json")
+    main_yml = os.path.join(script_directory, "escmd.yml")
+    servers_yml = os.path.join(script_directory, "elastic_servers.yml")
+    if os.path.isfile(main_yml) and os.path.isfile(servers_yml):
+        return ConfigurationManager(
+            state_file_path=state_file,
+            main_config_path=main_yml,
+            servers_config_path=servers_yml,
+        )
+    return ConfigurationManager(state_file_path=state_file)
+
+
+def build_unfreeze_ui(console: Console, config_manager: ConfigurationManager) -> UnfreezeUI:
+    theme_manager = ThemeManager(config_manager)
+    return UnfreezeUI(
+        console=console,
+        theme_manager=theme_manager,
+        style_system=StyleSystem(theme_manager),
+    )
+
+
+def print_unfreeze_banner(ui: UnfreezeUI, today_date: str) -> None:
+    border = ui.theme_manager.get_themed_style(
+        "table_styles", "border_style", "bright_magenta"
+    )
+    title_st = ui.theme_manager.get_themed_style("panel_styles", "title", "bold cyan")
+    sub_st = ui.theme_manager.get_themed_style("panel_styles", "subtitle", "dim")
+    info_st = ui.style_system.get_semantic_style("info")
+    theme_name = ui.theme_manager.get_theme_name()
+    body = Text.assemble(
+        ("Unfreeze indices by location, component, and date range.\n", sub_st),
+        (f"Active theme: ", sub_st),
+        (theme_name, info_st),
+        (f"  ·  Today: {today_date}", sub_st),
+    )
+    ui.console.print(
+        Panel.fit(
+            body,
+            title=Text("UNFREEZE INDEX", style=title_st),
+            subtitle=Text(f"v{VERSION} · {DATE}", style=sub_st),
+            border_style=border,
+            padding=(1, 2),
+        )
+    )
+    ui.console.print()
+
+
+def print_no_frozen_celebration(ui: UnfreezeUI, normal_count: int) -> None:
+    """Themed, centered success when every matched index is already unfrozen."""
+    ss = ui.style_system
+    tm = ui.theme_manager
+    succ = ss.get_semantic_style("success")
+    neu = ss.get_semantic_style("neutral")
+    prim = ss.get_semantic_style("primary")
+    sub_st = tm.get_themed_style("panel_styles", "subtitle", neu)
+    idx_word = "indices" if normal_count != 1 else "index"
+
+    hero = Text.assemble(
+        ("✓  ", succ),
+        ("ALL CLEAR", succ),
+    )
+    blurb = Text.assemble(
+        ("No frozen indices in this selection.\n", neu),
+        (f"{normal_count}", prim),
+        (f" {idx_word} ", neu),
+        ("checked — ", neu),
+        ("already unfrozen", succ),
+        (" and ready to query.", neu),
+    )
+    foot = Text(
+        "No unfreeze operations were required for this selection.",
+        style=sub_st,
+    )
+    body = Group(
+        Align.center(hero),
+        Text(""),
+        Align.center(blurb),
+        Text(""),
+        Align.center(foot),
+    )
+    ui.console.print()
+    ui.console.print(ss.create_success_panel(body, title="Index state", icon="✨"))
+    ui.console.print()
+
 
 # Define Global Variables
 gbl_password = False
@@ -413,21 +516,40 @@ def fetch_elastic_frozen_data(
 
 
 def get_frozenStatus(
-    batched_dict, config_manager, password_manager, gbl_password, cmd_password
+    batched_dict,
+    config_manager,
+    password_manager,
+    gbl_password,
+    cmd_password,
+    ui: UnfreezeUI,
 ):
     """
     Get frozen status for all indices in batched dictionary.
     """
-    console = Console()
+    ss = ui.style_system
     results = {}
     total_indices = len(batched_dict)
+    prim = ss.get_semantic_style("primary")
+    sec = ss.get_semantic_style("secondary")
+    neu = ss.get_semantic_style("neutral")
 
-    with console.status(
-        f"[bold green]⠋[/bold green] Checking frozen status for [bold cyan]{total_indices}[/bold cyan] indices..."
+    with ui.console.status(
+        Text.assemble(
+            ("⠋ ", prim),
+            ("Checking frozen status for ", neu),
+            (str(total_indices), sec),
+            (" indices…", neu),
+        )
     ) as status:
         for i, (index_name, info) in enumerate(batched_dict.items(), 1):
             status.update(
-                f"[bold green]⠙[/bold green] Checking [{i}/{total_indices}]: [bold yellow]{index_name}[/bold yellow]"
+                Text.assemble(
+                    ("⠙ ", prim),
+                    ("Checking [", neu),
+                    (f"{i}", sec),
+                    (f"/{total_indices}]: ", neu),
+                    (index_name, sec),
+                )
             )
             location = info["location"]
             port = info["port"]
@@ -450,7 +572,13 @@ def get_frozenStatus(
 
 
 def test_connection(
-    location, port, config_manager, password_manager, gbl_password, cmd_password
+    location,
+    port,
+    config_manager,
+    password_manager,
+    gbl_password,
+    cmd_password,
+    ui: Optional[UnfreezeUI] = None,
 ):
     """
     Test connection to Elasticsearch cluster before attempting operations.
@@ -521,7 +649,13 @@ def test_connection(
         return None, None
 
     except Exception as e:
-        print(f"[red]Connection test failed for {location}:{port} - {str(e)}[/red]")
+        msg = f"Connection test failed for {location}:{port} - {str(e)}"
+        if ui:
+            ui.console.print(
+                Text(msg, style=ui.style_system.get_semantic_style("error"))
+            )
+        else:
+            print(f"[red]{msg}[/red]")
         return None, None
 
 
@@ -533,6 +667,7 @@ def action_unFreezeIndice(
     password_manager,
     gbl_password,
     cmd_password,
+    ui: Optional[UnfreezeUI] = None,
 ):
     """
     Unfreeze a specific index using Elasticsearch client for consistency.
@@ -541,7 +676,13 @@ def action_unFreezeIndice(
     try:
         # Test connection first
         es, active_hostname = test_connection(
-            location, port, config_manager, password_manager, gbl_password, cmd_password
+            location,
+            port,
+            config_manager,
+            password_manager,
+            gbl_password,
+            cmd_password,
+            ui,
         )
 
         if not es:
@@ -575,18 +716,32 @@ def action_unFreezeIndice(
 
 
 def unFreezeIndices(
-    frozen_indices, config_manager, password_manager, gbl_password, cmd_password
+    frozen_indices,
+    config_manager,
+    password_manager,
+    gbl_password,
+    cmd_password,
+    ui: UnfreezeUI,
 ):
     """
     Unfreeze multiple indices with clean output formatting.
     """
     success_count = 0
     total_count = len(frozen_indices)
-
-    console = Console()
+    ss = ui.style_system
+    ok = ss.get_semantic_style("success")
+    bad = ss.get_semantic_style("error")
+    warn = ss.get_semantic_style("warning")
+    info = ss.get_semantic_style("info")
+    prim = ss.get_semantic_style("primary")
 
     # First, validate connections for all target hosts
-    console.print(f"[cyan]Validating connections before unfreezing...[/cyan]")
+    ui.console.print(
+        Text(
+            "Validating connections before unfreezing…",
+            style=info,
+        )
+    )
     connection_status = {}
     for index_name, info in frozen_indices.items():
         location = info["location"]
@@ -601,6 +756,7 @@ def unFreezeIndices(
                 password_manager,
                 gbl_password,
                 cmd_password,
+                ui,
             )
             connection_status[conn_key] = {
                 "es": es,
@@ -608,13 +764,24 @@ def unFreezeIndices(
                 "working": es is not None,
             }
             if es:
-                console.print(
-                    f"[green]✓ Connection validated: {location}:{port} -> {active_hostname}[/green]"
+                ui.console.print(
+                    Text.assemble(
+                        ("✓ ", ok),
+                        (f"Connection validated: {conn_key} → {active_hostname}", ok),
+                    )
                 )
             else:
-                console.print(f"[red]✗ Connection failed: {location}:{port}[/red]")
+                ui.console.print(
+                    Text.assemble(
+                        ("✗ ", bad),
+                        (f"Connection failed: {conn_key}", bad),
+                    )
+                )
 
-    console.print("\n[bold blue]Starting unfreezing process...[/bold blue]")
+    ui.console.print()
+    ui.console.print(
+        Text("Starting unfreezing process…", style=prim),
+    )
 
     # Import progress bar if available
     try:
@@ -631,7 +798,7 @@ def unFreezeIndices(
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
             TaskProgressColumn(),
-            console=console,
+            console=ui.console,
         ) as progress:
             task = progress.add_task(f"Unfreezing indices", total=total_count)
 
@@ -648,8 +815,14 @@ def unFreezeIndices(
 
                 # Skip if connection is known to be bad
                 if not connection_status[conn_key]["working"]:
-                    console.print(
-                        f"[yellow]⚠[/yellow]  [{i:2d}/{total_count}] [red]Skipping {index_name}: No connection to {conn_key}[/red]"
+                    ui.console.print(
+                        Text.assemble(
+                            ("⚠  ", warn),
+                            (f"[{i:2d}/{total_count}] ", warn),
+                            ("Skipping ", warn),
+                            (index_name, bad),
+                            (f": No connection to {conn_key}", bad),
+                        )
                     )
                     progress.advance(task)
                     continue
@@ -663,23 +836,36 @@ def unFreezeIndices(
                     password_manager,
                     gbl_password,
                     cmd_password,
+                    ui,
                 )
 
                 if success:
                     success_count += 1
-                    console.print(
-                        f"[green]✓[/green]  [{i:2d}/{total_count}] [green]{index_name}[/green] → {message}"
+                    ui.console.print(
+                        Text.assemble(
+                            ("✓  ", ok),
+                            (f"[{i:2d}/{total_count}] ", ok),
+                            (index_name, ok),
+                            (" → ", ok),
+                            (message, ok),
+                        )
                     )
                 else:
-                    console.print(
-                        f"[red]✗[/red]  [{i:2d}/{total_count}] [red]{index_name}[/red] → {message}"
+                    ui.console.print(
+                        Text.assemble(
+                            ("✗  ", bad),
+                            (f"[{i:2d}/{total_count}] ", bad),
+                            (index_name, bad),
+                            (" → ", bad),
+                            (message, bad),
+                        )
                     )
 
                 progress.advance(task)
 
     except ImportError:
         # Fallback to simple progress without progress bar
-        console.print()
+        ui.console.print()
         for i, (index_name, info) in enumerate(frozen_indices.items(), 1):
             location = info["location"]
             port = info["port"]
@@ -687,8 +873,14 @@ def unFreezeIndices(
 
             # Skip if connection is known to be bad
             if not connection_status[conn_key]["working"]:
-                console.print(
-                    f"[yellow]⚠[/yellow]  [{i:2d}/{total_count}] [red]Skipping {index_name}: No connection to {conn_key}[/red]"
+                ui.console.print(
+                    Text.assemble(
+                        ("⚠  ", warn),
+                        (f"[{i:2d}/{total_count}] ", warn),
+                        ("Skipping ", warn),
+                        (index_name, bad),
+                        (f": No connection to {conn_key}", bad),
+                    )
                 )
                 continue
 
@@ -701,50 +893,111 @@ def unFreezeIndices(
                 password_manager,
                 gbl_password,
                 cmd_password,
+                ui,
             )
 
             if success:
                 success_count += 1
-                console.print(
-                    f"[green]✓[/green]  [{i:2d}/{total_count}] [green]{index_name}[/green] → {message}"
+                ui.console.print(
+                    Text.assemble(
+                        ("✓  ", ok),
+                        (f"[{i:2d}/{total_count}] ", ok),
+                        (index_name, ok),
+                        (" → ", ok),
+                        (message, ok),
+                    )
                 )
             else:
-                console.print(
-                    f"[red]✗[/red]  [{i:2d}/{total_count}] [red]{index_name}[/red] → {message}"
+                ui.console.print(
+                    Text.assemble(
+                        ("✗  ", bad),
+                        (f"[{i:2d}/{total_count}] ", bad),
+                        (index_name, bad),
+                        (" → ", bad),
+                        (message, bad),
+                    )
                 )
 
-    console.print()
+    ui.console.print()
     return success_count, total_count
 
 
-def create_table(title, data_dict):
+def create_table(
+    title: Optional[str],
+    data_dict: dict,
+    style_system: StyleSystem,
+) -> Table:
     """
-    Create a rich table for display.
+    Create a rich table for display using themes.yml table + semantic styles.
+    If title is None, the table has no title (e.g. when wrapped in a Panel).
     """
-    table = Table(title=title, show_header=True, header_style="bold magenta")
-    table.add_column("Index Name", style="cyan")
-    table.add_column("Location", style="green")
-    table.add_column("Port", style="yellow")
-    table.add_column("Status", style="red")
+    tm = style_system.theme_manager
+    table_title = None
+    if title:
+        table_title = Text(
+            title,
+            style=tm.get_themed_style("panel_styles", "title", "bold white"),
+        )
+    table = Table(
+        title=table_title,
+        show_header=True,
+        box=style_system.get_table_box(),
+        expand=True,
+        header_style=tm.get_themed_style("table_styles", "header_style", "bold white"),
+        border_style=tm.get_themed_style("table_styles", "border_style", "white"),
+    )
+    style_system.add_themed_column(table, "Index Name", "name", overflow="fold")
+    style_system.add_themed_column(table, "Location", "status")
+    style_system.add_themed_column(table, "Port", "count", justify="center")
+    style_system.add_themed_column(table, "Status", "status", justify="center")
 
-    for index_name, info in data_dict.items():
+    frozen_cell = tm.get_themed_style(
+        "table_styles", "row_styles.frozen", style_system.get_semantic_style("primary")
+    )
+    normal_cell = style_system.get_semantic_style("success")
+
+    for row_idx, (index_name, info) in enumerate(data_dict.items()):
         status = "FROZEN" if info.get("frozen", False) else "NORMAL"
+        stat_style = frozen_cell if status == "FROZEN" else normal_cell
+        zebra = style_system.get_zebra_style(row_idx)
         table.add_row(
             index_name,
             info.get("location", "unknown"),
             str(info.get("port", "unknown")),
-            status,
+            Text(status, style=stat_style),
+            style=zebra,
         )
 
     return table
 
 
-def displayResults(frozen_status_dict):
+def wrap_indices_results_panel(
+    ui: UnfreezeUI,
+    table: Table,
+    panel_heading: str,
+    subtitle: str,
+) -> Panel:
+    """
+    Same panel chrome as the opening UNFREEZE INDEX banner (border + title + subtitle).
+    """
+    tm = ui.theme_manager
+    border = tm.get_themed_style("table_styles", "border_style", "bright_magenta")
+    title_st = tm.get_themed_style("panel_styles", "title", "bold cyan")
+    sub_st = tm.get_themed_style("panel_styles", "subtitle", "dim")
+    return Panel(
+        table,
+        title=Text(panel_heading, style=title_st),
+        subtitle=Text(subtitle, style=sub_st),
+        border_style=border,
+        padding=(1, 2),
+        expand=True,
+    )
+
+
+def displayResults(frozen_status_dict: dict, ui: UnfreezeUI):
     """
     Display results in formatted tables.
     """
-    console = Console()
-
     frozen_indices = {
         k: v for k, v in frozen_status_dict.items() if v.get("frozen", False)
     }
@@ -753,12 +1006,36 @@ def displayResults(frozen_status_dict):
     }
 
     if frozen_indices:
-        console.print(create_table("FROZEN INDICES", frozen_indices))
-        console.print()
+        fn = len(frozen_indices)
+        f_idx = "indices" if fn != 1 else "index"
+        frozen_subtitle = (
+            f"{fn} matching {f_idx} · frozen (will unfreeze if you confirm)"
+        )
+        frozen_table = create_table(None, frozen_indices, ui.style_system)
+        ui.console.print(
+            wrap_indices_results_panel(
+                ui,
+                frozen_table,
+                "FROZEN INDICES",
+                frozen_subtitle,
+            )
+        )
+        ui.console.print()
 
     if normal_indices:
-        console.print(create_table("NORMAL INDICES", normal_indices))
-        console.print()
+        n = len(normal_indices)
+        idx_lbl = "indices" if n != 1 else "index"
+        subtitle = f"{n} matching {idx_lbl} · already unfrozen (no action needed)"
+        normal_table = create_table(None, normal_indices, ui.style_system)
+        ui.console.print(
+            wrap_indices_results_panel(
+                ui,
+                normal_table,
+                "NORMAL INDICES",
+                subtitle,
+            )
+        )
+        ui.console.print()
 
     return len(frozen_indices), len(normal_indices)
 
@@ -776,26 +1053,80 @@ def tabData(data_dict, col_names):
     return table_data
 
 
-def validateProceed():
+def validateProceed(ui: UnfreezeUI) -> bool:
     """
     Ask user for confirmation to proceed.
     """
-    console = Console()
-    response = console.input(
-        "[yellow]Do you want to proceed with unfreezing? (y/n): [/yellow]"
+    prompt_style = ui.style_system.get_semantic_style("warning")
+    response = ui.console.input(
+        Text("Do you want to proceed with unfreezing? (y/n): ", style=prompt_style)
     )
     return response.lower() in ["y", "yes"]
 
 
-def status_bar_update(message, spinner_console=None):
+def status_bar_update(ui: UnfreezeUI, message: str) -> None:
     """
-    Print status update message.
+    Print status update message using theme info accent.
     """
-    if spinner_console:
-        spinner_console.print(f"[blue]🔵  {message}[/blue]")
-    else:
-        console = Console()
-        console.print(f"[blue]🔵  {message}[/blue]")
+    info = ui.style_system.get_semantic_style("info")
+    ui.console.print(Text.assemble(("▸ ", info), Text.from_markup(f" {message}")))
+
+
+class UnfreezeArgumentParser(argparse.ArgumentParser):
+    """ArgumentParser that renders argparse errors with the same Rich theme as the script."""
+
+    def __init__(self, ui: UnfreezeUI, *args, **kwargs):
+        self._ui = ui
+        super().__init__(*args, **kwargs)
+
+    def error(self, message: str) -> None:
+        ss = self._ui.style_system
+        console = self._ui.console
+        err_st = ss.get_semantic_style("error")
+        neu = ss.get_semantic_style("neutral")
+        info = ss.get_semantic_style("info")
+        sec = ss.get_semantic_style("secondary")
+        prim = ss.get_semantic_style("primary")
+
+        headline = Text.assemble(("⛔ ", err_st), ("CLI ERROR", err_st))
+        detail = Text(message, style=err_st)
+
+        buf = StringIO()
+        self.print_usage(buf)
+        usage_line = buf.getvalue().rstrip()
+        usage_block = Syntax(
+            usage_line,
+            lexer="text",
+            word_wrap=True,
+            theme="monokai",
+            background_color="default",
+        )
+
+        hint = Text.assemble(
+            ("Required: ", neu),
+            ("-l/--locations", sec),
+            (" (clusters) and ", neu),
+            ("-c/--component", sec),
+            (" (index name parts). ", neu),
+            ("Try ", neu),
+            ("--help", prim),
+            (" for every flag.", neu),
+        )
+
+        body = Group(
+            Align.center(headline),
+            Text(""),
+            Align.center(detail),
+            Text(""),
+            Text("usage", style=info),
+            usage_block,
+            Text(""),
+            hint,
+        )
+        console.print()
+        console.print(ss.create_error_panel(body, title="Unfreeze index", icon="⚡"))
+        console.print()
+        sys.exit(2)
 
 
 def extract_and_format_date(filename):
@@ -875,24 +1206,26 @@ if __name__ == "__main__":
 
     # Initialize configuration and password managers
     try:
-        # Get the correct state file path (escmd.json in script directory)
         script_directory = os.path.dirname(os.path.abspath(__file__))
-        state_file = os.path.join(script_directory, "escmd.json")
-        config_manager = ConfigurationManager(state_file_path=state_file)
+        config_manager = make_configuration_manager(script_directory)
         password_manager = PasswordManager()
     except Exception as e:
         print(f"[red]Error initializing configuration: {str(e)}[/red]")
         sys.exit(1)
 
-    # Start Rich Console...
     console = Console()
+    ui = build_unfreeze_ui(console, config_manager)
     today_date = datetime.datetime.today().strftime("%Y-%m-%d")
+    print_unfreeze_banner(ui, today_date)
     status_bar_update(
-        f"UNFREEZE Index Script [white](v{VERSION}), Today Date: {today_date})[/white]"
+        ui,
+        f"UNFREEZE Index Script [white](v{VERSION}), Today: {today_date}[/white]",
     )
 
     # Parser Stuff
-    parser = argparse.ArgumentParser(description="Unfreeze Elasticsearch indices")
+    parser = UnfreezeArgumentParser(
+        ui, description="Unfreeze Elasticsearch indices"
+    )
     # Locations(split by ,) where indexes need to be opened
     parser.add_argument(
         "-l",
@@ -937,6 +1270,8 @@ if __name__ == "__main__":
     comp = [c.strip() for c in args.component.split(",")]
     indx2openList = []
     prompt_password = args.password
+    gbl_password = False
+    cmd_password = None
 
     # Calculate Date to show
     if args.date is not None:
@@ -956,13 +1291,15 @@ if __name__ == "__main__":
 
     # Update Console with Information
     status_bar_update(
-        f"COMPONENT: [bold green]{comp}[/bold green], LOCATIONS: [bold green] {locations} [/bold green]"
+        ui,
+        f"COMPONENT: [bold green]{comp}[/bold green], LOCATIONS: [bold green] {locations} [/bold green]",
     )
     status_bar_update(
-        f"DATES: Start [{start_date.strftime('%Y.%m.%d')}]   End [{end_date.strftime('%Y.%m.%d')}]"
+        ui,
+        f"DATES: Start [{start_date.strftime('%Y.%m.%d')}]   End [{end_date.strftime('%Y.%m.%d')}]",
     )
 
-    if prompt_password == True:
+    if prompt_password:
         gbl_password = True
         cmd_password = getpass.getpass(prompt="Enter your Password: ")
 
@@ -971,10 +1308,19 @@ if __name__ == "__main__":
 
     time.sleep(1)
 
+    ss = ui.style_system
+    prim = ss.get_semantic_style("primary")
+    sec = ss.get_semantic_style("secondary")
+    neu = ss.get_semantic_style("neutral")
+
     # Process each location with individual spinners
     for location in locations:
-        with console.status(
-            f"[bold green]⠋[/bold green] Collecting data from cluster: [bold cyan]{location}[/bold cyan]"
+        with ui.console.status(
+            Text.assemble(
+                ("⠋ ", prim),
+                ("Collecting data from cluster: ", neu),
+                (location, sec),
+            )
         ) as status:
             try:
                 # Verify server configuration exists
@@ -987,19 +1333,27 @@ if __name__ == "__main__":
 
                 # Update spinner status and print info
                 status.update(
-                    f"[bold green]⠙[/bold green] Connecting to cluster: [bold cyan]{location}[/bold cyan]"
+                    Text.assemble(
+                        ("⠙ ", prim),
+                        ("Connecting to cluster: ", neu),
+                        (location, sec),
+                    )
                 )
                 status_bar_update(
+                    ui,
                     f"Found server configuration for: {location} -> {resolved_name}",
-                    console,
                 )
             except ValueError as e:
-                console.print(f"[red]{str(e)}[/red]")
+                ui.console.print(Text(str(e), style=ss.get_semantic_style("error")))
                 continue
 
             # Get Indices from all ports in parallel for faster execution
             status.update(
-                f"[bold green]⠸[/bold green] Scanning ports for cluster: [bold cyan]{location}[/bold cyan]"
+                Text.assemble(
+                    ("⠸ ", prim),
+                    ("Scanning ports for cluster: ", neu),
+                    (location, sec),
+                )
             )
             ports = [9201, 9202, 9203, 9200]
             get_indices_partial = partial(
@@ -1030,14 +1384,21 @@ if __name__ == "__main__":
                             # Only show this if we want verbose debugging
                             pass
                     except Exception as exc:
-                        console.print(
-                            f"[red]Port {port} generated an exception: {exc}[/red]"
+                        ui.console.print(
+                            Text(
+                                f"Port {port} generated an exception: {exc}",
+                                style=ss.get_semantic_style("error"),
+                            )
                         )
                         # Don't append empty results that could interfere
 
             # Create new dictionary and append results from all ports
             status.update(
-                f"[bold green]⠼[/bold green] Processing indices for cluster: [bold cyan]{location}[/bold cyan]"
+                Text.assemble(
+                    ("⠼ ", prim),
+                    ("Processing indices for cluster: ", neu),
+                    (location, sec),
+                )
             )
             merged_indices = {}
             for result in indices_results:
@@ -1049,8 +1410,11 @@ if __name__ == "__main__":
 
             # Show total indices found (useful for troubleshooting)
             if len(merged_indices) == 0:
-                console.print(
-                    f"[yellow]Warning: No indices found across all ports for {location}[/yellow]"
+                ui.console.print(
+                    Text(
+                        f"Warning: No indices found across all ports for {location}",
+                        style=ss.get_semantic_style("warning"),
+                    )
                 )
 
             # Look for matches of indices
@@ -1068,7 +1432,11 @@ if __name__ == "__main__":
 
             # Now Loop over each date and append matches
             status.update(
-                f"[bold green]⠦[/bold green] Matching indices for cluster: [bold cyan]{location}[/bold cyan]"
+                Text.assemble(
+                    ("⠦ ", prim),
+                    ("Matching indices for cluster: ", neu),
+                    (location, sec),
+                )
             )
             for current_date in date_range:
                 current_date_fmt = current_date.strftime("%Y.%m.%d")
@@ -1085,8 +1453,11 @@ if __name__ == "__main__":
 
             # Only show debug info if no matches found
             if len(final_matching_indices) == 0:
-                console.print(
-                    f"[yellow]No matching indices found after date filtering for {location}[/yellow]"
+                ui.console.print(
+                    Text(
+                        f"No matching indices found after date filtering for {location}",
+                        style=ss.get_semantic_style("warning"),
+                    )
                 )
 
             """
@@ -1098,53 +1469,77 @@ if __name__ == "__main__":
                         port = merged_indices[indices]["port"]
                         batched_final[indices] = {"location": location, "port": port}
                     else:
-                        console.print(
-                            f"[red]Warning: Index {indices} not found in merged_indices for {location}[/red]"
+                        ui.console.print(
+                            Text(
+                                f"Warning: Index {indices} not found in merged_indices for {location}",
+                                style=ss.get_semantic_style("error"),
+                            )
                         )
             matches = len(final_matching_indices)
 
     # Show results for each location
-    console.print()  # Add clean spacing after data collection
+    ui.console.print()
     for location in locations:
         location_matches = len(
             [k for k, v in batched_final.items() if v["location"] == location]
         )
         if location_matches > 0:
             status_bar_update(
-                f"Found {location_matches} matching indices for {location}"
+                ui,
+                f"Found {location_matches} matching indices for {location}",
             )
 
     # Check if we found any indices
     if not batched_final:
-        console.print(
-            f"[yellow]No matching indices found for the specified criteria.[/yellow]"
+        ui.console.print(
+            Text(
+                "No matching indices found for the specified criteria.",
+                style=ss.get_semantic_style("warning"),
+            )
         )
         if oldest_final:
-            console.print(f"[cyan]Oldest available dates by pattern:[/cyan]")
+            ui.console.print(
+                Text(
+                    "Oldest available dates by pattern:",
+                    style=ss.get_semantic_style("info"),
+                )
+            )
             for pattern, date in oldest_final.items():
-                console.print(f"  {pattern}: {date}")
+                ui.console.print(
+                    Text.assemble(
+                        ("  ", neu),
+                        (pattern, sec),
+                        (": ", neu),
+                        (date, prim),
+                    )
+                )
         sys.exit(0)
 
     # Get frozen status for all matching indices
-    console.print()  # Add spacing before status check
+    ui.console.print()
     frozen_status = get_frozenStatus(
-        batched_final, config_manager, password_manager, gbl_password, cmd_password
+        batched_final,
+        config_manager,
+        password_manager,
+        gbl_password,
+        cmd_password,
+        ui,
     )
 
-    # Add newline for clean output
-    console.print()
+    ui.console.print()
 
     # Display results
-    frozen_count, normal_count = displayResults(frozen_status)
+    frozen_count, normal_count = displayResults(frozen_status, ui)
 
     if frozen_count == 0:
-        console.print(
-            f"[green]✓ No frozen indices found. All {normal_count} indices are already unfrozen.[/green]"
-        )
+        print_no_frozen_celebration(ui, normal_count)
         sys.exit(0)
 
-    console.print(
-        f"[yellow]Summary: {frozen_count} frozen indices, {normal_count} normal indices[/yellow]"
+    ui.console.print(
+        Text(
+            f"Summary: {frozen_count} frozen indices, {normal_count} normal indices",
+            style=ss.get_semantic_style("warning"),
+        )
     )
 
     # Ask for confirmation to unfreeze (skip if dry-run)
@@ -1152,21 +1547,42 @@ if __name__ == "__main__":
         frozen_indices = {
             k: v for k, v in frozen_status.items() if v.get("frozen", False)
         }
-        console.print(
-            f"\n[yellow]DRY RUN: Would unfreeze {len(frozen_indices)} indices.[/yellow]"
+        ui.console.print()
+        ui.console.print(
+            Text(
+                f"DRY RUN: Would unfreeze {len(frozen_indices)} indices.",
+                style=ss.get_semantic_style("warning"),
+            )
         )
         for index_name, info in frozen_indices.items():
-            console.print(f"  - {index_name} (port {info['port']})")
-    elif args.yes or validateProceed():
+            ui.console.print(
+                Text.assemble(
+                    ("  - ", neu),
+                    (index_name, sec),
+                    (f" (port {info['port']})", neu),
+                )
+            )
+    elif args.yes or validateProceed(ui):
         frozen_indices = {
             k: v for k, v in frozen_status.items() if v.get("frozen", False)
         }
         success_count, total_count = unFreezeIndices(
-            frozen_indices, config_manager, password_manager, gbl_password, cmd_password
+            frozen_indices,
+            config_manager,
+            password_manager,
+            gbl_password,
+            cmd_password,
+            ui,
         )
 
-        console.print(
-            f"\n[green]Unfreezing completed: {success_count}/{total_count} indices processed successfully.[/green]"
+        ui.console.print()
+        ui.console.print(
+            Text(
+                f"Unfreezing completed: {success_count}/{total_count} indices processed successfully.",
+                style=ss.get_semantic_style("success"),
+            )
         )
     else:
-        print(f"[yellow]Operation cancelled by user.[/yellow]")
+        ui.console.print(
+            Text("Operation cancelled by user.", style=ss.get_semantic_style("warning"))
+        )

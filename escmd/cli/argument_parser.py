@@ -84,6 +84,7 @@ def _add_help_command(subparsers):
             "indices-s3-estimate",
             "indices-watch-collect",
             "indices-watch-report",
+            "indices-watch-sessions",
             "ilm",
             "health",
             "nodes",
@@ -328,18 +329,18 @@ def _add_basic_commands(subparsers):
     indices_s3_estimate_parser.add_argument(
         "--buffer-percent",
         type=float,
-        default=0.0,
+        default=20.0,
         metavar="P",
         dest="buffer_percent",
-        help="Scale total primary bytes by (1 + P/100) before pricing (default: 0)",
+        help="Scale total primary bytes by (1 + P/100) before pricing (default: 20)",
     )
     indices_s3_estimate_parser.add_argument(
         "--price-per-gib-month",
         type=float,
-        required=True,
+        default=0.023,
         metavar="USD",
         dest="price_per_gib_month",
-        help="Storage class price in USD per gibibyte-month (1024^3 bytes), e.g. S3 Standard list price",
+        help="Storage class price in USD per gibibyte-month (default: 0.023, S3 Standard list price)",
     )
     indices_s3_estimate_parser.add_argument(
         "--include-undated",
@@ -527,6 +528,98 @@ def _add_basic_commands(subparsers):
         default=False,
         dest="list_sessions",
         help="Print available sessions for the resolved cluster and date, then exit",
+    )
+
+    # indices-watch-sessions: manage stored watch sessions
+    watch_sessions_parser = subparsers.add_parser(
+        "indices-watch-sessions",
+        help="Manage stored watch sessions (list, detail, delete, delete-day, clusters)",
+    )
+    watch_sessions_subparsers = watch_sessions_parser.add_subparsers(
+        dest="sessions_action", help="Session management action",
+    )
+
+    # -- list (default)
+    ws_list_parser = watch_sessions_subparsers.add_parser(
+        "list", help="List sessions for a cluster and date (default: today)",
+    )
+    ws_list_parser.add_argument(
+        "--cluster", default=None, metavar="NAME",
+        help="Cluster slug (default: resolved from -l or config default)",
+    )
+    ws_list_parser.add_argument(
+        "--date", default=None, metavar="YYYY-MM-DD",
+        help="Date folder (default: today UTC)",
+    )
+    ws_list_parser.add_argument(
+        "--format", choices=["json", "table"], default="table",
+        help="Output format (default: table)",
+    )
+
+    # -- detail
+    ws_detail_parser = watch_sessions_subparsers.add_parser(
+        "detail", help="Show detailed info for a specific session",
+    )
+    ws_detail_parser.add_argument(
+        "session_id", help="Session ID, prefix, or label to inspect (partial match supported)",
+    )
+    ws_detail_parser.add_argument(
+        "--cluster", default=None, metavar="NAME",
+        help="Cluster slug (default: resolved from -l or config default)",
+    )
+    ws_detail_parser.add_argument(
+        "--date", default=None, metavar="YYYY-MM-DD",
+        help="Date folder (default: today UTC)",
+    )
+    ws_detail_parser.add_argument(
+        "--format", choices=["json", "table"], default="table",
+        help="Output format (default: table)",
+    )
+
+    # -- delete
+    ws_delete_parser = watch_sessions_subparsers.add_parser(
+        "delete", help="Delete a specific session",
+    )
+    ws_delete_parser.add_argument(
+        "session_id", help="Session ID, prefix, or label to delete (partial match supported)",
+    )
+    ws_delete_parser.add_argument(
+        "--cluster", default=None, metavar="NAME",
+        help="Cluster slug (default: resolved from -l or config default)",
+    )
+    ws_delete_parser.add_argument(
+        "--date", default=None, metavar="YYYY-MM-DD",
+        help="Date folder (default: today UTC)",
+    )
+    ws_delete_parser.add_argument(
+        "--force", action="store_true", default=False,
+        help="Skip confirmation prompt",
+    )
+
+    # -- delete-day
+    ws_delete_day_parser = watch_sessions_subparsers.add_parser(
+        "delete-day", help="Delete all sessions for a cluster and date",
+    )
+    ws_delete_day_parser.add_argument(
+        "--cluster", default=None, metavar="NAME",
+        help="Cluster slug (default: resolved from -l or config default)",
+    )
+    ws_delete_day_parser.add_argument(
+        "--date", default=None, metavar="YYYY-MM-DD",
+        help="Date folder (default: today UTC)",
+    )
+    ws_delete_day_parser.add_argument(
+        "--force", action="store_true", default=False,
+        help="Skip confirmation prompt",
+    )
+
+    # -- clusters
+    ws_clusters_parser = watch_sessions_subparsers.add_parser(
+        "clusters", help="List all clusters with stored watch data",
+    )
+    ws_clusters_parser.add_argument(
+        "--format", choices=["json", "table"], default="table",
+        help="Output format (default: table)",
     )
 
     # Indice command (single index)
@@ -2109,4 +2202,14 @@ def _add_estop_command(subparsers):
             dest="label",
             metavar="LABEL",
             help="Human-readable label for the session ID (no effect without --collect)",
+        )
+        estop_parser.add_argument(
+            "--readonly",
+            action="store_true",
+            default=False,
+            dest="readonly",
+            help=(
+                "Load the latest session history but do not write new samples to disk. "
+                "Useful for observing a session being collected by another instance."
+            ),
         )
