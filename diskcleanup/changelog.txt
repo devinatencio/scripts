@@ -1,5 +1,39 @@
 Changelog for diskcleanup.py
 ----------------------------
+2.1.0   (2026-04-16) ** CODE MODERNIZATION - PATHLIB & CLEANUP **
+  *** PATHLIB STANDARDIZATION ***
+  * ENHANCED: Converted all file/directory operations to use pathlib consistently
+  * ENHANCED: simulate_cleanup(), delete_old_abrt_directories(), cleanup_empty_abrt_directories()
+  * ENHANCED: delete_abrt_directories_by_size(), find_yaml_config(), truncate_log_file()
+  * ENHANCED: truncate_file(), setup_rc_files(), directory_cleanup(), advanced_cleanup_directory()
+  * ENHANCED: audit_scan_files(), count_deleted_files_procfs(), validate_config()
+  * KEPT: os.readlink for /proc fd symlinks, os.stat for partition device comparison
+
+  *** STDLIB DISK USAGE ***
+  * ENHANCED: partition_usage() and disk_usage() now use shutil.disk_usage()
+  * REMOVED: Raw os.statvfs() calls replaced with cleaner stdlib API (available since Python 3.3)
+
+  *** CUSTOM EXCEPTIONS ***
+  * NEW: DiskCleanupError base exception class
+  * NEW: ConfigError for configuration parsing and validation failures
+  * NEW: CleanupOperationError for cleanup operation failures
+  * ENHANCED: readConfig() now raises ConfigError with proper exception chaining
+
+  *** TYPE HINTS ***
+  * ENHANCED: Added return type annotations to audit_scan_files(), run_check_services(), check_auditd()
+
+  *** IMPORT CLEANUP ***
+  * REMOVED: Unused json import from diskcleanup_core.py
+  * REMOVED: Unused glob import from diskcleanup_core.py (replaced by pathlib.glob)
+  * REMOVED: Unused sys import from diskcleanup_core.py
+  * REMOVED: Unused os import from diskcleanup.py
+
+  *** BUG FIXES ***
+  * FIXED: Removed redundant duplicate existence check in advanced_cleanup_directory()
+  * FIXED: delete_abrt_directories_by_size() error handler referenced unbound variable
+
+  NOTE: All changes maintain Python 3.6+ compatibility.
+
 2.0.4   (2025-07-23) ** CRITICAL BUG FIXES - METRICS & ABRT IMPROVEMENTS **
   *** CRITICAL BUG FIXES ***
   * FIXED: ABRT cleanup metrics not being tracked (space freed always showed 0 bytes)

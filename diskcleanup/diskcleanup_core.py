@@ -11,20 +11,17 @@ This module contains all the core business logic including:
 - Disk usage calculations
 
 Author: Devin Acosta
-Version: 2.0.4
-Date: 2025-07-23
+Version: 2.1.0
+Date: 2025-07-26
 """
 
 import arrow
 import datetime
-import glob
 import logging
-import json
 import os
 import re
 import shutil
 import subprocess
-import sys
 import time
 import yaml
 from dataclasses import dataclass
@@ -39,6 +36,21 @@ from rich.align import Align
 # Import from our logging module
 from diskcleanup_logging import LogHelper, LogSampler, OperationMetrics
 
+
+# Custom exceptions for clearer error handling
+class DiskCleanupError(Exception):
+    """Base exception for disk cleanup operations."""
+    pass
+
+class ConfigError(DiskCleanupError):
+    """Raised when configuration is invalid or cannot be read."""
+    pass
+
+class CleanupOperationError(DiskCleanupError):
+    """Raised when a cleanup operation fails."""
+    pass
+
+
 # Global instances - will be initialized by main script
 logger = LogHelper()
 log = None  # Will be set by main script
@@ -46,7 +58,7 @@ global_metrics = None  # Will be set by main script
 
 # Global variables
 rc_files: Dict[str, Dict[str, int]] = {}
-SCRIPTVER = "2.0.5"
+SCRIPTVER = "2.1.0"
 SCRIPTDATE = "2025-07-26"
 
 @dataclass
@@ -117,10 +129,10 @@ def convert_size_to_bytes(size_str: str) -> int:
     # Convert to bytes based on unit
     multipliers = {
         'B': 1,
-        'KB': 1024, 'KIB': 1024,
-        'MB': 1024**2, 'MIB': 1024**2,
-        'GB': 1024**3, 'GIB': 1024**3,
-        'TB': 1024**4, 'TIB': 1024**4
+        'K': 1024, 'KB': 1024, 'KIB': 1024,
+        'M': 1024**2, 'MB': 1024**2, 'MIB': 1024**2,
+        'G': 1024**3, 'GB': 1024**3, 'GIB': 1024**3,
+        'T': 1024**4, 'TB': 1024**4, 'TIB': 1024**4
     }
 
     if unit in multipliers:
@@ -152,14 +164,13 @@ def simulate_cleanup(directory: str) -> int:
     """Simulate cleanup and return estimated space freed."""
     total_size = 0
     try:
-        for root, dirs, files in os.walk(directory):
-            for file in files:
-                filepath = os.path.join(root, file)
-                try:
-                    total_size += os.path.getsize(filepath)
-                except (OSError, IOError):
-                    continue
-    except (OSError, IOError):
+        for file_path in Path(directory).rglob('*'):
+            try:
+                if file_path.is_file():
+                    total_size += file_path.stat().st_size
+            except OSError:
+                continue
+    except OSError:
         pass
     return total_size
 
@@ -167,7 +178,8 @@ def delete_old_abrt_directories(abrt_directory: str, max_age_days: int, dry_run:
     """
     Delete ABRT directories older than max_age_days.
     """
-    if not os.path.exists(abrt_directory):
+    abrt_path = Path(abrt_directory)
+    if not abrt_path.exists():
         log.warning(logger.system(f"ABRT directory does not exist: {abrt_directory}"))
         return 0
 
@@ -175,25 +187,20 @@ def delete_old_abrt_directories(abrt_directory: str, max_age_days: int, dry_run:
     threshold_date = datetime.datetime.now() - datetime.timedelta(days=max_age_days)
 
     try:
-        for dump_dir in os.listdir(abrt_directory):
-            dir_path = os.path.join(abrt_directory, dump_dir)
-            if os.path.isdir(dir_path):
-                # Extract date from directory name
-                dir_date = extract_date_from_directory_name(dump_dir)
+        for entry in abrt_path.iterdir():
+            if entry.is_dir():
+                dir_date = extract_date_from_directory_name(entry.name)
                 if dir_date and dir_date < threshold_date:
-                    age_days = (datetime.datetime.now() - dir_date).days
+                    freed = simulate_cleanup(str(entry))
+                    space_freed += freed
                     if dry_run:
-                        freed = simulate_cleanup(dir_path)
-                        space_freed += freed
-                        log.info(logger.dry_run(f"ABRT directory cleanup",
-                                               target=dir_path,
+                        log.info(logger.dry_run("ABRT directory cleanup",
+                                               target=str(entry),
                                                potential_savings=format_size(freed)))
                     else:
-                        freed = simulate_cleanup(dir_path)
-                        space_freed += freed
-                        shutil.rmtree(dir_path)
+                        shutil.rmtree(entry)
                         log.info(logger.action("ABRT directory removed",
-                                              target=dir_path,
+                                              target=str(entry),
                                               freed=format_size(freed)))
     except Exception as e:
         log.error(logger.error_with_context(abrt_directory, e))
@@ -203,34 +210,32 @@ def delete_old_abrt_directories(abrt_directory: str, max_age_days: int, dry_run:
 
 def cleanup_empty_abrt_directories(abrt_directory: str) -> None:
     """Clean up empty ABRT directories and old files."""
+    abrt_path = Path(abrt_directory)
+    threshold_date = datetime.datetime.now() - datetime.timedelta(days=30)
     try:
-        for root, dirs, files in os.walk(abrt_directory, topdown=False):
-            # Clean up old files first
-            for file_name in files:
-                file_path = os.path.join(root, file_name)
-                try:
-                    file_timestamp = datetime.datetime.fromtimestamp(os.path.getmtime(file_path))
-                    threshold_date = datetime.datetime.now() - datetime.timedelta(days=30)
-
+        # Clean up old files first (bottom-up so we can remove empty dirs after)
+        for file_path in sorted(abrt_path.rglob('*'), reverse=True):
+            try:
+                if file_path.is_file():
+                    file_timestamp = datetime.datetime.fromtimestamp(file_path.stat().st_mtime)
                     if file_timestamp < threshold_date:
-                        os.remove(file_path)
+                        file_path.unlink()
                         log.info(logger.action(f"deleted file {file_path}"))
                         global_metrics.add_file()
-                except Exception:
-                    continue
-
-            # Remove empty directories
-            if not os.listdir(root):
-                os.rmdir(root)
-                log.info(logger.action(f"removed empty directory {root}"))
-                global_metrics.add_directory()
+                elif file_path.is_dir() and not any(file_path.iterdir()):
+                    file_path.rmdir()
+                    log.info(logger.action(f"removed empty directory {file_path}"))
+                    global_metrics.add_directory()
+            except OSError:
+                continue
     except Exception as e:
         log.error(logger.error_with_context(abrt_directory, e))
         global_metrics.add_error()
 
 def delete_abrt_directories_by_size(abrt_directory: str, max_size: str, dry_run: bool = False) -> int:
     """Delete ABRT directories when total size exceeds max_size."""
-    if not os.path.exists(abrt_directory):
+    abrt_path = Path(abrt_directory)
+    if not abrt_path.exists():
         return 0
 
     size_threshold_bytes = convert_size_to_bytes(max_size)
@@ -238,17 +243,16 @@ def delete_abrt_directories_by_size(abrt_directory: str, max_size: str, dry_run:
 
     try:
         directories_with_sizes = []
-        for dump_dir in os.listdir(abrt_directory):
-            dir_path = os.path.join(abrt_directory, dump_dir)
-            if os.path.isdir(dir_path):
+        for entry in abrt_path.iterdir():
+            if entry.is_dir():
                 try:
                     dir_size = sum(
-                        os.path.getsize(os.path.join(dirpath, filename))
-                        for dirpath, dirnames, filenames in os.walk(dir_path)
-                        for filename in filenames
+                        f.stat().st_size
+                        for f in entry.rglob('*')
+                        if f.is_file()
                     )
-                    directories_with_sizes.append((dir_path, dir_size))
-                except (OSError, IOError):
+                    directories_with_sizes.append((entry, dir_size))
+                except OSError:
                     continue
 
         # Sort by size (largest first) and delete until under threshold
@@ -270,7 +274,7 @@ def delete_abrt_directories_by_size(abrt_directory: str, max_size: str, dry_run:
                                           size=format_size(dir_size)))
                 total_size -= dir_size
     except Exception as e:
-        log.error(logger.error_with_context(dump_dir, e))
+        log.error(logger.error_with_context(abrt_directory, e))
         global_metrics.add_error()
 
     return space_freed
@@ -280,10 +284,11 @@ def truncate_log_file(filename: str, file_size: str) -> None:
     """
     Truncates a log file if it exceeds a specified size.
     """
+    file_path = Path(filename)
     try:
         bytes_to_compare = convert_size_to_bytes(file_size)
-        actual_size = os.path.getsize(filename)
-    except FileNotFoundError:
+        actual_size = file_path.stat().st_size if file_path.exists() else 0
+    except OSError:
         actual_size = 0
     if actual_size > bytes_to_compare:
         with open(filename, 'r+') as file:
@@ -295,27 +300,20 @@ def truncate_log_file(filename: str, file_size: str) -> None:
 
 def find_yaml_config() -> Optional[str]:
     """Find YAML configuration file in current directory."""
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    possible_configs = [
-        os.path.join(current_dir, 'diskcleanup.yaml'),
-        os.path.join(current_dir, 'diskcleanup.yml'),
-        os.path.join(current_dir, 'config.yaml'),
-        os.path.join(current_dir, 'config.yml')
-    ]
-
-    for config_path in possible_configs:
-        if os.path.exists(config_path):
-            return config_path
+    current_dir = Path(__file__).resolve().parent
+    for name in ('diskcleanup.yaml', 'diskcleanup.yml', 'config.yaml', 'config.yml'):
+        config_path = current_dir / name
+        if config_path.exists():
+            return str(config_path)
     return None
 
 def truncate_file(filename: str) -> None:
     """Truncate a file to 0 bytes."""
     try:
-        with open(filename, 'w') as f:
-            f.truncate(0)
+        Path(filename).write_text('')
         log.info(logger.action(f"truncated file {filename} to 0 bytes"))
         global_metrics.add_file()
-    except (OSError, IOError) as e:
+    except OSError as e:
         log.error(logger.error_with_context(filename, e))
         global_metrics.add_error()
 
@@ -333,7 +331,7 @@ def advanced_cleanup_directory(directory: str, max_age_days: int, file_pattern: 
     """
     Performs advanced cleanup of a directory based on file age and regex pattern.
     """
-    if not os.path.exists(directory):
+    if not Path(directory).exists():
         log.warning(f"Directory does not exist: {directory}")
         return 0
 
@@ -347,10 +345,6 @@ def advanced_cleanup_directory(directory: str, max_age_days: int, file_pattern: 
     try:
         pattern = re.compile(file_pattern)
         directory_path = Path(directory)
-
-        if not directory_path.exists():
-            log.warning(f"Directory does not exist: {directory}")
-            return 0
 
         # Use pathlib's rglob for more efficient recursive search with sampling
         sampler = LogSampler(50)  # Log every 50th file for large operations
@@ -416,7 +410,7 @@ def directory_cleanup(directory: str, max_fileage: int, file_extensions: List[st
             if itemTime < dir_max_fileage_tstamp:
                 if check_filename_pattern(item, file_extensions):
                     try:
-                        file_size = os.path.getsize(item)
+                        file_size = item.stat().st_size
                         age_days = (arrow.now() - itemTime).days
                         if dry_run:
                             space_freed += file_size
@@ -425,7 +419,7 @@ def directory_cleanup(directory: str, max_fileage: int, file_extensions: List[st
                                 log.info(logger.dry_run(f"remove file {item}",
                                                        age_days=age_days, size=format_size(file_size)))
                         else:
-                            os.remove(item)
+                            item.unlink()
                             space_freed += file_size
                             global_metrics.add_file(file_size)
                             if sampler.should_log():
@@ -466,17 +460,19 @@ def readConfig(filename: str) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str,
         required_keys = ['files', 'main', 'directories']
         missing_keys = [key for key in required_keys if key not in config]
         if missing_keys:
-            raise KeyError(f"Missing required configuration sections: {', '.join(missing_keys)}")
+            raise ConfigError(f"Missing required configuration sections: {', '.join(missing_keys)}")
 
         return config['files'], config['main'], config['directories']
     except yaml.YAMLError as e:
         if log is not None:
             log.error(logger.config("failed to parse YAML configuration", error=str(e)))
+        raise ConfigError(f"Invalid YAML: {e}") from e
+    except ConfigError:
         raise
     except Exception as e:
         if log is not None:
             log.error(logger.config("failed to read configuration file", error=str(e)))
-        raise
+        raise ConfigError(f"Failed to read config: {e}") from e
 
 def setup_rc_files(files: Dict[str, Any], max_filesize: str) -> None:
     """Set up the global rc_files dictionary."""
@@ -485,7 +481,8 @@ def setup_rc_files(files: Dict[str, Any], max_filesize: str) -> None:
 
     for filename, file_config in files.items():
         try:
-            file_size = os.path.getsize(filename) if os.path.exists(filename) else 0
+            file_path = Path(filename)
+            file_size = file_path.stat().st_size if file_path.exists() else 0
 
             if isinstance(file_config, dict) and file_config:
                 file_maxsize = convert_size_to_bytes(file_config.get('max_size', max_filesize))
@@ -569,24 +566,18 @@ def get_health_status(percent_used: int) -> str:
 def partition_usage(path: str) -> Tuple[int, int, float]:
     """Get partition usage for a given path."""
     try:
-        statvfs = os.statvfs(path)
-        total = statvfs.f_frsize * statvfs.f_blocks
-        free = statvfs.f_frsize * statvfs.f_bavail
-        used = total - free
-        percent = (used / total) * 100 if total > 0 else 0
-        return total, used, percent
+        usage = shutil.disk_usage(path)
+        percent = (usage.used / usage.total) * 100 if usage.total > 0 else 0
+        return usage.total, usage.used, percent
     except OSError:
         return 0, 0, 0.0
 
 def disk_usage(path: str) -> Tuple[int, int, int, float]:
     """Get disk usage for a path."""
     try:
-        statvfs = os.statvfs(path)
-        total = statvfs.f_frsize * statvfs.f_blocks
-        free = statvfs.f_frsize * statvfs.f_bavail
-        used = total - free
-        percent = (used / total) * 100 if total > 0 else 0
-        return total, used, free, percent
+        usage = shutil.disk_usage(path)
+        percent = (usage.used / usage.total) * 100 if usage.total > 0 else 0
+        return usage.total, usage.used, usage.free, percent
     except OSError:
         return 0, 0, 0, 0.0
 
@@ -640,19 +631,17 @@ def calculate_space_freed(health_before: Dict, health_after: Dict) -> int:
     return total_freed
 
 # Audit Functions
-def audit_scan_files(audit_path, disk_percent):
+def audit_scan_files(audit_path: str, disk_percent: float) -> None:
     """
     Scans and deletes audit log files until disk usage drops below 50%.
     """
-    audit_files = []
-    for filename in glob.glob(f"{audit_path}/audit.log.*"):
-        audit_files.append(filename)
-    sorted_audit_files = sorted(audit_files)
+    audit_dir = Path(audit_path)
+    sorted_audit_files = sorted(audit_dir.glob('audit.log.*'))
     current_disk_usage = disk_percent
 
     while current_disk_usage > 50 and sorted_audit_files:
         audit_last_file = sorted_audit_files.pop(-1)
-        os.remove(audit_last_file)
+        audit_last_file.unlink()
         total, used, free, percent = disk_usage(audit_path)
         current_disk_usage = percent
         log.info(logger.action(f"removed file {audit_last_file}",
@@ -661,7 +650,7 @@ def audit_scan_files(audit_path, disk_percent):
 
     log.info(logger.system("disk cleanup completed"))
 
-def check_auditd(audit_percent=50):
+def check_auditd(audit_percent: int = 50) -> None:
     """Check and clean up audit logs if disk usage exceeds threshold."""
     audit_path = '/var/log/audit'
     disk_total, disk_used, disk_percent = partition_usage(audit_path)
@@ -685,16 +674,18 @@ def count_deleted_files_procfs(service_name: str) -> int:
         for pid in pids:
             if pid:
                 try:
-                    fd_dir = f"/proc/{pid}/fd"
-                    if os.path.exists(fd_dir):
-                        for fd in os.listdir(fd_dir):
+                    fd_dir = Path(f"/proc/{pid}/fd")
+                    if fd_dir.exists():
+                        for fd in fd_dir.iterdir():
                             try:
-                                link_target = os.readlink(os.path.join(fd_dir, fd))
+                                # Use os.readlink directly — Path.resolve()
+                                # follows the link and loses the '(deleted)' marker
+                                link_target = os.readlink(str(fd))
                                 if '(deleted)' in link_target:
                                     count += 1
-                            except (OSError, IOError):
+                            except OSError:
                                 continue
-                except (OSError, IOError):
+                except OSError:
                     continue
     except subprocess.CalledProcessError:
         # Service not running
@@ -704,7 +695,7 @@ def count_deleted_files_procfs(service_name: str) -> int:
 
     return count
 
-def run_check_services(services):
+def run_check_services(services: List[str]) -> None:
     """
     Checks each service for open deleted file handles and restarts if needed.
     """
@@ -762,7 +753,7 @@ def validate_config(config: Dict[str, Any]) -> bool:
         # Validate directories exist
         missing_dirs = []
         for dir_path in main_config['directories_to_check']:
-            if not os.path.exists(dir_path):
+            if not Path(dir_path).exists():
                 missing_dirs.append(dir_path)
 
         if missing_dirs:
@@ -783,11 +774,11 @@ def print_health_comparison(health_before: Dict, health_after: Dict, execution_t
 
     # Create comparison table
     table = Table(title="🏥 System Health Comparison - Before vs After Cleanup", show_header=True, header_style="bold magenta")
-    table.add_column("Mount Point", justify="left", style="cyan", width=12)
-    table.add_column("Before", justify="center", style="red", width=15)
-    table.add_column("After", justify="center", style="green", width=15)
-    table.add_column("Freed", justify="center", style="bold green", width=12)
-    table.add_column("Improvement", justify="center", style="bold yellow", width=12)
+    table.add_column("Mount Point", justify="left", style="cyan", no_wrap=True)
+    table.add_column("Before", justify="center", style="red")
+    table.add_column("After", justify="center", style="green")
+    table.add_column("Freed", justify="center", style="bold green")
+    table.add_column("Improvement", justify="center", style="bold yellow")
 
     # Add rows for each mount point
     for mount_point in sorted(health_before.keys()):

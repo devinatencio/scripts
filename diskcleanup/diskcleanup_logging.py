@@ -9,8 +9,8 @@ This module contains all logging-related functionality including:
 - Simplified log message formatting
 
 Author: Devin Acosta
-Version: 2.0.3
-Date: 2025-07-23
+Version: 2.1.0
+Date: 2025-07-26
 """
 
 import datetime
@@ -45,27 +45,14 @@ class OperationIdFormatter(logging.Formatter):
         super().__init__(fmt, datefmt)
     
     def format(self, record):
-        # Get current operation ID
-        op_id = get_current_operation_id()
-        
-        # Add operation ID to the message, not the entire format
-        if op_id and op_id != 'session':
-            # For non-session IDs, use compact format
-            record.msg = f"[{op_id}] {record.msg}"
-        else:
-            # For session or missing IDs, use minimal format
-            record.msg = f"[session] {record.msg}"
-        
-        # Use the original formatter normally
-        return super().format(record)
+        # Work on a copy so other handlers don't see the prepended ID
+        import copy
+        record = copy.copy(record)
 
-class CleanRichHandler(RichHandler):
-    """Clean RichHandler without operation ID duplication."""
-    
-    def emit(self, record):
-        # Just emit cleanly without adding operation ID
-        # (the LogHelper methods already include operation IDs)
-        super().emit(record)
+        op_id = get_current_operation_id()
+        record.msg = f"[{op_id}] {record.msg}"
+
+        return super().format(record)
 
 @dataclass
 class OperationMetrics:
@@ -159,49 +146,51 @@ class OperationContext:
 
 class LogHelper:
     """Simplified logging helper - operation ID provides context, keep messages clean."""
-    
+
+    @staticmethod
+    def _format(message: str, **kwargs) -> str:
+        """Shared formatter: appends key-value pairs as (k: v) to the message."""
+        extra = " ".join(f"({k}: {v})" for k, v in kwargs.items() if v is not None)
+        return f"{message} {extra}".strip()
+
     @staticmethod
     def action(details: str, **kwargs) -> str:
-        """Format action log messages: Details (extra info)"""
-        extra_info = " ".join(f"({k}: {v})" for k, v in kwargs.items() if v is not None)
-        return f"{details} {extra_info}".strip()
-    
+        """Format action log messages."""
+        return LogHelper._format(details, **kwargs)
+
     @staticmethod
     def dry_run(details: str, **kwargs) -> str:
-        """Format dry-run log messages: Would details (extra info)"""
-        extra_info = " ".join(f"({k}: {v})" for k, v in kwargs.items() if v is not None)
-        return f"Would {details} {extra_info}".strip()
-    
+        """Format dry-run log messages."""
+        return LogHelper._format(f"Would {details}", **kwargs)
+
     @staticmethod
     def system(details: str, **kwargs) -> str:
-        """Format system log messages: Details (extra info)"""
-        extra_info = " ".join(f"({k}: {v})" for k, v in kwargs.items() if v is not None)
-        return f"{details} {extra_info}".strip()
-    
+        """Format system/informational log messages."""
+        return LogHelper._format(details, **kwargs)
+
     @staticmethod
     def config(details: str, **kwargs) -> str:
-        """Format configuration log messages: Details (extra info)"""
-        extra_info = " ".join(f"({k}: {v})" for k, v in kwargs.items() if v is not None)
-        return f"{details} {extra_info}".strip()
-    
+        """Format configuration log messages."""
+        return LogHelper._format(details, **kwargs)
+
     @staticmethod
     def performance(**kwargs) -> str:
-        """Format performance log messages: key: value pairs"""
-        extra_info = " ".join(f"{k}: {v}" for k, v in kwargs.items() if v is not None)
-        return f"Completed - {extra_info}"
-    
+        """Format performance log messages: key: value pairs."""
+        extra = " ".join(f"{k}: {v}" for k, v in kwargs.items() if v is not None)
+        return f"Completed - {extra}"
+
     @staticmethod
     def error_with_context(path: str, error: Exception, **kwargs) -> str:
         """Format error messages with context."""
-        extra_info = " ".join(f"({k}: {v})" for k, v in kwargs.items() if v is not None)
-        return f"Failed to process {path}: {type(error).__name__}: {error} {extra_info}".strip()
-    
+        return LogHelper._format(
+            f"Failed to process {path}: {type(error).__name__}: {error}", **kwargs
+        )
+
     @staticmethod
     def progress(current: int, total: int, **kwargs) -> str:
         """Format progress messages."""
         percent = f"{(current/total)*100:.1f}%" if total > 0 else "0%"
-        extra_info = " ".join(f"({k}: {v})" for k, v in kwargs.items() if v is not None)
-        return f"Progress: {current}/{total} ({percent}) {extra_info}".strip()
+        return LogHelper._format(f"Progress: {current}/{total} ({percent})", **kwargs)
 
 def setup_logging(log_file_path: str, verbose: bool = False) -> tuple:
     """
@@ -226,8 +215,8 @@ def setup_logging(log_file_path: str, verbose: bool = False) -> tuple:
     global_metrics = OperationMetrics()
     global_metrics.operation_id = f"session_{datetime.datetime.now().strftime('%H%M')}{str(uuid.uuid4())[:3]}"
     
-    # Rich console handler for beautiful interactive display
-    console_handler = CleanRichHandler(
+    # Rich console handler for interactive display
+    console_handler = RichHandler(
         console=console,
         rich_tracebacks=True,
         show_time=True,
@@ -242,7 +231,7 @@ def setup_logging(log_file_path: str, verbose: bool = False) -> tuple:
     console_handler.setFormatter(logging.Formatter('%(levelname)s %(message)s'))
     
     # File handler uses clean, standard format for tools/automation
-    file_handler = logging.FileHandler(log_file_path)
+    file_handler = logging.FileHandler(log_file_path, mode='a')
     file_handler.setFormatter(
         OperationIdFormatter(
             fmt='%(asctime)s %(levelname)-8s : %(message)s',

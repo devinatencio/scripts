@@ -1,0 +1,31 @@
+main:
+  cleanup: true
+  abrt_maxage: 30
+  abrt_maxsize: 50 MB
+  abrt_directory: ./test_data/crash/abrt
+  max_filesize: "2 GiB"
+  max_fileage: 30
+  check_services:
+    []
+  file_extensions:
+    - "tar.gz"
+    - ".gz"
+    - '.*-\d{8}'
+  directories_to_check:
+    - "./test_data/var/log"
+  audit_percent: 50
+  log_file: diskcleanup.log
+
+files:
+  "./test_data/var/log/mysqld.log": "5 MiB"
+  "./test_data/var/log/mysql/mysql-slow.log": {}
+  "./test_data/var/log/app/logstash-plain.log": {}
+  "./test_data/var/log/kibana/kibana.log": {}
+
+directories:
+  "./test_data/var/log/haproxy":
+    max_fileage: 10
+    file_pattern: "haproxy-.*"
+  "./test_data/var/log/kibana-1":
+    max_fileage: 3
+    file_pattern: "kibana-.*"

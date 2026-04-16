@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """
 Disk Cleanup Utility - Main Script
 
@@ -7,8 +7,8 @@ and detailed reporting capabilities. Supports dry-run analysis, pattern-based cl
 service restart detection, and real-time system health tracking.
 
 Author: Devin Acosta
-Version: 2.0.5
-Date: 2025-07-23
+Version: 2.1.0
+Date: 2025-07-26
 License: MIT
 
 Features:
@@ -40,9 +40,9 @@ Configuration:
 
 import argparse
 import logging
-import os
 import sys
 import time
+from pathlib import Path
 # Conditional import for GUI support
 HAS_GUI = False
 tk = None
@@ -72,6 +72,8 @@ from diskcleanup_core import (
     print_health_comparison, print_compact_health_summary,
     # Utilities
     format_size, has_slashes, truncate_log_file,
+    # Exceptions
+    ConfigError,
     # Global variables
     SCRIPTVER, SCRIPTDATE, log, logger, global_metrics
 )
@@ -209,8 +211,8 @@ def main():
         sys.exit(0)
 
     # Variable setup
-    script_name = os.path.basename(__file__)
-    current_directory = os.path.abspath(os.path.dirname(__file__))
+    script_name = Path(__file__).name
+    current_directory = str(Path(__file__).resolve().parent)
 
     # Initialize Config
     yml_config = args.config if args.config else find_yaml_config()
@@ -221,7 +223,7 @@ def main():
     # Read configuration
     try:
         files, files_main_settings, directories_to_check = readConfig(filename=yml_config)
-    except Exception as e:
+    except ConfigError as e:
         print(f"ERROR: Failed to read configuration: {e}")
         sys.exit(1)
 
@@ -249,6 +251,10 @@ def main():
 
     # Truncate log file if over 100M in size
     truncate_log_file(LOGFILE_PATH, '100M')
+
+    # Write a run separator to the log file for clarity between sessions
+    with open(LOGFILE_PATH, 'a') as f:
+        f.write("\n" + "=" * 72 + "\n")
 
     # Initialize Logging
     console, logger_helper, global_metrics_instance = setup_logging(LOGFILE_PATH, args.verbose > 0)
