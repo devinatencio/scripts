@@ -7,7 +7,7 @@ and detailed reporting capabilities. Supports dry-run analysis, pattern-based cl
 service restart detection, real-time system health tracking, and daemon mode for
 continuous scheduled cleanup.
 
-Author: Devin Acosta
+Author: Devin Atencio 
 Version: 3.0.0
 Date: 2026-04-18
 License: MIT
@@ -134,7 +134,7 @@ def show_version_dialog():
         version_info = f"""Disk Cleanup Utility
 
 Version: {SCRIPTVER}
-Author: Devin Acosta
+Author: Devin Atencio 
 Date: {SCRIPTDATE}
 License: MIT
 
