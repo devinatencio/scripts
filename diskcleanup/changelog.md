@@ -2,6 +2,134 @@
 
 ---
 
+## 3.0.0 (2026-04-18) — Package Architecture & Code Quality
+
+### Package Restructure
+
+- **NEW:** `diskcleanup/` Python package replaces flat `diskcleanup_*.py` module files
+- **NEW:** `diskcleanup/__init__.py` — re-exports all public symbols for backward-compatible imports
+- **NEW:** `diskcleanup/config.py` — exceptions, path safety, size utilities, YAML config reading/validation (~250 lines)
+- **NEW:** `diskcleanup/health.py` — system health monitoring, disk usage helpers, before/after comparison UI (~230 lines)
+- **NEW:** `diskcleanup/history.py` — JSONL history persistence, trending reports, CSV export (~280 lines)
+- **NEW:** `diskcleanup/core.py` — cleanup operations: directory, ABRT, journald, audit, services, file truncation (~480 lines)
+- **NEW:** `diskcleanup/logging.py` — logging infrastructure, formatters, metrics (unchanged, moved into package)
+- **REMOVED:** `diskcleanup_core.py`, `diskcleanup_config.py`, `diskcleanup_health.py`, `diskcleanup_history.py`, `diskcleanup_logging.py` (replaced by package modules)
+- **ENHANCED:** Module names shortened — `diskcleanup_` prefix no longer needed since the package name provides context
+- **ENHANCED:** `find_yaml_config()` updated to resolve config relative to project root from inside the package
+
+### Global State Cleanup
+
+- **NEW:** `init_runtime()` function in `diskcleanup/core.py` — single entry point to initialize module-level `log`, `logger`, and `global_metrics`
+- **ENHANCED:** `init_runtime()` propagates runtime state to all sub-modules (`config`, `health`, `history`) automatically
+- **REMOVED:** Direct module attribute assignment (`diskcleanup_core.log = ...`) from `diskcleanup.py` — replaced by `init_runtime()` call
+
+### Dead Code Removal
+
+- **REMOVED:** Unused `CleanupConfig` dataclass and its `from dataclasses import dataclass` import
+- **REMOVED:** `diskcleanup.py.5` backup file (restored — this is a man page, not a backup)
+
+### Code Quality
+
+- **FIXED:** `__import__('yaml').safe_load()` replaced with proper `import yaml` + `yaml.safe_load()` in two locations
+- **NEW:** `VERSION_FEATURES` and `VERSION_DESCRIPTION` shared constants — `show_version_dialog()` and `show_version_console()` no longer duplicate the feature list
+- **ENHANCED:** `diskcleanup.py` now imports `yaml` at module level instead of using runtime `__import__`
+
+### Version Bump
+
+- **BUMPED:** Version 2.7.0 → 3.0.0
+
+**Before:** Flat modules in project root
+
+```
+diskcleanup.py              (main script + orchestration)
+diskcleanup_logging.py      (logging infrastructure)
+diskcleanup_core.py         (~1500 lines — everything else)
+```
+
+**After:** Clean package architecture
+
+```
+diskcleanup.py              (main script + orchestration)
+diskcleanup/
+    __init__.py             (re-exports all public symbols)
+    config.py               (exceptions, safety, config I/O, validation, utilities)
+    core.py                 (cleanup operations)
+    health.py               (system health monitoring + display)
+    history.py              (run history persistence + trending reports)
+    logging.py              (logging infrastructure, formatters, metrics)
+```
+
+> **Note:** All changes maintain Python 3.6+ compatibility. Existing CLI usage is unchanged.
+
+---
+
+## 2.7.0 (2026-04-18) — Daemon Mode
+
+### Daemon Mode
+
+- **NEW:** `--daemon` flag runs cleanup in a continuous loop with a configurable sleep interval
+- **NEW:** `--interval SECONDS` CLI flag to override the daemon sleep interval
+- **NEW:** `daemon` YAML config section with `interval`, `pid_file`, and `max_consecutive_errors` settings
+- **NEW:** PID file support to prevent duplicate daemon instances (stale PID detection included)
+- **NEW:** Signal handling — `SIGTERM`/`SIGINT` for graceful shutdown, `SIGHUP` to interrupt sleep and trigger immediate next cycle
+- **NEW:** Config is re-read from YAML every cycle, so changes take effect without a restart
+- **NEW:** Consecutive error tracking — daemon exits after `max_consecutive_errors` failures to avoid silent broken loops
+- **NEW:** `run_cleanup()` function extracted from `main()` for clean single-pass execution (used by both standalone and daemon modes)
+
+### Systemd Integration
+
+- **NEW:** `contrib/systemd/diskcleanup-daemon.service` — systemd unit for daemon mode (built-in sleep loop)
+- **NEW:** `contrib/systemd/diskcleanup.service` — systemd unit for one-shot cleanup (pair with timer)
+- **NEW:** `contrib/systemd/diskcleanup.timer` — systemd timer for scheduled one-shot cleanup with randomized delay
+
+### Documentation
+
+- **UPDATED:** `README.md` — added Daemon Mode section with quick start, YAML config table, signal handling, PID file, and systemd integration instructions
+- **UPDATED:** `README.md` — added daemon mode to Features list
+- **UPDATED:** `diskcleanup.yaml` — added commented `daemon` config block with defaults
+- **UPDATED:** Version dialog and console feature lists include daemon mode
+- **UPDATED:** Module docstring features list and usage examples include daemon mode
+
+### Version Bump
+
+- **BUMPED:** Version 2.6.0 → 2.7.0
+
+> **Note:** All changes maintain Python 3.6+ compatibility. The daemon uses only stdlib modules (`signal`, `os`, `time`).
+
+---
+
+## 2.6.0 (2026-04-18) — Systemd Journal Cleanup
+
+### Journald Vacuum Support
+
+- **NEW:** `journald` YAML config section with `cleanup`, `max_size`, and `max_age` settings
+- **NEW:** `is_systemd_available()` — detects systemd by checking `/run/systemd/system`; gracefully skips non-systemd hosts
+- **NEW:** `get_journald_disk_usage()` — parses `journalctl --disk-usage` output into bytes
+- **NEW:** `cleanup_journald()` — runs `journalctl --vacuum-size` and `--vacuum-time`, tracks before/after usage
+- **NEW:** Dry-run support estimates savings by comparing current journal size against configured `max_size`
+- **NEW:** Journald space freed flows into `cleanup_breakdown`, trending reports, and run history
+
+### Reporting
+
+- **ENHANCED:** `type_labels` in `print_report()` now includes `journald_cleanup` → `journald`
+- **ENHANCED:** Journald cleanup appears in "Top Paths by Space Freed" trending table
+
+### Documentation
+
+- **UPDATED:** `README.md` — added Journald Section with config table and explanation
+- **UPDATED:** `README.md` — added journald to Features list and trending report description
+- **UPDATED:** `diskcleanup.yaml` — added default `journald` config block
+- **UPDATED:** Version dialog and console feature lists include journald
+- **UPDATED:** Module docstring features list includes journald
+
+### Version Bump
+
+- **BUMPED:** Version 2.5.0 → 2.6.0, date 2026-04-17 → 2026-04-18
+
+> **Note:** All changes maintain Python 3.6+ compatibility.
+
+---
+
 ## 2.5.0 (2026-04-17) — Safety Guardrails: Protected Path Enforcement
 
 ### Protected Path System

@@ -1,0 +1,43 @@
+# diskcleanup-daemon.service
+#
+# Runs diskcleanup.py in daemon mode with a built-in sleep loop.
+# The script handles its own scheduling interval (configured in YAML or via --interval).
+#
+# Installation:
+#   1. Copy this file to /etc/systemd/system/diskcleanup-daemon.service
+#   2. Adjust ExecStart path and --config path to match your installation
+#   3. sudo systemctl daemon-reload
+#   4. sudo systemctl enable --now diskcleanup-daemon.service
+#
+# Management:
+#   sudo systemctl status diskcleanup-daemon
+#   sudo systemctl stop diskcleanup-daemon
+#   sudo systemctl restart diskcleanup-daemon
+#   journalctl -u diskcleanup-daemon -f          # Follow logs
+#
+# To reload config without restarting (triggers SIGHUP → immediate next cycle):
+#   sudo systemctl reload diskcleanup-daemon
+
+[Unit]
+Description=Disk Cleanup Daemon
+Documentation=https://github.com/yourusername/diskcleanup
+After=network.target local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/diskcleanup/diskcleanup.py --daemon --config /opt/diskcleanup/diskcleanup.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+PIDFile=/var/run/diskcleanup.pid
+Restart=on-failure
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=diskcleanup
+
+# Security hardening
+NoNewPrivileges=false
+ProtectSystem=false
+PrivateTmp=false
+
+[Install]
+WantedBy=multi-user.target

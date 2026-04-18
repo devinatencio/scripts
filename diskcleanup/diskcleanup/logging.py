@@ -15,6 +15,7 @@ Date: 2025-07-26
 
 import datetime
 import logging
+import os
 import threading
 import time
 import uuid
@@ -192,43 +193,38 @@ class LogHelper:
         percent = f"{(current/total)*100:.1f}%" if total > 0 else "0%"
         return LogHelper._format(f"Progress: {current}/{total} ({percent})", **kwargs)
 
-def setup_logging(log_file_path: str, verbose: bool = False) -> tuple:
+def setup_logging(log_file_path: str, verbose: bool = False, quiet: bool = False) -> tuple:
     """
     Set up logging with dual approach: Rich console + Standard file
+    
+    Args:
+        log_file_path: Path to the log file.
+        verbose: Enable DEBUG level logging.
+        quiet: When True, suppress all console output (daemon mode).
+                Only the file handler is attached.
     
     Returns:
         tuple: (console, logger_helper, global_metrics)
     """
-    # Initialize console
-    console = Console(
-        theme=Theme({
-            "info": "cyan",
-            "warning": "yellow",
-            "error": "bold red",
-            "dry_run": "bold magenta"
-        }),
-        highlight=False  # Auto-detects terminal width for full console usage
-    )
+    # Initialize console — in quiet mode it writes to /dev/null so any code
+    # that calls console.print() or console.rule() is silently discarded.
+    if quiet:
+        console = Console(file=open(os.devnull, 'w'), highlight=False)
+    else:
+        console = Console(
+            theme=Theme({
+                "info": "cyan",
+                "warning": "yellow",
+                "error": "bold red",
+                "dry_run": "bold magenta"
+            }),
+            highlight=False  # Auto-detects terminal width for full console usage
+        )
     
     # Initialize logger helper and global metrics
     logger_helper = LogHelper()
     global_metrics = OperationMetrics()
     global_metrics.operation_id = f"session_{datetime.datetime.now().strftime('%H%M')}{str(uuid.uuid4())[:3]}"
-    
-    # Rich console handler for interactive display
-    console_handler = RichHandler(
-        console=console,
-        rich_tracebacks=True,
-        show_time=True,
-        show_path=False,
-        markup=False,  # Disable markup processing for log messages
-        log_time_format="[%H:%M:%S]",
-        omit_repeated_times=False,
-        show_level=False,  # Don't show level to avoid duplication
-        keywords=[]  # Don't highlight keywords 
-    )
-    # Set clean formatter without logger name
-    console_handler.setFormatter(logging.Formatter('%(levelname)s %(message)s'))
     
     # File handler uses clean, standard format for tools/automation
     file_handler = logging.FileHandler(log_file_path, mode='a')
@@ -239,10 +235,29 @@ def setup_logging(log_file_path: str, verbose: bool = False) -> tuple:
         )
     )
     
+    handlers = [file_handler]
+    
+    # Rich console handler for interactive display (skip in daemon/quiet mode)
+    if not quiet:
+        console_handler = RichHandler(
+            console=console,
+            rich_tracebacks=True,
+            show_time=True,
+            show_path=False,
+            markup=False,  # Disable markup processing for log messages
+            log_time_format="[%H:%M:%S]",
+            omit_repeated_times=False,
+            show_level=False,  # Don't show level to avoid duplication
+            keywords=[]  # Don't highlight keywords 
+        )
+        # Set clean formatter without logger name
+        console_handler.setFormatter(logging.Formatter('%(levelname)s %(message)s'))
+        handlers.append(console_handler)
+    
     # Configure logging
     logging.basicConfig(
         level=logging.DEBUG if verbose else logging.INFO,
-        handlers=[file_handler, console_handler],
+        handlers=handlers,
         force=True  # Ensure settings are applied
     )
     

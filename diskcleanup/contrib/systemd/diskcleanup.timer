@@ -1,0 +1,32 @@
+# diskcleanup.timer
+#
+# Systemd timer that triggers diskcleanup.service on a schedule.
+# This is an alternative to --daemon mode — the process starts, cleans, and exits
+# each cycle, freeing all memory between runs.
+#
+# Installation:
+#   1. Copy this file and diskcleanup.service to /etc/systemd/system/
+#   2. sudo systemctl daemon-reload
+#   3. sudo systemctl enable --now diskcleanup.timer
+#
+# Check timer status:
+#   systemctl list-timers diskcleanup.timer
+#   systemctl status diskcleanup.timer
+
+[Unit]
+Description=Disk Cleanup Timer
+Documentation=https://github.com/yourusername/diskcleanup
+
+[Timer]
+# Run every hour
+OnBootSec=5min
+OnUnitActiveSec=1h
+
+# Randomize start within a 5-minute window to avoid thundering herd on fleets
+RandomizedDelaySec=300
+
+# Persist timer across reboots — catch up on missed runs
+Persistent=true
+
+[Install]
+WantedBy=timers.target

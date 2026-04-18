@@ -1,0 +1,24 @@
+# diskcleanup.service
+#
+# Runs diskcleanup.py as a one-shot cleanup (no daemon mode).
+# Pair this with diskcleanup.timer for systemd-managed scheduling.
+#
+# Installation:
+#   1. Copy this file and diskcleanup.timer to /etc/systemd/system/
+#   2. Adjust ExecStart path and --config path to match your installation
+#   3. sudo systemctl daemon-reload
+#   4. sudo systemctl enable --now diskcleanup.timer
+#
+# Manual trigger:
+#   sudo systemctl start diskcleanup.service
+
+[Unit]
+Description=Disk Cleanup (one-shot)
+Documentation=https://github.com/yourusername/diskcleanup
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/diskcleanup/diskcleanup.py --config /opt/diskcleanup/diskcleanup.yaml
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=diskcleanup

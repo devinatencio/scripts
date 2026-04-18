@@ -1,12 +1,12 @@
 .\" diskcleanup.py - Disk Cleanup Utility man page
 .\" Section 5: File Formats and Configuration
 .\"
-.TH DISKCLEANUP.PY 5 "April 17, 2026" "2.5.0" "Disk Cleanup Utility"
+.TH DISKCLEANUP.PY 5 "April 18, 2026" "3.0.0" "Disk Cleanup Utility"
 .\"
 .\" ──────────────────────────────────────────────
 .SH NAME
 diskcleanup.py \- comprehensive disk cleanup utility with intelligent
-file management and health monitoring
+file management, health monitoring, and daemon mode
 .\"
 .\" ──────────────────────────────────────────────
 .SH SYNOPSIS
@@ -15,6 +15,13 @@ file management and health monitoring
 .RB [ \-\-config
 .IR path ]
 .RB [ \-\-verbose | \-v ]
+.br
+.B diskcleanup.py
+.B \-\-daemon
+.RB [ \-\-interval
+.IR seconds ]
+.RB [ \-\-config
+.IR path ]
 .br
 .B diskcleanup.py
 .RB [ \-\-report ]
@@ -38,26 +45,41 @@ file management and health monitoring
 is a comprehensive disk cleanup solution for Linux systems.
 It reads a YAML configuration file and performs intelligent file management
 including directory cleanup, log file truncation, ABRT crash dump management,
-audit log cleanup, and service restart detection.
+systemd journal log vacuuming, audit log cleanup, and service restart detection.
+.PP
+The utility can run as a one\-shot command, as a daemon with a built\-in
+sleep loop, or on a schedule via cron or systemd timers.
 .PP
 Key capabilities include:
 .RS 4
 .IP \(bu 2
 Cleanup directories by file age and extension, with regex pattern matching.
 .IP \(bu 2
+Recursive or top\-level\-only directory scanning, configurable globally and per directory.
+.IP \(bu 2
+Exclude patterns to protect specific files from cleanup (global and per\-directory).
+.IP \(bu 2
+Compressed file age detection \(em peeks inside .gz and .tar.gz headers to determine true age.
+.IP \(bu 2
 Monitor and truncate individual log files once they exceed a configured size.
 .IP \(bu 2
 Manage ABRT crash dumps by age and total directory size.
 .IP \(bu 2
+Vacuum systemd journal logs by size and age via journalctl.
+.IP \(bu 2
 Clean audit logs when disk usage exceeds a threshold percentage.
 .IP \(bu 2
 Detect and restart services holding deleted file handles.
+.IP \(bu 2
+Daemon mode with configurable interval, PID file, and graceful signal handling.
 .IP \(bu 2
 Dry\-run mode to preview potential savings without modifying anything.
 .IP \(bu 2
 System health monitoring with before/after comparison.
 .IP \(bu 2
 Run history tracking with trending reports and CSV export.
+.IP \(bu 2
+Protected path enforcement \(em refuses to operate on critical system directories.
 .IP \(bu 2
 Rich console output with progress tracking and detailed logging.
 .RE
@@ -81,6 +103,21 @@ Increase logging verbosity. Use
 for verbose or
 .B \-vv
 for debug\-level output.
+.TP
+.BR \-\-daemon
+Run as a daemon, performing cleanup on a recurring interval.
+The process stays resident and re\-reads the YAML configuration each cycle.
+See
+.B DAEMON MODE
+below.
+.TP
+.BR \-\-interval " " \fIseconds\fR
+Override the daemon sleep interval in seconds.
+Takes precedence over the YAML
+.B daemon.interval
+setting.
+Only meaningful with
+.BR \-\-daemon .
 .TP
 .BR \-\-report
 Display a trending report from run history and exit.
@@ -114,16 +151,7 @@ filesystem
 .\" ──────────────────────────────────────────────
 .SH INSTALLATION
 Place the script and its supporting files in a directory such as
-.IR /opt/diskcleanup .
-.PP
-To run the script hourly via cron, create
-.IR /etc/cron.d/diskcleanup :
-.PP
-.RS 4
-.nf
-00 * * * * root /opt/diskcleanup/diskcleanup.py
-.fi
-.RE
+.IR /opt/scripts/diskcleanup .
 .PP
 Install required Python modules:
 .PP
@@ -132,16 +160,30 @@ Install required Python modules:
 pip3 install \-r requirements.txt
 .fi
 .RE
+.PP
+To run the script hourly via cron, create
+.IR /etc/cron.d/diskcleanup :
+.PP
+.RS 4
+.nf
+00 * * * * root /opt/scripts/diskcleanup/diskcleanup.py
+.fi
+.RE
+.PP
+Alternatively, use the provided systemd units (see
+.BR "SYSTEMD INTEGRATION" ).
 .\"
 .\" ──────────────────────────────────────────────
 .SH CONFIGURATION FILE
 The script reads a YAML configuration file
 .RI ( diskcleanup.yaml
-by default) containing three top\-level sections:
+by default) containing the following top\-level sections:
 .BR main ,
 .BR files ,
-and
-.BR directories .
+.BR directories ,
+.BR journald ,
+and optionally
+.BR daemon .
 .\"
 .\" ──────────────────────────────────────────────
 .SS Main Section
@@ -166,13 +208,14 @@ main:
     \- 'compliance'
   directories_to_check:
     \- "/var/log"
+  recursive: false
   audit_percent: 50
+  compressed_age_detection: true
   log_file: diskcleanup.log
+  history_file: diskcleanup_history.jsonl
 .fi
 .RE
-
 .PP
-The main section parameters are described below:
 .TS
 allbox;
 lb lb lb
@@ -189,16 +232,22 @@ Files older than this are eligible for deletion.
 T}
 file_extensions	list of strings	T{
 File extensions to target during directory cleanup.
-Only files matching these extensions are actioned.
 Supports regex patterns (e.g., '.*\-\\d{8}').
 T}
 exclude_patterns	list of strings	T{
 Regex patterns for files to exclude from cleanup.
-Matching files are skipped even if they meet other criteria.
+Matched against both full path and filename.
 T}
 directories_to_check	list of paths	T{
 Directories to scan during basic directory cleanup.
-Typically set to /var/log.
+T}
+recursive	true | false	T{
+Enable recursive scanning for directories_to_check.
+Defaults to false.
+T}
+compressed_age_detection	true | false	T{
+Peek inside .gz and .tar.gz headers to determine true file age.
+Defaults to true. Disable to use only filesystem mtime.
 T}
 abrt_maxage	integer (days)	Maximum age of ABRT crash dump directories before deletion
 abrt_maxsize	size (MB or GB)	T{
@@ -216,6 +265,10 @@ T}
 log_file	path or filename	T{
 Log file location. If a bare filename is given, it is written
 to the script directory. An absolute path may also be used.
+T}
+history_file	path or filename	T{
+Run history file location. Defaults to diskcleanup_history.jsonl
+in the script directory.
 T}
 .TE
 .\"
@@ -240,18 +293,6 @@ Use an explicit size string (e.g., "5 MiB") to override the global
 for that file, or use
 .B {}
 to inherit the global default.
-.PP
-Examples:
-.RS 4
-.IP \(bu 2
-.I /var/log/mysqld.log
-\(em truncated when it reaches 5 MiB.
-.IP \(bu 2
-.I /var/log/mysql/mysql\-slow.log
-\(em truncated when it reaches the global
-.B max_filesize
-(2 GiB in the example above).
-.RE
 .\"
 .\" ──────────────────────────────────────────────
 .SS Directories Section
@@ -269,6 +310,8 @@ directories:
   "/var/log/kibana\-1":
     max_fileage: 3
     file_pattern: "kibana\-.*"
+    exclude_pattern: "kibana\-recent"
+    recursive: true
 .fi
 .RE
 .PP
@@ -303,11 +346,192 @@ alternation operator:
 file_pattern: "[logfile1_.*|filebeat\-.*]"
 .fi
 .RE
+.\"
+.\" ──────────────────────────────────────────────
+.SS Journald Section
+Controls systemd journal log vacuuming.
+Requires a system running systemd; gracefully skipped on non\-systemd hosts.
 .PP
-This matches files beginning with
-.I logfile1_
-or
-.IR filebeat\- .
+.RS 4
+.nf
+journald:
+  cleanup: true
+  max_size: "500 MB"
+  max_age: "30d"
+.fi
+.RE
+.PP
+.TS
+allbox;
+lb lb lb
+l l l.
+Parameter	Value	Description
+cleanup	true | false	Enable or disable journald vacuuming
+max_size	size string	T{
+Maximum journal size. Maps to journalctl \-\-vacuum\-size.
+T}
+max_age	duration string	T{
+Maximum journal age (e.g., "30d", "2weeks"). Maps to journalctl \-\-vacuum\-time.
+T}
+.TE
+.\"
+.\" ──────────────────────────────────────────────
+.SS Daemon Section
+Optional settings for daemon mode. Only used when
+.B \-\-daemon
+is passed.
+.PP
+.RS 4
+.nf
+daemon:
+  interval: 3600
+  pid_file: /var/run/diskcleanup.pid
+  max_consecutive_errors: 5
+.fi
+.RE
+.PP
+.TS
+allbox;
+lb lb lb
+l l l.
+Parameter	Value	Description
+interval	integer (seconds)	T{
+Sleep interval between cleanup cycles. Default: 3600.
+Overridden by the \-\-interval CLI flag.
+T}
+pid_file	path	T{
+PID file path. Used to prevent duplicate daemon instances.
+Default: /var/run/diskcleanup.pid.
+T}
+max_consecutive_errors	integer	T{
+Exit the daemon after this many consecutive failures.
+Default: 5.
+T}
+.TE
+.\"
+.\" ──────────────────────────────────────────────
+.SH DAEMON MODE
+When started with
+.BR \-\-daemon ,
+the script runs in a continuous loop:
+.PP
+.RS 4
+.IP 1. 3
+Write a PID file (exits if another instance is already running).
+.IP 2. 3
+Perform a full cleanup pass.
+.IP 3. 3
+Sleep for the configured interval.
+.IP 4. 3
+Re\-read the YAML configuration and repeat.
+.RE
+.PP
+.B Signal handling:
+.RS 4
+.IP \(bu 2
+.B SIGTERM / SIGINT
+\(em graceful shutdown. The current sleep is interrupted and the daemon exits cleanly.
+.IP \(bu 2
+.B SIGHUP
+\(em interrupts the sleep and triggers an immediate next cycle.
+Useful for config reload (the config is re\-read every cycle anyway).
+.RE
+.PP
+The PID file is removed on shutdown. If a stale PID file is found from a
+crashed instance, the daemon detects the dead process and overwrites it.
+.\"
+.\" ──────────────────────────────────────────────
+.SH PROTECTED PATHS
+The script maintains a hardcoded set of protected system paths that can never
+be targeted for cleanup, including
+.IR / ,
+.IR /etc ,
+.IR /usr ,
+.IR /home ,
+.IR /boot ,
+and others.
+.PP
+Additionally, any path shallower than depth 2 (e.g.,
+.IR /var )
+is rejected.
+Paths that are parents of protected directories are also blocked.
+.PP
+Protection is enforced at two levels:
+.RS 4
+.IP \(bu 2
+.B Configuration validation
+\(em rejects protected paths at startup before any cleanup runs.
+.IP \(bu 2
+.B Runtime checks
+\(em every cleanup function calls
+.B validate_path_safety()
+before performing any destructive operation.
+.RE
+.\"
+.\" ──────────────────────────────────────────────
+.SH COMPRESSED FILE AGE DETECTION
+When
+.B compressed_age_detection
+is enabled (the default), the script peeks inside compressed files to
+determine their true age:
+.RS 4
+.IP \(bu 2
+.B .tar.gz / .tgz
+\(em reads the mtime of the first tar archive member.
+.IP \(bu 2
+.B .gz
+\(em reads the 4\-byte timestamp from the gzip header (bytes 4\-7).
+.RE
+.PP
+The older of the filesystem mtime and the internal timestamp is used.
+This prevents recently\-rotated compressed logs from being skipped when
+the filesystem mtime reflects the rotation time rather than the log content age.
+.PP
+If the filesystem mtime already qualifies a file for cleanup, the archive
+header peek is skipped for performance.
+.\"
+.\" ──────────────────────────────────────────────
+.SH SYSTEMD INTEGRATION
+Three systemd unit files are provided in
+.IR contrib/systemd/ :
+.TP
+.B diskcleanup\-daemon.service
+Runs diskcleanup.py in daemon mode with a built\-in sleep loop.
+The script handles its own scheduling.
+Supports
+.B systemctl reload
+to send SIGHUP and trigger an immediate cycle.
+.TP
+.B diskcleanup.service
+One\-shot unit that runs a single cleanup pass and exits.
+Pair with the timer below for systemd\-managed scheduling.
+.TP
+.B diskcleanup.timer
+Triggers
+.B diskcleanup.service
+every hour with a randomized 5\-minute delay.
+Persistent across reboots (catches up on missed runs).
+.PP
+To install the timer\-based approach:
+.PP
+.RS 4
+.nf
+cp contrib/systemd/diskcleanup.service /etc/systemd/system/
+cp contrib/systemd/diskcleanup.timer /etc/systemd/system/
+systemctl daemon\-reload
+systemctl enable \-\-now diskcleanup.timer
+.fi
+.RE
+.PP
+To install the daemon approach:
+.PP
+.RS 4
+.nf
+cp contrib/systemd/diskcleanup\-daemon.service /etc/systemd/system/
+systemctl daemon\-reload
+systemctl enable \-\-now diskcleanup\-daemon.service
+.fi
+.RE
 .\"
 .\" ──────────────────────────────────────────────
 .SH EXAMPLES
@@ -332,6 +556,14 @@ Run with verbose logging:
 .RS 4
 .nf
 diskcleanup.py \-\-verbose
+.fi
+.RE
+.PP
+Start as a daemon with a 30\-minute interval:
+.PP
+.RS 4
+.nf
+diskcleanup.py \-\-daemon \-\-interval 1800
 .fi
 .RE
 .PP
@@ -365,6 +597,17 @@ Run history file in JSON Lines format, used for trending reports.
 .TP
 .I requirements.txt
 Python package dependencies.
+.TP
+.I diskcleanup/
+Python package containing the modular components:
+.BR config.py ,
+.BR core.py ,
+.BR health.py ,
+.BR history.py ,
+.BR logging.py .
+.TP
+.I contrib/systemd/
+Systemd service and timer unit files.
 .\"
 .\" ──────────────────────────────────────────────
 .SH EXIT STATUS
@@ -373,11 +616,11 @@ Python package dependencies.
 Successful execution.
 .TP
 .B 1
-Configuration error or missing configuration file.
+Configuration error, missing configuration file, or daemon PID conflict.
 .\"
 .\" ──────────────────────────────────────────────
 .SH AUTHOR
-Devin Atencio 
+Devin Acosta
 .\"
 .\" ──────────────────────────────────────────────
 .SH LICENSE
@@ -388,4 +631,5 @@ See \fIhttps://choosealicense.com/licenses/mit/\fR for details.
 .SH SEE ALSO
 .BR crontab (5),
 .BR logrotate (8),
-.BR systemctl (1)
+.BR systemctl (1),
+.BR journalctl (1)

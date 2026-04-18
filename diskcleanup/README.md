@@ -10,12 +10,38 @@ This script is a comprehensive disk cleanup utility designed to help maintain cl
 - **Pattern-Based Cleanup**: Advanced directory cleanup with regex pattern matching
 - **Exclude Patterns**: Whitelist files/paths from cleanup using regex (global and per-directory)
 - **Audit Log Management**: Cleanup audit logs when disk usage exceeds thresholds
+- **Journald Cleanup**: Vacuum systemd journal logs by size and age thresholds
+- **Daemon Mode**: Run continuously with configurable interval — no cron required
 - **Service Management**: Detect and restart services with deleted file handles
 - **Dry-Run Support**: Preview cleanup operations without making changes
 - **Run History & Trending**: Track space freed per run with per-directory breakdown
 - **Trending Reports**: View cleanup effectiveness over time with `--report` or `--report-csv`
 - **Rich Logging**: Detailed operation tracking with correlation IDs and metrics
 - **Health Monitoring**: Before/after system health comparison
+
+## Compressed File Age Detection
+
+When evaluating `.gz`, `.tar.gz`, and `.tgz` files for age-based cleanup, the utility looks beyond the filesystem modification time (mtime). Compressed files often carry a recent mtime from the moment they were created by log rotation, even though the data inside may be much older.
+
+To handle this, the cleanup functions peek at the internal timestamp stored in the archive:
+
+- **`.gz` files** — The gzip header contains a 4-byte timestamp of the original file. Only the first 8 bytes of the file are read.
+- **`.tar.gz` / `.tgz` files** — The modification time of the first tar member is read from the archive header.
+
+The older of the two timestamps (filesystem mtime vs. internal timestamp) is used for the age comparison. This means a log that was compressed yesterday but contains 60-day-old data will correctly be treated as 60 days old.
+
+For performance, the internal timestamp check is skipped when the filesystem mtime already qualifies the file for deletion. The archive is only opened for files whose mtime is newer than the configured age threshold — the exact case this feature is designed to catch. On systems with large numbers of tar.gz files this keeps overhead minimal.
+
+This applies to both `directory_cleanup` (the main config-driven path) and `advanced_cleanup_directory` (per-directory pattern rules).
+
+This feature is enabled by default. To disable it, set `compressed_age_detection: false` in the `main` section of your YAML configuration:
+
+```yml
+main:
+  compressed_age_detection: false
+```
+
+When disabled, all files are evaluated using only their filesystem mtime, which was the behavior prior to this feature.
 
 ## Architecture
 
@@ -103,6 +129,98 @@ For automated cleanup, install via CRON:
 00 2 * * * /opt/diskcleanup/diskcleanup.py 2>&1 | logger -t diskcleanup
 ```
 
+## Daemon Mode
+
+The `--daemon` flag runs diskcleanup in a continuous loop, sleeping between cleanup cycles. This is useful on systems without cron (containers, minimal AMIs, appliances) or when you want a single long-running process instead of scheduled invocations.
+
+### Quick Start
+
+```bash
+# Run as daemon with default 1-hour interval
+sudo python diskcleanup.py --daemon
+
+# Override interval from the command line (every 30 minutes)
+sudo python diskcleanup.py --daemon --interval 1800
+
+# Combine with dry-run to test daemon behavior without deleting anything
+sudo python diskcleanup.py --daemon --dry-run
+```
+
+### YAML Configuration
+
+Add an optional `daemon` section to your YAML config:
+
+```yml
+daemon:
+  interval: 3600                              # Seconds between cycles (default: 3600)
+  pid_file: /var/run/diskcleanup.pid          # PID file location (default: /var/run/diskcleanup.pid)
+  max_consecutive_errors: 5                   # Exit after N consecutive failures (default: 5)
+```
+
+| Config Parameter | Value | Explanation |
+| :---: | :---: | :---: |
+| interval | seconds | Time to sleep between cleanup cycles (default: 3600) |
+| pid_file | path | PID file to prevent duplicate instances (default: /var/run/diskcleanup.pid) |
+| max_consecutive_errors | integer | Daemon exits after this many consecutive cycle failures (default: 5) |
+
+The `--interval` CLI flag takes precedence over the YAML value. If neither is set, the default is 3600 seconds (1 hour).
+
+### How It Works
+
+1. On startup, the daemon writes a PID file and registers signal handlers
+2. Each cycle re-reads the YAML config, so changes take effect on the next cycle without a restart
+3. Between cycles, the process sleeps using a kernel-level sleep — zero CPU usage
+4. The daemon responds to signals:
+   - `SIGTERM` / `SIGINT` — graceful shutdown (finishes current cycle, removes PID file)
+   - `SIGHUP` — interrupts the sleep and starts the next cycle immediately (useful after config changes)
+5. If a cleanup cycle crashes, the error is logged and the daemon continues. After `max_consecutive_errors` consecutive failures, the daemon exits to avoid silent broken loops
+
+### PID File
+
+The daemon writes its PID to the configured `pid_file` path. If the file already exists and the PID inside it belongs to a running process, the daemon refuses to start (prevents duplicate instances). Stale PID files from crashed processes are automatically detected and overwritten.
+
+### Systemd Integration
+
+Example systemd unit files are provided in `contrib/systemd/`. There are two approaches:
+
+#### Option A: Daemon Mode (built-in sleep loop)
+
+Use `diskcleanup-daemon.service` — the script runs continuously with `--daemon`:
+
+```bash
+sudo cp contrib/systemd/diskcleanup-daemon.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now diskcleanup-daemon.service
+
+# Check status
+sudo systemctl status diskcleanup-daemon
+
+# Reload config (sends SIGHUP, triggers immediate next cycle)
+sudo systemctl reload diskcleanup-daemon
+
+# View logs
+journalctl -u diskcleanup-daemon -f
+```
+
+#### Option B: Systemd Timer (process starts/stops each cycle)
+
+Use `diskcleanup.service` + `diskcleanup.timer` — systemd handles the scheduling, the script runs once per invocation and exits:
+
+```bash
+sudo cp contrib/systemd/diskcleanup.service /etc/systemd/system/
+sudo cp contrib/systemd/diskcleanup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now diskcleanup.timer
+
+# Check timer schedule
+systemctl list-timers diskcleanup.timer
+
+# Manual trigger
+sudo systemctl start diskcleanup.service
+```
+
+The timer approach frees all memory between runs and is preferred for production servers with systemd. The daemon approach is simpler for environments without systemd or cron.
+
 ## YAML Configuration
 
 The script reads a YAML configuration file to tell the script all the settings that it needs to know in order to function properly.
@@ -130,6 +248,7 @@ main:
     - "/var/log"
   recursive: true
   audit_percent: 50
+  compressed_age_detection: true
   log_file: diskcleanup.log
   history_file: diskcleanup_history.jsonl
 ```
@@ -149,6 +268,7 @@ The above configuration is explained as follows:
 | directories_to_check | /var/log | This really should only be set to /var/log |
 | recursive | (true,false) | When true, directories_to_check are scanned recursively into subdirectories (default: false) |
 | audit_percent | 0-100 | Setting this value in (%) percent it will delete files until this percent of disk space is free |
+| compressed_age_detection | (true,false) | When true, `.gz`/`.tar.gz`/`.tgz` files are inspected for their internal timestamp to determine true data age (default: true) |
 | log_file | anything | Location to write the log file |
 | history_file | anything | Location to write the JSONL run history for trending reports (default: diskcleanup_history.jsonl) |
 
@@ -166,6 +286,25 @@ In the above example of files to watch, the following will happen:
 - File /var/log/mysqld.log will be truncated to 0 bytes once it reaches 2 GiB in size.
 - File /var/log/mysql-slow.log will be truncated to 0 bytes once it reaches 3 GiB in size.
 - File /var/log/logstash/logstash-plain.log will be truncated to 0 bytes once it reaches whatever the MAX Global setting is configured (max_filesize) which in this case is 2 GiB, so once it reaches 2 GiB it will be truncated.
+
+### Journald Section
+
+This optional section controls cleanup of systemd journal logs (`/var/log/journal`). On systems without systemd the section is silently skipped.
+
+```yml
+journald:
+  cleanup: true
+  max_size: "500 MB"
+  max_age: "30d"
+```
+
+| Config Parameter | Value | Explanation |
+| :---: | :---: | :---: |
+| cleanup | (true,false) | Enable or disable journald vacuum cleanup |
+| max_size | size | Maximum total journal size — maps to `journalctl --vacuum-size` (e.g. "500 MB", "1 GB") |
+| max_age | duration | Maximum journal age — maps to `journalctl --vacuum-time` (e.g. "30d", "2weeks") |
+
+Both constraints are applied together; whichever is more aggressive wins (this matches journalctl's own behavior). In dry-run mode the current journal usage is compared against `max_size` to estimate potential savings without actually vacuuming.
 
 ### Directories Section
 
@@ -219,7 +358,7 @@ python diskcleanup.py --report-csv > cleanup_history.csv
 The report shows:
 - **Summary** — total space freed, files processed, error count across all runs
 - **Run History** — each run with timestamp, mode (live/dry-run), freed, files, errors, duration
-- **Top Paths by Space Freed** — which directories/files contribute most to cleanup, aggregated across runs
+- **Top Paths by Space Freed** — which directories/files contribute most to cleanup (including journald), aggregated across runs
 - **Mount Point Trends** — disk usage change per mount from oldest to newest run
 
 The history file is automatically trimmed to the most recent 500 entries.

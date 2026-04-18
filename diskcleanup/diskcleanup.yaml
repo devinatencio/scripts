@@ -17,6 +17,7 @@ main:
   directories_to_check:
     - "/var/log"
   audit_percent: 50
+  compressed_age_detection: true
   log_file: diskcleanup.log
 
 files:
@@ -24,6 +25,17 @@ files:
   "/var/log/mysql/mysql-slow.log": {}
   "/var/log/ringcentral/lss/logstash-plain.log": {}
   "/var/log/kibana/kibana.log": {}
+
+journald:
+  cleanup: true
+  max_size: "500 MB"
+  max_age: "30d"
+
+# Daemon mode settings (used with --daemon flag)
+# daemon:
+#   interval: 3600                              # Seconds between cleanup cycles (default: 3600)
+#   pid_file: /var/run/diskcleanup.pid          # PID file path (default: /var/run/diskcleanup.pid)
+#   max_consecutive_errors: 5                   # Exit after N consecutive failures (default: 5)
 
 directories:
   "/var/log/haproxy":
