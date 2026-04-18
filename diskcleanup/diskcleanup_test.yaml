@@ -11,10 +11,16 @@ main:
     - "tar.gz"
     - ".gz"
     - '.*-\d{8}'
+  exclude_patterns:
+    - '\.keep$'
+    - 'compliance'
+    - 'haproxy-recent'
   directories_to_check:
     - "./test_data/var/log"
+  recursive: true
   audit_percent: 50
   log_file: diskcleanup.log
+  history_file: diskcleanup_history.jsonl
 
 files:
   "./test_data/var/log/mysqld.log": "5 MiB"
@@ -29,3 +35,4 @@ directories:
   "./test_data/var/log/kibana-1":
     max_fileage: 3
     file_pattern: "kibana-.*"
+    exclude_pattern: "kibana-recent"

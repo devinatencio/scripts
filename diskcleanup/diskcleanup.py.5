@@ -1,121 +1,391 @@
-.TH diskcleanup.py
+.\" diskcleanup.py - Disk Cleanup Utility man page
+.\" Section 5: File Formats and Configuration
+.\"
+.TH DISKCLEANUP.PY 5 "April 17, 2026" "2.5.0" "Disk Cleanup Utility"
+.\"
+.\" ──────────────────────────────────────────────
+.SH NAME
+diskcleanup.py \- comprehensive disk cleanup utility with intelligent
+file management and health monitoring
+.\"
+.\" ──────────────────────────────────────────────
+.SH SYNOPSIS
+.B diskcleanup.py
+.RB [ \-\-dry\-run ]
+.RB [ \-\-config
+.IR path ]
+.RB [ \-\-verbose | \-v ]
+.br
+.B diskcleanup.py
+.RB [ \-\-report ]
+.RB [ \-\-last
+.IR N ]
+.br
+.B diskcleanup.py
+.RB [ \-\-report\-csv ]
+.RB [ \-\-last
+.IR N ]
+.br
+.B diskcleanup.py
+.RB [ \-\-version | \-V ]
+.br
+.B diskcleanup.py
+.RB [ \-\-version\-dialog ]
+.\"
+.\" ──────────────────────────────────────────────
+.SH DESCRIPTION
+.B diskcleanup.py
+is a comprehensive disk cleanup solution for Linux systems.
+It reads a YAML configuration file and performs intelligent file management
+including directory cleanup, log file truncation, ABRT crash dump management,
+audit log cleanup, and service restart detection.
 .PP
-This script is a very useful utility to help you keep your /var/log directory clean. It is a very powerful utility that has several capabilities. These include:
-.RS
+Key capabilities include:
+.RS 4
 .IP \(bu 2
-Ability to cleanup individual directories (each with unique settings) to delete files older than XX number of days.
+Cleanup directories by file age and extension, with regex pattern matching.
 .IP \(bu 2
-Monitor Log Files and truncate once they reach XX size (MiB, GiB, TiB)
+Monitor and truncate individual log files once they exceed a configured size.
 .IP \(bu 2
-Cleanup /var/log/audit directory once it achieves XX disk space usage and bring down to 50%.
+Manage ABRT crash dumps by age and total directory size.
+.IP \(bu 2
+Clean audit logs when disk usage exceeds a threshold percentage.
+.IP \(bu 2
+Detect and restart services holding deleted file handles.
+.IP \(bu 2
+Dry\-run mode to preview potential savings without modifying anything.
+.IP \(bu 2
+System health monitoring with before/after comparison.
+.IP \(bu 2
+Run history tracking with trending reports and CSV export.
+.IP \(bu 2
+Rich console output with progress tracking and detailed logging.
 .RE
-.SH Installation of Python Modules
+.\"
+.\" ──────────────────────────────────────────────
+.SH OPTIONS
+.TP
+.BR \-\-dry\-run
+Show what would be cleaned without actually removing or truncating any files.
+Displays estimated space savings.
+.TP
+.BR \-\-config " " \fIpath\fR
+Path to a YAML configuration file.
+If not specified, the script searches for
+.I diskcleanup.yaml
+in the same directory as the script.
+.TP
+.BR \-\-verbose ", " \-v
+Increase logging verbosity. Use
+.B \-v
+for verbose or
+.B \-vv
+for debug\-level output.
+.TP
+.BR \-\-report
+Display a trending report from run history and exit.
+.TP
+.BR \-\-report\-csv
+Export run history as CSV to stdout and exit.
+.TP
+.BR \-\-last " " \fIN\fR
+Number of recent runs to include in the report. Default is 20.
+.TP
+.BR \-\-version ", " \-V
+Print version information to the console and exit.
+.TP
+.BR \-\-version\-dialog
+Show version information in a GUI dialog box (requires tkinter).
+.\"
+.\" ──────────────────────────────────────────────
+.SH REQUIREMENTS
+.IP \(bu 2
+Python 3.6 or later
+.IP \(bu 2
+PyYAML, rich, arrow (install via
+.BR "pip3 install \-r requirements.txt" )
+.IP \(bu 2
+Root privileges for system cleanup operations
+.IP \(bu 2
+Linux system with
+.I /proc
+filesystem
+.\"
+.\" ──────────────────────────────────────────────
+.SH INSTALLATION
+Place the script and its supporting files in a directory such as
+.IR /opt/diskcleanup .
 .PP
-Install required Python Modules using the requirements.txt, Requires Python 3.6+
+To run the script hourly via cron, create
+.IR /etc/cron.d/diskcleanup :
 .PP
-.RS
+.RS 4
 .nf
-pip3 \-r requirements.txt
+00 * * * * root /opt/diskcleanup/diskcleanup.py
 .fi
 .RE
-.SH Installation (using CRONTAB)
 .PP
-It is assumed that you will run the script on some cadence using CRON, you can install the files into any directory that you like (ie: /opt/diskcleanup), below is to have the script run every hour (put into /etc/cron.d/diskcleanup
+Install required Python modules:
 .PP
-.RS
+.RS 4
 .nf
-00 * * * * /opt/diskcleanup/diskcleanup.py
+pip3 install \-r requirements.txt
 .fi
 .RE
-.SH YAML Configuration
-.PP
-The script reads a YAML configuration file to tell the script all the settings that it needs to know in order to function properly.
+.\"
+.\" ──────────────────────────────────────────────
+.SH CONFIGURATION FILE
+The script reads a YAML configuration file
+.RI ( diskcleanup.yaml
+by default) containing three top\-level sections:
+.BR main ,
+.BR files ,
+and
+.BR directories .
+.\"
+.\" ──────────────────────────────────────────────
 .SS Main Section
+Global settings that control overall script behavior.
 .PP
-.RS
+.RS 4
 .nf
 main:
-  cleanup: true 
+  cleanup: true
   abrt_maxage: 30
   abrt_maxsize: 50 MB
   abrt_directory: /var/log/crash/abrt
-  max_filesize: 2 GiB
+  max_filesize: "2 GiB"
   max_fileage: 30
-  file_extensions: 
+  check_services: []
+  file_extensions:
     \- "tar.gz"
     \- ".gz"
+    \- '.*\-\\d{8}'
+  exclude_patterns:
+    \- '\\.keep'
+    \- 'compliance'
   directories_to_check:
     \- "/var/log"
   audit_percent: 50
   log_file: diskcleanup.log
 .fi
 .RE
+
 .PP
-The above configuration is explained as follows:
+The main section parameters are described below:
 .TS
 allbox;
-cb cb cb
-c c c
-c c c
-c c c
-c c c
-c c c
-c c c
-c c c
-c c c
-c c c
-c c c
-.
-Config Parameter	Value	Explanation
-abrt_maxage	days	Set max file age of ABRT files
-abrt_maxsize	size	Purge if directory over this size (MB or GB)
-abrt_directory	directory	Directory of ABRT crash files
-cleanup	(true,false)	(this tells the program whether or not to perform cleanup of the /var/log directory)
-max_filesize	(KiB,MiB,GiB,TiB)	Sets file Limit Size (There must be space between value and size (i.e.: 2 GiB)
-max_fileage	days	Set file Max Age in number of days (i.e.: 30 days)
-file_extensions	anything	List of extensions to pay attention to, only will action files matching these extensions
-directories\fIto\fPcheck	/var/log	This really should only be set to /var/log
-audit_percent	0\-100	Setting this value in (%) percent it will delete files until this percent of disk space is free
-log_file	anything	Location to write the log file
+lb lb lb
+l l l.
+Parameter	Value	Description
+cleanup	true | false	Enable or disable cleanup operations
+max_filesize	size (KiB, MiB, GiB, TiB)	T{
+Global maximum file size before truncation.
+Must include a space between value and unit (e.g., "2 GiB").
+T}
+max_fileage	integer (days)	T{
+Global maximum file age in days.
+Files older than this are eligible for deletion.
+T}
+file_extensions	list of strings	T{
+File extensions to target during directory cleanup.
+Only files matching these extensions are actioned.
+Supports regex patterns (e.g., '.*\-\\d{8}').
+T}
+exclude_patterns	list of strings	T{
+Regex patterns for files to exclude from cleanup.
+Matching files are skipped even if they meet other criteria.
+T}
+directories_to_check	list of paths	T{
+Directories to scan during basic directory cleanup.
+Typically set to /var/log.
+T}
+abrt_maxage	integer (days)	Maximum age of ABRT crash dump directories before deletion
+abrt_maxsize	size (MB or GB)	T{
+Purge oldest ABRT directories when total size exceeds this value.
+T}
+abrt_directory	path	Directory containing ABRT crash dump files
+audit_percent	0\-100	T{
+Disk usage percentage threshold for audit log cleanup.
+When exceeded, audit files are deleted until usage drops below this value.
+T}
+check_services	list of strings	T{
+Service names to check for deleted file handles.
+Services holding deleted files are restarted automatically.
+T}
+log_file	path or filename	T{
+Log file location. If a bare filename is given, it is written
+to the script directory. An absolute path may also be used.
+T}
 .TE
+.\"
+.\" ──────────────────────────────────────────────
 .SS Files Section
+Lists individual files to monitor for size.
+When a file exceeds its configured maximum size, it is truncated to 0 bytes.
 .PP
-This section of the YAML is to list individual files that you want to monitor specifically and the max value setting for this file. If the file reaches over the XX value it will truncate the file to 0 bytes. The table below lists some examples:
-.PP
-.RS
+.RS 4
 .nf
 files:
-  "/var/log/mysqld.log": "2 GiB"
-  "/var/log/mysql/mysql\-slow.log" : "3 GiB"
+  "/var/log/mysqld.log": "5 MiB"
+  "/var/log/mysql/mysql\-slow.log": {}
   "/var/log/logstash/logstash\-plain.log": {}
+  "/var/log/kibana/kibana.log": {}
 .fi
 .RE
 .PP
-In the above example of files to watch, the following will happen:
-\- File /var/log/mysqld.log will be truncated to 0 bytes once it reaches 2 GiB in size.
-\- File /var/log/mysql\-slow.log will be truncated to 0 bytes once it reaches 3 GiB in size.
-\- File /var/log/logstash/logstash\-plain.log will be truncated to 0 bytes once it reaches whatever the MAX Global setting is configured (max_filesize) which in this case is 2 GiB, so once it reaches 2 GiB it will be truncated.
+Each entry maps a file path to a size limit.
+Use an explicit size string (e.g., "5 MiB") to override the global
+.B max_filesize
+for that file, or use
+.B {}
+to inherit the global default.
+.PP
+Examples:
+.RS 4
+.IP \(bu 2
+.I /var/log/mysqld.log
+\(em truncated when it reaches 5 MiB.
+.IP \(bu 2
+.I /var/log/mysql/mysql\-slow.log
+\(em truncated when it reaches the global
+.B max_filesize
+(2 GiB in the example above).
+.RE
+.\"
+.\" ──────────────────────────────────────────────
 .SS Directories Section
+Defines per\-directory cleanup rules using regex file patterns.
+Each directory can override the global
+.B max_fileage
+and specify its own file matching pattern.
 .PP
-This section allows you to specifically individual directories to check across the filesystem and the appropriate configuration settings.
-.PP
-If you plan to watch multiple file REGEX patterns within a single directory, you will need to use the REGEX | parameter, something like: 
-\fBfile\fIpattern: "[logfile1\fP\&.*|filebeat\-.*]"\fP\&. This would look for logs beginning with logfile1_*, or filebeat\-*\&.
-.PP
-.RS
+.RS 4
 .nf
 directories:
-  "/var/log/directory_1":
-    file_pattern: "[log_.*\\\\.log]"
-  "/var/log/directory_2":
+  "/var/log/haproxy":
+    max_fileage: 10
+    file_pattern: "haproxy\-.*"
+  "/var/log/kibana\-1":
     max_fileage: 3
-    file_pattern: "file_.*\\\\.csv"
+    file_pattern: "kibana\-.*"
 .fi
 .RE
 .PP
-In the example of directories to watch, the following will happen:
-\- Directory /var/log/directory\fI1, any file that matches REGEX pattern will be deleted, since no max\fPfileage was provided it will default to using Global Default [max\fIfileage] which in this case would be 30 days.
-\- Directory /var/log/directory\fP2, any file that matches REGEX pattern will be deleted, in this case anything over 3 days.
-.SH License
+.TS
+allbox;
+lb lb lb
+l l l.
+Parameter	Value	Description
+max_fileage	integer (days)	T{
+Override the global max_fileage for this directory.
+If omitted, the global default is used.
+T}
+file_pattern	regex string	T{
+Regex pattern to match filenames.
+Only matching files are eligible for deletion.
+T}
+exclude_pattern	string or list	T{
+Additional exclude patterns specific to this directory.
+Merged with global exclude_patterns.
+T}
+recursive	true | false	T{
+Whether to recurse into subdirectories.
+Defaults to true for pattern directories.
+T}
+.TE
 .PP
-MIT \[la]https://choosealicense.com/licenses/mit/\[ra]
+To match multiple file patterns within a single directory, use the regex
+alternation operator:
+.PP
+.RS 4
+.nf
+file_pattern: "[logfile1_.*|filebeat\-.*]"
+.fi
+.RE
+.PP
+This matches files beginning with
+.I logfile1_
+or
+.IR filebeat\- .
+.\"
+.\" ──────────────────────────────────────────────
+.SH EXAMPLES
+Run a dry\-run to preview what would be cleaned:
+.PP
+.RS 4
+.nf
+diskcleanup.py \-\-dry\-run
+.fi
+.RE
+.PP
+Run cleanup with a custom configuration file:
+.PP
+.RS 4
+.nf
+diskcleanup.py \-\-config /etc/diskcleanup/production.yaml
+.fi
+.RE
+.PP
+Run with verbose logging:
+.PP
+.RS 4
+.nf
+diskcleanup.py \-\-verbose
+.fi
+.RE
+.PP
+Show a trending report of the last 50 runs:
+.PP
+.RS 4
+.nf
+diskcleanup.py \-\-report \-\-last 50
+.fi
+.RE
+.PP
+Export run history as CSV:
+.PP
+.RS 4
+.nf
+diskcleanup.py \-\-report\-csv > cleanup_history.csv
+.fi
+.RE
+.\"
+.\" ──────────────────────────────────────────────
+.SH FILES
+.TP
+.I diskcleanup.yaml
+Default YAML configuration file (searched in the script directory).
+.TP
+.I diskcleanup.log
+Default log file (written to the script directory unless overridden).
+.TP
+.I diskcleanup_history.jsonl
+Run history file in JSON Lines format, used for trending reports.
+.TP
+.I requirements.txt
+Python package dependencies.
+.\"
+.\" ──────────────────────────────────────────────
+.SH EXIT STATUS
+.TP
+.B 0
+Successful execution.
+.TP
+.B 1
+Configuration error or missing configuration file.
+.\"
+.\" ──────────────────────────────────────────────
+.SH AUTHOR
+Devin Atencio 
+.\"
+.\" ──────────────────────────────────────────────
+.SH LICENSE
+MIT License.
+See \fIhttps://choosealicense.com/licenses/mit/\fR for details.
+.\"
+.\" ──────────────────────────────────────────────
+.SH SEE ALSO
+.BR crontab (5),
+.BR logrotate (8),
+.BR systemctl (1)

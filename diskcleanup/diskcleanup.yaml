@@ -11,6 +11,9 @@ main:
     - "tar.gz"
     - ".gz"
     - '.*-\d{8}'
+  exclude_patterns:
+    - '\.keep$'
+    - 'compliance'
   directories_to_check:
     - "/var/log"
   audit_percent: 50

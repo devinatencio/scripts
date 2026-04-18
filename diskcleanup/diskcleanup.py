@@ -6,9 +6,9 @@ A comprehensive disk cleanup solution with intelligent file management, health m
 and detailed reporting capabilities. Supports dry-run analysis, pattern-based cleanup,
 service restart detection, and real-time system health tracking.
 
-Author: Devin Acosta
-Version: 2.1.0
-Date: 2025-07-26
+Author: Devin Atencio
+Version: 2.5.0
+Date: 2026-04-17
 License: MIT
 
 Features:
@@ -31,6 +31,8 @@ Requirements:
 
 Usage:
     ./diskcleanup.py [--dry-run] [--config /path/to/config.yaml] [--verbose]
+    ./diskcleanup.py --report [--last N]          # Show trending report
+    ./diskcleanup.py --report-csv [--last N]      # Export history as CSV
     ./diskcleanup.py --version | -V               # Show version information
     ./diskcleanup.py --version-dialog             # Show version in GUI dialog
 
@@ -70,10 +72,15 @@ from diskcleanup_core import (
     check_system_health, calculate_space_freed,
     # UI functions
     print_health_comparison, print_compact_health_summary,
+    # Run history / trending
+    get_history_path, save_run_history, trim_history_file,
+    print_report, print_report_csv,
     # Utilities
     format_size, has_slashes, truncate_log_file,
     # Exceptions
     ConfigError,
+    # Safety
+    is_path_protected, validate_path_safety,
     # Global variables
     SCRIPTVER, SCRIPTDATE, log, logger, global_metrics
 )
@@ -194,6 +201,23 @@ def parse_arguments():
         default=0,
         help='Increase verbosity (use -v or -vv)'
     )
+    parser.add_argument(
+        '--report',
+        action='store_true',
+        help='Show trending report from run history and exit'
+    )
+    parser.add_argument(
+        '--report-csv',
+        action='store_true',
+        help='Export run history as CSV to stdout and exit'
+    )
+    parser.add_argument(
+        '--last',
+        type=int,
+        default=20,
+        metavar='N',
+        help='Number of recent runs to show in report (default: 20)'
+    )
     return parser.parse_args()
 
 def main():
@@ -228,7 +252,7 @@ def main():
         sys.exit(1)
 
     # Validate configuration
-    if not validate_config({"main": files_main_settings}):
+    if not validate_config({"main": files_main_settings, "directories": directories_to_check}):
         print("ERROR: Configuration validation failed. Exiting.")
         sys.exit(1)
 
@@ -236,12 +260,26 @@ def main():
     dirtochk = files_main_settings["directories_to_check"]
     max_fileage = files_main_settings["max_fileage"]
     file_extensions = files_main_settings["file_extensions"]
+    exclude_patterns = files_main_settings.get("exclude_patterns", [])
+    recursive = files_main_settings.get("recursive", False)
     audit_percent = files_main_settings['audit_percent']
     abrt_maxage = files_main_settings['abrt_maxage']
     abrt_maxsize = files_main_settings['abrt_maxsize']
     abrt_directory = files_main_settings['abrt_directory']
     LOGFILE = files_main_settings['log_file']
     check_services = files_main_settings.get('check_services', [])
+
+    # Resolve history file path
+    history_path = get_history_path(files_main_settings, current_directory)
+
+    # Handle report commands early (no cleanup needed)
+    if args.report:
+        print_report(history_path, last_n=args.last)
+        sys.exit(0)
+
+    if args.report_csv:
+        print_report_csv(history_path, last_n=args.last)
+        sys.exit(0)
 
     # Adjust Log File Path
     if has_slashes(LOGFILE):
@@ -282,6 +320,7 @@ def main():
 
     # Track potential/actual space savings
     total_space_freed = 0
+    cleanup_breakdown = {}  # {path: {bytes_freed, files, type}}
 
     # Set up file monitoring
     setup_rc_files(files, files_main_settings["max_filesize"])
@@ -294,10 +333,18 @@ def main():
                               directories=len(dirtochk), max_age=max_fileage,
                               extensions=file_extensions, targets=dirtochk))
         for dir in dirtochk:
-            space = directory_cleanup(dir, max_fileage, file_extensions, args.dry_run)
+            dir_start_files = diskcleanup_core.global_metrics.files_processed
+            space = directory_cleanup(dir, max_fileage, file_extensions, args.dry_run,
+                                     exclude_patterns=exclude_patterns,
+                                     recursive=recursive)
             total_space_freed += space
             metrics.bytes_freed += space
             if space > 0:
+                cleanup_breakdown[dir] = {
+                    'bytes_freed': space,
+                    'files': diskcleanup_core.global_metrics.files_processed - dir_start_files,
+                    'type': 'directory_cleanup',
+                }
                 if args.dry_run:
                     diskcleanup_core.log.info(logger_helper.dry_run(f"clean directory {dir}",
                                           potential_savings=format_size(space)))
@@ -320,6 +367,15 @@ def main():
             total_space_freed += space
             metrics.bytes_freed += space
             if space > 0:
+                # Break down per-file truncations
+                for file_path in diskcleanup_core.rc_files:
+                    rc = diskcleanup_core.rc_files[file_path]
+                    if rc['file_size'] >= rc['file_maxsize'] and rc['file_size'] != 0:
+                        cleanup_breakdown[file_path] = {
+                            'bytes_freed': rc['file_size'],
+                            'files': 1,
+                            'type': 'file_truncate',
+                        }
                 diskcleanup_core.log.info(logger_helper.action("disk cleanup completed", freed=format_size(space)))
         else:
             for file in diskcleanup_core.rc_files:
@@ -329,6 +385,11 @@ def main():
                     space = file_size
                     total_space_freed += space
                     metrics.bytes_freed += space
+                    cleanup_breakdown[file] = {
+                        'bytes_freed': space,
+                        'files': 1,
+                        'type': 'file_truncate',
+                    }
                     diskcleanup_core.log.info(logger_helper.dry_run(f"truncate {file}", saving=format_size(space)))
         # Sync global metrics to operation metrics
         metrics.files_processed = diskcleanup_core.global_metrics.files_processed - start_files
@@ -345,11 +406,30 @@ def main():
             # Use directory-specific max_fileage or fall back to global default
             dir_max_fileage = directories_to_check[directory].get('max_fileage', max_fileage)
             file_pattern = directories_to_check[directory]['file_pattern']
+            # Merge global excludes with per-directory excludes
+            dir_excludes = list(exclude_patterns)
+            dir_exclude = directories_to_check[directory].get('exclude_pattern')
+            if dir_exclude:
+                if isinstance(dir_exclude, list):
+                    dir_excludes.extend(dir_exclude)
+                else:
+                    dir_excludes.append(dir_exclude)
 
-            space = advanced_cleanup_directory(directory, dir_max_fileage, file_pattern, args.dry_run)
+            # Per-directory recursive setting, falls back to global, then True (original behavior)
+            dir_recursive = directories_to_check[directory].get('recursive', True)
+
+            dir_start_files = diskcleanup_core.global_metrics.files_processed
+            space = advanced_cleanup_directory(directory, dir_max_fileage, file_pattern, args.dry_run,
+                                              exclude_patterns=dir_excludes,
+                                              recursive=dir_recursive)
             total_space_freed += space
             metrics.bytes_freed += space
             if space > 0:
+                cleanup_breakdown[directory] = {
+                    'bytes_freed': space,
+                    'files': diskcleanup_core.global_metrics.files_processed - dir_start_files,
+                    'type': 'pattern_cleanup',
+                }
                 if args.dry_run:
                     diskcleanup_core.log.info(logger_helper.dry_run(f"clean {directory}",
                                           potential_savings=format_size(space)))
@@ -361,7 +441,26 @@ def main():
         metrics.directories_processed = diskcleanup_core.global_metrics.directories_processed - start_dirs
 
     # AuditD Disk Cleanup
-    check_auditd(audit_percent)
+    with OperationContext("audit_cleanup", "audit", "/var/log/audit") as metrics:
+        start_files = diskcleanup_core.global_metrics.files_processed
+        start_dirs = diskcleanup_core.global_metrics.directories_processed
+        audit_freed, audit_files = check_auditd(audit_percent)
+        total_space_freed += audit_freed
+        metrics.bytes_freed += audit_freed
+        if audit_freed > 0:
+            cleanup_breakdown['/var/log/audit'] = {
+                'bytes_freed': audit_freed,
+                'files': audit_files,
+                'type': 'audit_cleanup',
+            }
+            if args.dry_run:
+                diskcleanup_core.log.info(logger_helper.dry_run("audit cleanup",
+                                      potential_savings=format_size(audit_freed)))
+            else:
+                diskcleanup_core.log.info(logger_helper.action("AuditD cleanup completed",
+                                     freed=format_size(audit_freed), files=audit_files))
+        metrics.files_processed = diskcleanup_core.global_metrics.files_processed - start_files
+        metrics.directories_processed = diskcleanup_core.global_metrics.directories_processed - start_dirs
 
     # Perform ABRT Cleanups
     with OperationContext("abrt_cleanup", "abrt", abrt_directory.replace('/', '_')) as metrics:
@@ -377,9 +476,15 @@ def main():
         space_size = delete_abrt_directories_by_size(abrt_directory, abrt_maxsize, args.dry_run)
         total_space_freed += space_size
         metrics.bytes_freed += space_size
-        if space_age > 0 or space_size > 0:
+        abrt_total = space_age + space_size
+        if abrt_total > 0:
+            cleanup_breakdown[abrt_directory] = {
+                'bytes_freed': abrt_total,
+                'files': diskcleanup_core.global_metrics.files_processed - start_files,
+                'type': 'abrt_cleanup',
+            }
             diskcleanup_core.log.info(logger_helper.action("ABRT cleanup completed",
-                                     freed=format_size(space_age + space_size)))
+                                     freed=format_size(abrt_total)))
         # Sync global metrics to operation metrics
         metrics.files_processed = diskcleanup_core.global_metrics.files_processed - start_files
         metrics.directories_processed = diskcleanup_core.global_metrics.directories_processed - start_dirs
@@ -470,6 +575,22 @@ def main():
                                    dirs_processed=global_metrics_instance.directories_processed,
                                    errors=global_metrics_instance.errors_encountered,
                                    execution_time=f"{execution_time:.2f}s"))
+
+    # Save run history for trending
+    save_run_history(
+        history_path=history_path,
+        health_before=health_before,
+        health_after=health_after,
+        space_freed=total_space_freed if args.dry_run else space_freed_display,
+        files_processed=global_metrics_instance.files_processed,
+        dirs_processed=global_metrics_instance.directories_processed,
+        errors=global_metrics_instance.errors_encountered,
+        execution_time=execution_time,
+        dry_run=args.dry_run,
+        config_file=yml_config,
+        cleanup_breakdown=cleanup_breakdown,
+    )
+    trim_history_file(history_path)
 
     # Email notification (send_notification function not implemented)
     if 'email' in files_main_settings:
