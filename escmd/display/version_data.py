@@ -114,14 +114,14 @@ class VersionDataCollector:
         Returns:
             Dictionary containing script location details
         """
-        from pathlib import Path
+        from utils import get_script_dir
 
-        script_path = Path(__file__).parent.parent.resolve()
+        script_path = get_script_dir()
 
         return {
             "script_directory": str(script_path),
             "current_working_directory": os.getcwd(),
-            "script_file": __file__,
+            "script_file": sys.argv[0],
         }
 
     def collect_command_statistics(self):

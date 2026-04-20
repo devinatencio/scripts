@@ -489,7 +489,10 @@ class TemplateHandler(BaseHandler):
             return
 
         # Show what would change
-        from ..template_utils import TemplateModifier
+        try:
+            from template_utils.field_manipulation import TemplateModifier
+        except ImportError:
+            from ..template_utils.field_manipulation import TemplateModifier
         modifier = TemplateModifier()
         current_value, field_exists = modifier.get_field_value(template_def, field_path)
 

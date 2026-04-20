@@ -1,0 +1,63 @@
+2026-04-18 17:11:18,916 - escmd_dangling - INFO - [escmd.py:557] - Starting escmd command: dangling
+2026-04-18 17:11:18,960 - escmd_dangling - INFO - [command_handler.py:316] - Executing command: dangling
+2026-04-18 17:11:18,960 - escmd_dangling - INFO - [dangling_handler.py:41] - Starting dangling indices operation
+2026-04-18 17:11:18,960 - escmd_dangling - INFO - [dangling_handler.py:42] - Command arguments: cleanup_all=False, group=None, env=None, metrics=False
+2026-04-18 17:11:18,960 - escmd_dangling - INFO - [dangling_handler.py:137] - Starting dangling indices listing operation
+2026-04-18 17:11:18,960 - escmd_dangling - INFO - [dangling_handler.py:142] - Retrieving dangling indices from cluster
+2026-04-18 17:11:18,966 - escmd_dangling - INFO - [dangling_handler.py:161] - Found 0 dangling indices
+2026-04-18 17:11:18,981 - escmd_dangling - INFO - [dangling_handler.py:171] - Cluster: elasticsearch, Nodes: 1
+2026-04-18 17:11:19,010 - escmd_dangling - INFO - [escmd.py:655] - Command dangling completed successfully
+2026-04-18 17:12:05,549 - escmd_dangling - INFO - [escmd.py:557] - Starting escmd command: dangling
+2026-04-18 17:12:05,595 - escmd_dangling - INFO - [command_handler.py:316] - Executing command: dangling
+2026-04-18 17:12:05,595 - escmd_dangling - INFO - [dangling_handler.py:41] - Starting dangling indices operation
+2026-04-18 17:12:05,595 - escmd_dangling - INFO - [dangling_handler.py:42] - Command arguments: cleanup_all=False, group=None, env=None, metrics=False
+2026-04-18 17:12:05,595 - escmd_dangling - INFO - [dangling_handler.py:137] - Starting dangling indices listing operation
+2026-04-18 17:12:05,595 - escmd_dangling - INFO - [dangling_handler.py:142] - Retrieving dangling indices from cluster
+2026-04-18 17:12:05,601 - escmd_dangling - INFO - [dangling_handler.py:161] - Found 0 dangling indices
+2026-04-18 17:12:05,673 - escmd_dangling - INFO - [dangling_handler.py:171] - Cluster: elasticsearch, Nodes: 1
+2026-04-18 17:12:05,708 - escmd_dangling - INFO - [escmd.py:655] - Command dangling completed successfully
+2026-04-18 17:12:09,789 - escmd_dangling - INFO - [escmd.py:557] - Starting escmd command: dangling
+2026-04-18 17:12:09,835 - escmd_dangling - INFO - [command_handler.py:316] - Executing command: dangling
+2026-04-18 17:12:09,835 - escmd_dangling - INFO - [dangling_handler.py:41] - Starting dangling indices operation
+2026-04-18 17:12:09,835 - escmd_dangling - INFO - [dangling_handler.py:42] - Command arguments: cleanup_all=False, group=None, env=None, metrics=False
+2026-04-18 17:12:09,835 - escmd_dangling - INFO - [dangling_handler.py:137] - Starting dangling indices listing operation
+2026-04-18 17:12:09,835 - escmd_dangling - INFO - [dangling_handler.py:142] - Retrieving dangling indices from cluster
+2026-04-18 17:12:09,840 - escmd_dangling - INFO - [dangling_handler.py:161] - Found 0 dangling indices
+2026-04-18 17:12:09,858 - escmd_dangling - INFO - [dangling_handler.py:171] - Cluster: elasticsearch, Nodes: 1
+2026-04-18 17:12:09,888 - escmd_dangling - INFO - [escmd.py:655] - Command dangling completed successfully
+2026-04-18 17:12:11,468 - escmd_dangling - INFO - [escmd.py:557] - Starting escmd command: dangling
+2026-04-18 17:12:11,513 - escmd_dangling - INFO - [command_handler.py:316] - Executing command: dangling
+2026-04-18 17:12:11,513 - escmd_dangling - INFO - [dangling_handler.py:41] - Starting dangling indices operation
+2026-04-18 17:12:11,513 - escmd_dangling - INFO - [dangling_handler.py:42] - Command arguments: cleanup_all=False, group=None, env=None, metrics=False
+2026-04-18 17:12:11,513 - escmd_dangling - INFO - [dangling_handler.py:137] - Starting dangling indices listing operation
+2026-04-18 17:12:11,513 - escmd_dangling - INFO - [dangling_handler.py:142] - Retrieving dangling indices from cluster
+2026-04-18 17:12:11,520 - escmd_dangling - INFO - [dangling_handler.py:161] - Found 0 dangling indices
+2026-04-18 17:12:11,538 - escmd_dangling - INFO - [dangling_handler.py:171] - Cluster: elasticsearch, Nodes: 1
+2026-04-18 17:12:11,568 - escmd_dangling - INFO - [escmd.py:655] - Command dangling completed successfully
+2026-04-18 17:12:14,362 - escmd_dangling - INFO - [escmd.py:557] - Starting escmd command: dangling
+2026-04-18 17:12:14,408 - escmd_dangling - INFO - [command_handler.py:316] - Executing command: dangling
+2026-04-18 17:12:14,408 - escmd_dangling - INFO - [dangling_handler.py:41] - Starting dangling indices operation
+2026-04-18 17:12:14,408 - escmd_dangling - INFO - [dangling_handler.py:42] - Command arguments: cleanup_all=False, group=None, env=None, metrics=False
+2026-04-18 17:12:14,408 - escmd_dangling - INFO - [dangling_handler.py:137] - Starting dangling indices listing operation
+2026-04-18 17:12:14,408 - escmd_dangling - INFO - [dangling_handler.py:142] - Retrieving dangling indices from cluster
+2026-04-18 17:12:14,413 - escmd_dangling - INFO - [dangling_handler.py:161] - Found 0 dangling indices
+2026-04-18 17:12:14,429 - escmd_dangling - INFO - [dangling_handler.py:171] - Cluster: elasticsearch, Nodes: 1
+2026-04-18 17:12:14,458 - escmd_dangling - INFO - [escmd.py:655] - Command dangling completed successfully
+2026-04-18 17:12:16,159 - escmd_dangling - INFO - [escmd.py:557] - Starting escmd command: dangling
+2026-04-18 17:12:16,204 - escmd_dangling - INFO - [command_handler.py:316] - Executing command: dangling
+2026-04-18 17:12:16,204 - escmd_dangling - INFO - [dangling_handler.py:41] - Starting dangling indices operation
+2026-04-18 17:12:16,204 - escmd_dangling - INFO - [dangling_handler.py:42] - Command arguments: cleanup_all=False, group=None, env=None, metrics=False
+2026-04-18 17:12:16,204 - escmd_dangling - INFO - [dangling_handler.py:137] - Starting dangling indices listing operation
+2026-04-18 17:12:16,204 - escmd_dangling - INFO - [dangling_handler.py:142] - Retrieving dangling indices from cluster
+2026-04-18 17:12:16,210 - escmd_dangling - INFO - [dangling_handler.py:161] - Found 0 dangling indices
+2026-04-18 17:12:16,225 - escmd_dangling - INFO - [dangling_handler.py:171] - Cluster: elasticsearch, Nodes: 1
+2026-04-18 17:12:16,255 - escmd_dangling - INFO - [escmd.py:655] - Command dangling completed successfully
+2026-04-18 17:12:24,623 - escmd_dangling - INFO - [escmd.py:557] - Starting escmd command: dangling
+2026-04-18 17:12:24,665 - escmd_dangling - INFO - [command_handler.py:316] - Executing command: dangling
+2026-04-18 17:12:24,665 - escmd_dangling - INFO - [dangling_handler.py:41] - Starting dangling indices operation
+2026-04-18 17:12:24,665 - escmd_dangling - INFO - [dangling_handler.py:42] - Command arguments: cleanup_all=False, group=None, env=None, metrics=False
+2026-04-18 17:12:24,665 - escmd_dangling - INFO - [dangling_handler.py:137] - Starting dangling indices listing operation
+2026-04-18 17:12:24,665 - escmd_dangling - INFO - [dangling_handler.py:142] - Retrieving dangling indices from cluster
+2026-04-18 17:12:24,670 - escmd_dangling - INFO - [dangling_handler.py:161] - Found 0 dangling indices
+2026-04-18 17:12:24,688 - escmd_dangling - INFO - [dangling_handler.py:171] - Cluster: elasticsearch, Nodes: 1
+2026-04-18 17:12:24,724 - escmd_dangling - INFO - [escmd.py:655] - Command dangling completed successfully

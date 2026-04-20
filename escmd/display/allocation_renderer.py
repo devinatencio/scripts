@@ -327,7 +327,6 @@ class AllocationRenderer:
             self.console.print(title_panel)
             print()
             self.console.print(help_table)
-            print()
 
         except Exception as e:
             self.console.print(f"[red]❌ Error retrieving allocation settings: {str(e)}[/red]")

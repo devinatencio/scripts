@@ -1,9 +1,11 @@
 import json
 import os
+import re
 import yaml
 from rich.console import Console
 from rich.table import Table
 from rich import box
+from utils import load_json_tolerant as _load_json_tolerant
 
 
 class ConfigurationManager:
@@ -42,15 +44,20 @@ class ConfigurationManager:
             self._load_single_file_config()
         else:
             # Auto-detect mode: try dual-file first, fallback to single-file
-            if os.path.exists("escmd.yml") or os.path.exists("elastic_servers.yml"):
-                self.main_config_path = "escmd.yml"
-                self.servers_config_path = "elastic_servers.yml"
+            # Resolve config files relative to the state file's directory
+            # so they work regardless of cwd (important for Nuitka onefile builds).
+            _base = os.path.dirname(os.path.abspath(self.state_file_path))
+            _main_candidate = os.path.join(_base, "escmd.yml")
+            _servers_candidate = os.path.join(_base, "elastic_servers.yml")
+            if os.path.exists(_main_candidate) or os.path.exists(_servers_candidate):
+                self.main_config_path = _main_candidate
+                self.servers_config_path = _servers_candidate
                 self.config_file_path = None
                 self.is_dual_file_mode = True
                 self._load_dual_file_config()
             else:
                 # Fallback to single-file mode with default path
-                self.config_file_path = "elastic_servers.yml"
+                self.config_file_path = os.path.join(_base, "elastic_servers.yml")
                 self.main_config_path = None
                 self.servers_config_path = None
                 self.is_dual_file_mode = False
@@ -352,10 +359,9 @@ class ConfigurationManager:
         """
         # Check state file first (for runtime theme switching)
         try:
-            with open(self.state_file_path, "r") as file:
-                state_data = json.load(file)
-                if "display_theme" in state_data:
-                    return state_data["display_theme"]
+            state_data = _load_json_tolerant(self.state_file_path)
+            if "display_theme" in state_data:
+                return state_data["display_theme"]
         except (FileNotFoundError, json.JSONDecodeError, KeyError):
             pass
 
@@ -556,11 +562,10 @@ class ConfigurationManager:
         # Option 4: JSON state file username
         try:
             if os.path.exists(self.state_file_path):
-                with open(self.state_file_path, "r") as file:
-                    state_data = json.load(file)
-                    json_username = state_data.get("elastic_username")
-                    if json_username:
-                        return json_username
+                state_data = _load_json_tolerant(self.state_file_path)
+                json_username = state_data.get("elastic_username")
+                if json_username:
+                    return json_username
         except (json.JSONDecodeError, IOError, KeyError):
             # Ignore errors reading state file
             pass
@@ -642,8 +647,7 @@ class ConfigurationManager:
             str: The name of the default cluster.
         """
         try:
-            with open(self.state_file_path, "r") as file:
-                return json.load(file)["current_cluster"]
+            return _load_json_tolerant(self.state_file_path)["current_cluster"]
         except (FileNotFoundError, json.JSONDecodeError, KeyError):
             return "default"
 
@@ -655,8 +659,7 @@ class ConfigurationManager:
             value (str): The name of the cluster to set as default.
         """
         try:
-            with open(self.state_file_path, "r") as file:
-                settings = json.load(file)
+            settings = _load_json_tolerant(self.state_file_path)
         except (FileNotFoundError, json.JSONDecodeError):
             settings = {"current_cluster": "default"}
 
@@ -677,8 +680,7 @@ class ConfigurationManager:
         """
         try:
             try:
-                with open(self.state_file_path, "r") as file:
-                    settings = json.load(file)
+                settings = _load_json_tolerant(self.state_file_path)
             except (FileNotFoundError, json.JSONDecodeError):
                 settings = {"current_cluster": "default"}
 
@@ -702,8 +704,7 @@ class ConfigurationManager:
         """
         try:
             try:
-                with open(self.state_file_path, "r") as file:
-                    settings = json.load(file)
+                settings = _load_json_tolerant(self.state_file_path)
             except (FileNotFoundError, json.JSONDecodeError):
                 settings = {"current_cluster": "default"}
 
@@ -729,9 +730,8 @@ class ConfigurationManager:
         """
         try:
             if os.path.exists(self.state_file_path):
-                with open(self.state_file_path, "r") as file:
-                    state_data = json.load(file)
-                    return state_data.get("elastic_username")
+                state_data = _load_json_tolerant(self.state_file_path)
+                return state_data.get("elastic_username")
         except (json.JSONDecodeError, IOError, KeyError):
             pass
         return None
@@ -1006,10 +1006,9 @@ class ConfigurationManager:
         # First try to get from state file (escmd.json)
         try:
             if os.path.exists(self.state_file_path):
-                with open(self.state_file_path, "r") as f:
-                    state_data = json.load(f)
-                    if "display_theme" in state_data:
-                        return state_data["display_theme"]
+                state_data = _load_json_tolerant(self.state_file_path)
+                if "display_theme" in state_data:
+                    return state_data["display_theme"]
         except (json.JSONDecodeError, IOError):
             # Ignore errors reading state file
             pass

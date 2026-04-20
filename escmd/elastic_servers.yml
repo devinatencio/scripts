@@ -5,3 +5,4 @@ servers:
   use_ssl: false
   verify_certs: false
   elastic_authentication: false
+  elastic_s3snapshot_repo: my-repo

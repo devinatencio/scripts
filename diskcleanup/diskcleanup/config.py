@@ -153,11 +153,16 @@ def has_slashes(filename: str) -> bool:
 
 # ── Configuration reading and validation ─────────────────────────────
 def find_yaml_config() -> Optional[str]:
-    """Find YAML configuration file in current directory."""
-    # __file__ is inside diskcleanup/ package, so go up one level
-    current_dir = Path(__file__).resolve().parent.parent
+    """Find YAML configuration file in the application directory.
+
+    When running as a PyInstaller bundle the app directory is the folder
+    containing the executable; otherwise it is the project root (one level
+    above the diskcleanup/ package).
+    """
+    from diskcleanup.path import get_app_dir
+    app_dir = get_app_dir()
     for name in ('diskcleanup.yaml', 'diskcleanup.yml', 'config.yaml', 'config.yml'):
-        config_path = current_dir / name
+        config_path = app_dir / name
         if config_path.exists():
             return str(config_path)
     return None

@@ -72,7 +72,7 @@ _COMMANDS = [
     ("🔄 ILM & Lifecycle",   "yellow",       "datastreams",             "Datastream list & detail",                       "./escmd.py datastreams"),
     ("🔄 ILM & Lifecycle",   "yellow",       "rollover",                "Rollover a datastream",                          "./escmd.py rollover <name>"),
     ("🔄 ILM & Lifecycle",   "yellow",       "auto-rollover",           "Rollover the biggest shard",                     "./escmd.py auto-rollover"),
-    ("🔄 ILM & Lifecycle",   "yellow",       "action",                  "Run action sequences",                           "./escmd.py action run <name>"),
+    ("🔄 ILM & Lifecycle",   "yellow",       "actions",                 "Run action sequences",                           "./escmd.py actions run <name>"),
 
     ("🔩 Settings & Config", "white",        "cluster-settings",        "View/manage cluster settings",                   "./escmd.py cluster-settings"),
     ("🔩 Settings & Config", "white",        "set",                     "Set a setting via dot notation",                 "./escmd.py set cluster.routing.allocation.enable all"),

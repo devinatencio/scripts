@@ -1,0 +1,20 @@
+settings:
+  elastic_clustername: <clustername>
+  elastic_default_timeout: 300
+  elastic_restored_indice: rc_snapshots
+  elastic_history_indice: rc_snapshots_history
+  elastic_restored_maxdays: 3
+  elastic_restore_batch_size: 3
+  elastic_max_shards_per_node: 1000
+  default_retention_maxdays: 30
+  ilm_curator_delay: 1h
+
+servers:
+  - name: DEFAULT
+    hostname: <ipaddress> 
+    port: 9200
+    use_ssl: True
+    repository: <repository_name>
+    elastic_authentication: False
+    elastic_username: None
+    elastic_password: None

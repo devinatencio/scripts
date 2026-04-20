@@ -198,7 +198,7 @@ class DatastreamHandler(BaseHandler):
             table.add_row(name, status, template, ilm_policy, generation, indices_count, style=ss.get_zebra_style(i) if ss else None)
 
         console.print(table)
-        print("\n")  # Extra spacing
+        print()
 
         # Create summary panel with actions - also full width
         actions_table = Table(show_header=False, box=None, padding=(0, 1))
@@ -219,7 +219,6 @@ class DatastreamHandler(BaseHandler):
         )
 
         console.print(actions_panel)
-        print("\n")
 
     def _print_datastream_details_table(self, datastream_details):
         """Print detailed datastream information in table format"""

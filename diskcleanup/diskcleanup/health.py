@@ -169,9 +169,11 @@ def calculate_space_freed(health_before: Dict, health_after: Dict) -> int:
 
 # ── UI / Display ─────────────────────────────────────────────────────
 def print_health_comparison(health_before: Dict, health_after: Dict,
-                            execution_time: float, space_freed: int) -> None:
+                            execution_time: float, space_freed: int,
+                            console: Optional[Console] = None) -> None:
     """Print a professional side-by-side comparison of system health."""
-    console = Console()
+    if console is None:
+        console = Console()
 
     table = Table(title="🏥 System Health Comparison - Before vs After Cleanup",
                   show_header=True, header_style="bold magenta")
@@ -250,9 +252,11 @@ def print_health_comparison(health_before: Dict, health_after: Dict,
     console.print(panel)
 
 
-def print_compact_health_summary(health_before: Dict, health_after: Dict) -> None:
+def print_compact_health_summary(health_before: Dict, health_after: Dict,
+                                  console: Optional[Console] = None) -> None:
     """Print a compact system health summary."""
-    console = Console()
+    if console is None:
+        console = Console()
 
     summary_text = Text()
     summary_text.append("🖥  System Status: ", style="bold")

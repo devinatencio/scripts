@@ -1,0 +1,11 @@
+# server_v2 dependencies - Python 3.6 compatible
+elasticsearch>=7.0,<8.0
+requests
+PyYAML
+rich>=10.0,<13.0
+urllib3
+
+# Test dependencies
+pytest>=3.0
+hypothesis>=3.56,<5.0
+pytest-mock>=1.10

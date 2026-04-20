@@ -153,9 +153,8 @@ class PanelRenderer:
             panel_kwargs["width"] = width
         
         panel = Panel(message_text, **panel_kwargs)
-        self.console.print("\n")
+        self.console.print()
         self.console.print(panel, markup=True)
-        self.console.print("\n")
 
     def _resolve_message_style(self, style: str) -> str:
         """Resolve message_style, preserving 'bold' prefix with themed color."""

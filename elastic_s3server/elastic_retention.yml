@@ -1,0 +1,7 @@
+retention:
+ - name: Retention for logs-gan
+   pattern: .*logs-gan-.*
+   max_days: 90
+ - name: Retention for logs-gas
+   pattern: .*logs-gas-.*
+   max_days: 90

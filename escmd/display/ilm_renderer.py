@@ -204,7 +204,7 @@ class ILMRenderer:
             self.console.print(f"[red]❌ Error retrieving ILM policies: {policies['error']}[/red]")
             return
 
-        # Get cluster name and version for context (same method as indices command)
+        # Get cluster name and version for context
         try:
             cluster_info = self.es_client.cluster_commands.get_cluster_info()
             cluster_name = cluster_info.get('cluster_name', 'Unknown')
@@ -219,43 +219,47 @@ class ILMRenderer:
         else:
             cluster_info_text = f"Cluster: {cluster_name}"
 
-        # Get style system for themed styling like indices command
-        style_system = self.es_client.style_system
+        style_system = getattr(self.es_client, 'style_system', None)
 
-        # Create colorized subtitle with theme-based styling
+        # --- Summary panel (matches template / indices pattern) ---
+        total = len(policies)
+        policy_word = "Policy" if total == 1 else "Policies"
+        status_text = f"✅ {total} ILM {policy_word} Configured"
+
         subtitle_rich = Text()
-        subtitle_rich.append(f"{cluster_info_text}", style=style_system._get_style('semantic', 'info', 'cyan'))
-        subtitle_rich.append(" | Total Policies: ", style="default")
-        subtitle_rich.append(str(len(policies)), style=style_system._get_style('semantic', 'primary', 'bright_magenta'))
+        subtitle_rich.append(cluster_info_text, style=self._sem('info', 'cyan'))
+        subtitle_rich.append(" | Total: ", style="default")
+        subtitle_rich.append(str(total), style=self._sem('primary', 'bright_magenta'))
 
-        title_panel = Panel(
-            style_system.create_semantic_text(f"📋 ILM Policies Overview", "primary", justify="center"),
+        border = style_system._get_style('table_styles', 'border_style', 'bright_magenta') if style_system else self._border('bright_magenta')
+        title_style = style_system._get_style('semantic', 'primary', 'bold cyan') if style_system else 'bold cyan'
+
+        summary_panel = Panel(
+            Text(status_text, style="bold green", justify="center"),
+            title=f"[{title_style}]📋 ILM Policies Overview[/{title_style}]",
             subtitle=subtitle_rich,
-            border_style=style_system._get_style('table_styles', 'border_style', 'bright_magenta'),
+            border_style=border,
             padding=(1, 2)
         )
 
-        # Create policies table with modern styling
-        style_system = self.es_client.style_system if hasattr(self.es_client, 'style_system') else None
-
+        # --- Policies table (standard themed table) ---
         if style_system:
-            # Use the standard table creation method which will apply themed styling
-            table = style_system.create_standard_table(
-                title="📋 ILM Policies",
-                style_variant='dashboard'
-            )
+            table = style_system.create_standard_table(title="📋 ILM Policies")
+            style_system.add_themed_column(table, "Policy Name", "name", no_wrap=True)
+            style_system.add_themed_column(table, "🔥 Hot", "status", justify="center")
+            style_system.add_themed_column(table, "🟡 Warm", "status", justify="center")
+            style_system.add_themed_column(table, "🧊 Cold", "status", justify="center")
+            style_system.add_themed_column(table, "🧊 Frozen", "status", justify="center")
+            style_system.add_themed_column(table, "🗑 Delete", "status", justify="center")
         else:
-            # Fallback for compatibility - use theme if available
             theme_manager = getattr(self.es_client, 'theme_manager', None)
+            from display.style_system import StyleSystem
+            _ss = StyleSystem(theme_manager)
+            table_box = _ss.get_table_box()
             full_theme = theme_manager.get_full_theme_data() if theme_manager else {}
             table_styles = full_theme.get('table_styles', {})
             header_style = table_styles.get('header_style', 'bold white on dark_blue')
             border_style = table_styles.get('border_style', 'white')
-
-            # Reuse StyleSystem.get_table_box() to avoid duplicating the mapping
-            from display.style_system import StyleSystem
-            _ss = StyleSystem(theme_manager)
-            table_box = _ss.get_table_box()
 
             table = Table(
                 show_header=True,
@@ -266,40 +270,43 @@ class ILMRenderer:
                 title="📋 ILM Policies",
                 title_style="bold bright_white"
             )
+            table.add_column("Policy Name", style="cyan", no_wrap=True)
+            table.add_column("🔥 Hot", justify="center")
+            table.add_column("🟡 Warm", justify="center")
+            table.add_column("🧊 Cold", justify="center")
+            table.add_column("🧊 Frozen", justify="center")
+            table.add_column("🗑 Delete", justify="center")
 
-        table.add_column("📋 Policy Name", style="cyan", no_wrap=False, min_width=30)
-        table.add_column("🔥 Hot", justify="center", width=8)
-        table.add_column("🟡 Warm", justify="center", width=8)
-        table.add_column("🧊 Cold", justify="center", width=8)
-        table.add_column("🧊 Frozen", justify="center", width=8)
-        table.add_column("🗑 Delete", justify="center", width=8)
+        success_style = self._sem('success', 'green')
+        error_style = self._sem('error', 'red')
 
-        for policy_name, policy_data in policies.items():
+        # Sort policies alphabetically for consistent display
+        sorted_policies = sorted(policies.items())
+
+        for i, (policy_name, policy_data) in enumerate(sorted_policies):
             policy_def = policy_data.get('policy', {})
             phases = policy_def.get('phases', {})
 
-            # Use semantic styling for phase indicators
-            if style_system:
-                hot = style_system.create_semantic_text("✅", "success") if 'hot' in phases else style_system.create_semantic_text("❌", "muted")
-                warm = style_system.create_semantic_text("✅", "success") if 'warm' in phases else style_system.create_semantic_text("❌", "muted")
-                cold = style_system.create_semantic_text("✅", "success") if 'cold' in phases else style_system.create_semantic_text("❌", "muted")
-                frozen = style_system.create_semantic_text("✅", "success") if 'frozen' in phases else style_system.create_semantic_text("❌", "muted")
-                delete = style_system.create_semantic_text("✅", "success") if 'delete' in phases else style_system.create_semantic_text("❌", "muted")
-            else:
-                # Fallback without styling
-                hot = "✅" if 'hot' in phases else "❌"
-                warm = "✅" if 'warm' in phases else "❌"
-                cold = "✅" if 'cold' in phases else "❌"
-                frozen = "✅" if 'frozen' in phases else "❌"
-                delete = "✅" if 'delete' in phases else "❌"
+            def _phase_indicator(phase_name):
+                if phase_name in phases:
+                    return f"[{success_style}]✅[/{success_style}]"
+                return f"[{error_style}]❌[/{error_style}]"
 
-            table.add_row(policy_name, hot, warm, cold, frozen, delete)
+            table.add_row(
+                policy_name,
+                _phase_indicator('hot'),
+                _phase_indicator('warm'),
+                _phase_indicator('cold'),
+                _phase_indicator('frozen'),
+                _phase_indicator('delete'),
+                style=style_system.get_zebra_style(i) if style_system else None,
+            )
 
-        print()
-        self.console.print(title_panel)
-        print()
+        self.console.print()
+        self.console.print(summary_panel)
+        self.console.print()
         self.console.print(table)
-        print()
+        self.console.print()
 
     def print_enhanced_ilm_policy_detail(self, policy_name, show_all_indices=False):
         """Display detailed information for a specific ILM policy with improved readability."""

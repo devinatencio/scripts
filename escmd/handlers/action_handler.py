@@ -4,6 +4,7 @@ Action Handler for escmd - manages and executes action sequences.
 """
 
 import os
+import sys
 import yaml
 import re
 from typing import Dict, List, Any, Optional, Tuple
@@ -27,8 +28,8 @@ class ActionManager:
     def __init__(self, actions_file: str = None):
         """Initialize ActionManager with actions file path."""
         if actions_file is None:
-            script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            actions_file = os.path.join(script_dir, "actions.yml")
+            from utils import get_script_dir
+            actions_file = os.path.join(get_script_dir(), "actions.yml")
 
         self.actions_file = actions_file
         self.actions = {}
@@ -132,7 +133,8 @@ class ActionHandler:
             from configuration_manager import ConfigurationManager as CM
             import os as _os
 
-            script_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+            from utils import get_script_dir
+            script_dir = get_script_dir()
             state_file = (
                 _os.environ.get("ESCMD_STATE")
                 or _os.environ.get("ESCMD_CONFIG")
@@ -309,7 +311,7 @@ class ActionHandler:
         box_style = ss.get_table_box()
 
         header_panel = Panel(
-            Text("Run ./escmd.py action <command> [options]", style="bold white"),
+            Text("Run ./escmd.py actions <command> [options]", style="bold white"),
             title=f"[{title_style}]🎬 Action Sequences[/{title_style}]",
             subtitle=Text.from_markup("[dim]Use[/dim] [cyan]--help[/cyan] [dim]on any subcommand for full options[/dim]"),
             border_style=border_style,
@@ -330,9 +332,9 @@ class ActionHandler:
         table.add_column("Example", style=success_style, ratio=3)
 
         rows = [
-            ("list", "List all available action sequences", "action list"),
-            ("show <name>", "Show details for a specific action", "action show my-action"),
-            ("run <name>", "Execute an action sequence", "action run my-action"),
+            ("list", "List all available action sequences", "actions list"),
+            ("show <name>", "Show details for a specific action", "actions show my-action"),
+            ("run <name>", "Execute an action sequence", "actions run my-action"),
         ]
         for i, (cmd, desc, ex) in enumerate(rows):
             table.add_row(cmd, desc, f"./escmd.py {ex}", style=ss.get_zebra_style(i) if ss else None)
@@ -344,9 +346,9 @@ class ActionHandler:
         )
 
         options = [
-            ("--dry-run", "Preview action without executing", "action run my-action --dry-run"),
-            ("--format json", "JSON output instead of table", "action list --format json"),
-            ("--var key=value", "Pass variables to action", "action run my-action --var env=prod"),
+            ("--dry-run", "Preview action without executing", "actions run my-action --dry-run"),
+            ("--format json", "JSON output instead of table", "actions list --format json"),
+            ("--var key=value", "Pass variables to action", "actions run my-action --var env=prod"),
         ]
         for i, (opt, desc, ex) in enumerate(options):
             table.add_row(
@@ -372,6 +374,20 @@ class ActionHandler:
             self._print_warning("No actions defined")
             return
 
+        # Handle JSON format
+        if getattr(self.args, "format", "table") == "json":
+            import json
+            output = {}
+            for action_name in sorted(actions):
+                action = self.action_manager.get_action(action_name)
+                output[action_name] = {
+                    "description": action.get("description", ""),
+                    "parameters": action.get("parameters", []),
+                    "steps": len(action.get("steps", [])),
+                }
+            self.console.print(json.dumps(output, indent=2))
+            return
+
         ss = self._get_style_system()
         primary = self._sem("primary", "cyan")
         muted = self._sem("muted", "dim white")
@@ -391,7 +407,7 @@ class ActionHandler:
             table.add_column("Steps", style="dim", justify="center")
 
         has_required = False
-        for action_name in sorted(actions):
+        for i, action_name in enumerate(sorted(actions)):
             action = self.action_manager.get_action(action_name)
             description = action.get("description", "No description")
             steps = action.get("steps", [])
@@ -408,20 +424,20 @@ class ActionHandler:
             param_str = ", ".join(param_parts) if param_parts else "—"
             step_count = str(len(steps)) if steps else "—"
 
-            table.add_row(action_name, description, param_str, step_count)
+            table.add_row(action_name, description, param_str, step_count, style=ss.get_zebra_style(i) if ss else None)
 
         # Build hint line
         hint = Text()
         if has_required:
             hint.append("* required  ", style=muted)
-        hint.append("action show <name>", style=muted)
+        hint.append("actions show <name>", style=muted)
         hint.append(" · ", style=muted)
-        hint.append("action run <name>", style=muted)
+        hint.append("actions run <name>", style=muted)
 
         inner = Table.grid()
         inner.add_column()
         inner.add_row(table)
-        inner.add_row(Padding(hint, (1, 0, 0, 0)))
+        inner.add_row(Padding(hint, (0, 0, 0, 1)))
 
         self.console.print(Panel(
             inner,
@@ -484,6 +500,10 @@ class ActionHandler:
         # Steps
         steps = action.get("steps", [])
         if steps:
+            # Get the table header style for command highlighting
+            tm_styles = self._get_theme_styles()
+            header_bg = tm_styles.get("header_style", "bold white on grey23")
+
             content.append(f"\nSteps  ({len(steps)} total)\n", style="bold white")
             for i, step in enumerate(steps, 1):
                 step_name = step.get("name", f"Step {i}")
@@ -492,7 +512,9 @@ class ActionHandler:
 
                 content.append(f"  {i}. ", style=muted)
                 content.append(f"{step_name}\n", style=success)
-                content.append(f"     {step_action}\n", style=muted)
+                content.append(f"     ", style=muted)
+                content.append(f" {step_action} ", style=header_bg)
+                content.append("\n")
                 if step_desc:
                     content.append(f"     {step_desc}\n", style=muted)
 

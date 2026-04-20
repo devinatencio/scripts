@@ -5,6 +5,10 @@ Re-exports all public symbols so the main script can do:
     from diskcleanup import readConfig, validate_config, ...
 """
 
+from diskcleanup.path import (                         # noqa: F401
+    is_pyinstaller, is_nuitka, is_frozen,
+    get_bundle_dir, get_app_dir, APP_NAME,
+)
 from diskcleanup.logging import (                      # noqa: F401
     setup_logging, OperationContext, OperationMetrics,
     set_current_operation_id, LogHelper, LogSampler,

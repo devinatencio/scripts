@@ -115,7 +115,7 @@ def show_welcome_screen(console, version=None, date=None):
             ("rollover",      "Rollover datastream"),
             ("auto-rollover", "Rollover biggest shard"),
             ("es-top / top",  "Live cluster dashboard"),
-            ("action",        "Action sequences"),
+            ("actions",       "Action sequences"),
             ("cluster-groups","Display cluster groups"),
         ]),
         ("🔩 Settings & Config", "white", [
@@ -183,7 +183,6 @@ def show_welcome_screen(console, version=None, date=None):
     footer.append("--format json", style="bold cyan")
     footer.append(" for machine output", style="dim")
     console.print(Panel(Align.center(footer), border_style="dim", padding=(0, 1)))
-    console.print()
 
 
 def _generate_complete_commands_table():
@@ -228,7 +227,7 @@ def _generate_complete_commands_table():
 def _get_static_command_descriptions():
     """Static command descriptions as fallback."""
     return {
-        "action": "Manage and execute action sequences for workflow automation",
+        "actions": "Manage and execute action sequences for workflow automation",
         "allocation": "Manage cluster allocation settings",
         "auto-rollover": "Rollover biggest shard",
         "clear-session": "Clear the current session cache",

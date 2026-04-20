@@ -1,3 +1,51 @@
+## [3.12.3] - 2026-04-18
+
+### Nuitka onefile build compatibility
+
+Comprehensive fixes to support running escmd as a Nuitka-compiled onefile binary. Previously, sub-module `__file__` paths resolved to the temporary extraction directory (`/tmp/escmd/`) instead of the real binary location, causing all data file lookups to fail silently.
+
+#### New utility — `get_script_dir()` and `load_json_tolerant()`
+
+- **`utils.py`** — Added `get_script_dir()` which returns the directory containing the actual binary (or script) using `sys.argv[0]`. Under normal Python execution this behaves identically to the old `__file__`-based approach; under Nuitka onefile it correctly resolves to the binary's real location instead of the temp extraction dir.
+- **`utils.py`** — Added `load_json_tolerant()` which strips trailing commas before parsing JSON. A trailing comma in `escmd.json` (e.g. `"display_theme": "cyberpunk",}`) previously caused silent `JSONDecodeError` exceptions that were caught and swallowed, falling back to default values with no error message.
+
+#### `__file__` → `get_script_dir()` migration (10 files)
+
+Replaced `os.path.dirname(os.path.abspath(__file__))` with `get_script_dir()` in all sub-modules that resolve paths to project-root data files:
+
+- **`handlers/action_handler.py`** — `actions.yml`, `escmd.json`, `escmd.yml`, `elastic_servers.yml` path resolution (2 locations)
+- **`handlers/snapshot_handler.py`** — `elastic_servers.yml`, `escmd.json` path resolution (2 locations)
+- **`handlers/dangling_handler.py`** — subprocess `cwd` for cluster scan and cleanup commands (2 locations)
+- **`handlers/themes_handler.py`** — `themes.yml` path resolution (2 locations)
+- **`commands/indices_commands.py`** — `elastic_servers.yml`, `escmd.json` for paging config
+- **`display/index_renderer.py`** — `elastic_servers.yml`, `escmd.json` for paging config
+- **`display/version_data.py`** — script location display in version info
+- **`display/theme_manager.py`** — `themes.yml` path resolution with `get_script_dir()` fallback
+- **`esterm_modules/theme_manager.py`** — `esterm_themes.yml`, `esterm_config.yml`, `escmd.json` (3 locations)
+- **`esterm_modules/command_processor.py`** — `escmd.json` state file path
+- **`esterm_modules/cluster_manager.py`** — `escmd.json` state file path
+- **`reports/dangling_report.py`** — subprocess `cwd`
+
+#### Main entry point — `escmd.py`
+
+- **`escmd.py`** — Both `script_directory` assignments in `initialize_configuration()` and `main()` now use `sys.argv[0]` instead of `__file__`. The main module's `__file__` also points to the temp extraction dir in some Nuitka versions, causing `escmd.json` state file paths to resolve incorrectly.
+
+#### Configuration manager — absolute path resolution
+
+- **`configuration_manager.py`** — Auto-detect mode previously used bare relative paths (`os.path.exists("escmd.yml")`) which only worked when cwd happened to match the binary's directory. Now resolves config file candidates relative to the state file's directory, ensuring correct behavior regardless of working directory.
+
+#### Trailing-comma-tolerant JSON loading (3 files)
+
+Replaced all `json.load()` calls that read `escmd.json` with `load_json_tolerant()`:
+
+- **`configuration_manager.py`** — All 8 state file read sites (`get_display_theme`, `get_current_cluster`, `set_default_cluster`, `set_display_theme`, `set_elastic_username`, `get_state_username`, and the duplicate `get_display_theme`)
+- **`security/password_manager.py`** — `_load_config()`, `rotate_master_key()`, and `migrate_to_env_key()` (3 sites)
+- **`esterm_modules/theme_manager.py`** — `_get_current_theme()` escmd.json read
+
+#### Build script
+
+- **`nuitka-build.sh`** — Added `rm -rf /tmp/escmd` before compilation. The fixed `--onefile-tempdir-spec=/tmp/escmd` causes Nuitka to cache extracted modules; stale modules from previous builds persist and mask code changes.
+
 ## [3.12.1] - 2026-04-15
 
 ### Theme system — dot-notation fix and theme palette corrections

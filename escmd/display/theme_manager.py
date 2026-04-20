@@ -206,7 +206,17 @@ class ThemeManager:
                 elif hasattr(self.configuration_manager, 'config_file_path') and self.configuration_manager.config_file_path:
                     # In single-file mode, use the config file path
                     config_dir = os.path.dirname(self.configuration_manager.config_file_path)
-            themes_file = os.path.join(config_dir, themes_file)
+            candidate = os.path.join(config_dir, themes_file)
+
+            # If not found via config paths, try the binary/script directory
+            if not os.path.exists(candidate):
+                try:
+                    from utils import get_script_dir
+                    candidate = os.path.join(get_script_dir(), themes_file)
+                except Exception:
+                    pass
+
+            themes_file = candidate
         
         return themes_file
     

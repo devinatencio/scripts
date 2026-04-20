@@ -1526,7 +1526,7 @@ class IndexHandler(BaseHandler):
                 style=self.es_client.style_system.get_semantic_style("error"),
             )
 
-            self.console.print("\n")
+            self.console.print()
             self.console.print(
                 Panel(
                     error_text,
@@ -1537,7 +1537,7 @@ class IndexHandler(BaseHandler):
                     padding=(1, 2),
                 )
             )
-            self.console.print("\n")
+            self.console.print()
             return
 
         # Check if index exists
@@ -1556,7 +1556,7 @@ class IndexHandler(BaseHandler):
                     style=self.es_client.style_system.get_semantic_style("primary"),
                 )
 
-                self.console.print("\n")
+                self.console.print()
                 self.console.print(
                     Panel(
                         error_text,
@@ -1567,7 +1567,7 @@ class IndexHandler(BaseHandler):
                         padding=(1, 2),
                     )
                 )
-                self.console.print("\n")
+                self.console.print()
                 return
 
         except Exception as e:
@@ -1581,7 +1581,7 @@ class IndexHandler(BaseHandler):
                 style=self.es_client.style_system.get_semantic_style("error"),
             )
 
-            self.console.print("\n")
+            self.console.print()
             self.console.print(
                 Panel(
                     error_text,
@@ -1592,7 +1592,7 @@ class IndexHandler(BaseHandler):
                     padding=(1, 2),
                 )
             )
-            self.console.print("\n")
+            self.console.print()
             return
 
         # Add metadata to index mapping
@@ -1652,7 +1652,7 @@ class IndexHandler(BaseHandler):
                 style=self.es_client.style_system.get_semantic_style("info"),
             )
 
-            self.console.print("\n")
+            self.console.print()
             self.console.print(
                 Panel(
                     success_text,
@@ -1663,7 +1663,7 @@ class IndexHandler(BaseHandler):
                     padding=(1, 2),
                 )
             )
-            self.console.print("\n")
+            self.console.print()
 
         except Exception as e:
             error_text = Text()
@@ -1676,7 +1676,7 @@ class IndexHandler(BaseHandler):
                 style=self.es_client.style_system.get_semantic_style("error"),
             )
 
-            self.console.print("\n")
+            self.console.print()
             self.console.print(
                 Panel(
                     error_text,
@@ -1687,7 +1687,7 @@ class IndexHandler(BaseHandler):
                     padding=(1, 2),
                 )
             )
-            self.console.print("\n")
+            self.console.print()
 
     def _display_no_matching_status_message(self, status_filter, total_indices_count):
         """Display a themed message when no indices match the status filter."""

@@ -245,16 +245,17 @@ class StyleSystem:
         """
         Return a background-only alternate row style for zebra striping.
 
-        Returns None for even rows (use default column style) and a subtle
-        background highlight for odd rows. Text colors are preserved.
+        Returns a subtle background highlight for even rows (0, 2, 4…)
+        and None for odd rows (use default column style).
+        This ensures the first row always starts with the highlight.
 
         Args:
             row_index: Zero-based row index
 
         Returns:
-            str background style for odd rows, None for even rows
+            str background style for even rows, None for odd rows
         """
-        if row_index % 2 == 0:
+        if row_index % 2 != 0:
             return None
         zebra_color = self._get_style("table_styles", "row_styles.zebra", "grey23")
         return f"on {zebra_color}"

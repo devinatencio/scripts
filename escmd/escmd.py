@@ -253,7 +253,7 @@ def initialize_configuration():
     - ELASTIC_SERVERS_CONFIG: Legacy single-file path (backward compatibility)
     - ESCMD_STATE: Path to state file
     """
-    script_directory = os.path.dirname(os.path.abspath(__file__))
+    script_directory = os.path.dirname(os.path.abspath(sys.argv[0]))
 
     # Check for dual-file configuration environment variables
     main_config_file = os.environ.get("ESCMD_MAIN_CONFIG")
@@ -405,7 +405,7 @@ def handle_special_commands(args, config_manager, console):
         return True
 
     # Handle action commands that don't need ES connection (list and show)
-    elif command == "action":
+    elif command in ("actions", "action"):
         action_cmd = getattr(args, "action_cmd", "list")
         if action_cmd in ("list", "show"):
             from handlers.action_handler import ActionHandler
@@ -525,6 +525,15 @@ def main():
     # prevents argparse from printing its own ugly error for unrecognised subcommands.
     _ACTION_SUBCMDS = {"list", "show", "run", "-h", "--help"}
     try:
+        _ai = sys.argv.index("actions")
+        _after = sys.argv[_ai + 1] if _ai + 1 < len(sys.argv) else None
+        if _after is not None and not _after.startswith("-") and _after not in _ACTION_SUBCMDS:
+            sys.argv.insert(_ai + 1, "run")
+    except ValueError:
+        pass
+
+    # Also support the old "action" (singular) shorthand
+    try:
         _ai = sys.argv.index("action")
         _after = sys.argv[_ai + 1] if _ai + 1 < len(sys.argv) else None
         if _after is not None and not _after.startswith("-") and _after not in _ACTION_SUBCMDS:
@@ -539,7 +548,7 @@ def main():
     args = parser.parse_args()
 
     # Set up logging configuration
-    script_directory = os.path.dirname(os.path.abspath(__file__))
+    script_directory = os.path.dirname(os.path.abspath(sys.argv[0]))
     logging_config = get_logging_config(script_directory)
 
     # Determine if this is a command that should log to file (like for cron jobs)

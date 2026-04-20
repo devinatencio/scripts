@@ -1,0 +1,31 @@
+
+========================================================================
+2026-04-18 09:44:37 INFO     : [session_094402f] diskcleanup.py v3.0.0 starting (config_file: /Users/devin/Documents/Git/scripts/diskcleanup/diskcleanup.yaml) (dry_run: False) (mode: standalone)
+2026-04-18 09:44:37 INFO     : [session_094402f] System health check - before cleanup
+2026-04-18 09:44:37 INFO     : [dir_cleanup_09444b3] Starting dir_cleanup
+2026-04-18 09:44:37 INFO     : [dir_cleanup_09444b3] Directory cleanup configuration (directories: 1) (max_age: 30) (extensions: ['tar.gz', '.gz', '.*-\\d{8}']) (targets: ['/var/log'])
+2026-04-18 09:44:37 INFO     : [dir_cleanup_09444b3] starting cleanup for /var/log (max_age: 30) (extensions: ['tar.gz', '.gz', '.*-\\d{8}']) (recursive: False)
+2026-04-18 09:44:37 INFO     : [dir_cleanup_09444b3] Completed - {'id': 'dir_cleanup_09444b3', 'files': 0, 'dirs': 0, 'freed': '0 bytes', 'errors': 0, 'duration': '0.00s'}
+2026-04-18 09:44:37 INFO     : [file_truncate_0944b07] Starting file_truncate
+2026-04-18 09:44:37 INFO     : [file_truncate_0944b07] File truncation configuration (monitored_files: 4) (max_size: 2 GiB)
+2026-04-18 09:44:37 INFO     : [file_truncate_0944b07] Completed - {'id': 'file_truncate_0944b07', 'files': 0, 'dirs': 0, 'freed': '0 bytes', 'errors': 0, 'duration': '0.00s'}
+2026-04-18 09:44:37 INFO     : [pattern_cleanup_0944464] Starting pattern_cleanup
+2026-04-18 09:44:37 INFO     : [pattern_cleanup_0944464] Pattern cleanup configuration (directories: 2) (targets: ['/var/log/haproxy', '/var/log/kibana-1'])
+2026-04-18 09:44:37 WARNING  : [pattern_cleanup_0944464] Directory does not exist: /var/log/haproxy
+2026-04-18 09:44:37 WARNING  : [pattern_cleanup_0944464] Directory does not exist: /var/log/kibana-1
+2026-04-18 09:44:37 INFO     : [pattern_cleanup_0944464] Completed - {'id': 'pattern_cleanup_0944464', 'files': 0, 'dirs': 0, 'freed': '0 bytes', 'errors': 0, 'duration': '0.00s'}
+2026-04-18 09:44:37 INFO     : [audit_cleanup_09447cd] Starting audit_cleanup
+2026-04-18 09:44:37 INFO     : [audit_cleanup_09447cd] AuditD cleanup starting (path: /var/log/audit) (current_usage: 0.0%) (threshold: 50%)
+2026-04-18 09:44:37 INFO     : [audit_cleanup_09447cd] Completed - {'id': 'audit_cleanup_09447cd', 'files': 0, 'dirs': 0, 'freed': '0 bytes', 'errors': 0, 'duration': '0.00s'}
+2026-04-18 09:44:37 INFO     : [abrt_cleanup_0944ba6] Starting abrt_cleanup
+2026-04-18 09:44:37 INFO     : [abrt_cleanup_0944ba6] ABRT cleanup configuration (max_age: 30) (max_size: 50 MB)
+2026-04-18 09:44:37 INFO     : [abrt_cleanup_0944ba6] checking crash dumps by age
+2026-04-18 09:44:37 WARNING  : [abrt_cleanup_0944ba6] ABRT directory does not exist: /var/log/crash/abrt
+2026-04-18 09:44:37 INFO     : [abrt_cleanup_0944ba6] checking crash dumps by size
+2026-04-18 09:44:37 INFO     : [abrt_cleanup_0944ba6] Completed - {'id': 'abrt_cleanup_0944ba6', 'files': 0, 'dirs': 0, 'freed': '0 bytes', 'errors': 0, 'duration': '0.00s'}
+2026-04-18 09:44:37 INFO     : [journald_cleanup_0944fc5] Starting journald_cleanup
+2026-04-18 09:44:37 INFO     : [journald_cleanup_0944fc5] Journald cleanup configuration (max_size: 500 MB) (max_age: 30d)
+2026-04-18 09:44:37 INFO     : [journald_cleanup_0944fc5] systemd not detected, skipping journald cleanup
+2026-04-18 09:44:37 INFO     : [journald_cleanup_0944fc5] Completed - {'id': 'journald_cleanup_0944fc5', 'files': 0, 'dirs': 0, 'freed': '0 bytes', 'errors': 0, 'duration': '0.00s'}
+2026-04-18 09:44:37 INFO     : [session_094402f] Completed - mode: production space_freed: 0 B files_processed: 0 dirs_processed: 0 errors: 0 execution_time: 0.02s
+2026-04-18 09:44:37 INFO     : [session_094402f] disk cleanup completed successfully (total_execution_time: 0.02s)

@@ -2024,7 +2024,8 @@ def _add_action_commands(subparsers):
     """Add action sequence management commands."""
 
     action_parser = subparsers.add_parser(
-        "action", help="Manage and execute action sequences"
+        "actions", help="Manage and execute action sequences",
+        aliases=["action"],
     )
     action_subparsers = action_parser.add_subparsers(
         dest="action_cmd", help="Action command help"
@@ -2033,6 +2034,12 @@ def _add_action_commands(subparsers):
     # List actions command
     list_parser = action_subparsers.add_parser(
         "list", help="List all available actions"
+    )
+    list_parser.add_argument(
+        "--format",
+        choices=["json", "table"],
+        default="table",
+        help="Output format (default: table)",
     )
 
     # Show action details command

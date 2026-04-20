@@ -1,0 +1,40 @@
+2026-04-18 21:43:40,218 - INFO - Elasticsearch Utilities Daemon starting...
+2026-04-18 21:43:40,218 - INFO - Using config: /Users/devin.acosta/Workspace/S3SERVER/daemon_config.yml
+2026-04-18 21:43:40,220 - INFO - Loaded task: cold_snapshots             type=interval  interval=30m  jitter=5m  enabled=True
+2026-04-18 21:43:40,220 - INFO - Loaded task: ilm_curator                type=window    interval=60m  jitter=10m  enabled=True
+2026-04-18 21:43:40,220 - INFO - Loaded task: retention_enforcer         type=window    interval=120m  jitter=15m  enabled=True
+2026-04-18 21:43:40,220 - INFO - Loaded task: restored_index_manager     type=interval  interval=360m  jitter=10m  enabled=True
+2026-04-18 21:43:40,220 - INFO - Daemon started (pid 2444). Tick every 30s.
+2026-04-18 21:43:40,220 - INFO - Tasks loaded: cold_snapshots, ilm_curator, retention_enforcer, restored_index_manager
+2026-04-18 21:43:40,220 - INFO - [dry-run] Would run cold_snapshots (jitter 296s).
+2026-04-18 21:43:40,220 - INFO - [dry-run] Would run restored_index_manager (jitter 338s).
+2026-04-18 21:43:49,981 - INFO - Elasticsearch Utilities Daemon starting...
+2026-04-18 21:43:49,981 - INFO - Using config: /Users/devin.acosta/Workspace/S3SERVER/daemon_config.yml
+2026-04-18 21:43:49,983 - INFO - Loaded task: cold_snapshots             type=interval  interval=30m  jitter=5m  enabled=True
+2026-04-18 21:43:49,983 - INFO - Loaded task: ilm_curator                type=window    interval=60m  jitter=10m  enabled=True
+2026-04-18 21:43:49,983 - INFO - Loaded task: retention_enforcer         type=window    interval=120m  jitter=15m  enabled=True
+2026-04-18 21:43:49,983 - INFO - Loaded task: restored_index_manager     type=interval  interval=360m  jitter=10m  enabled=True
+2026-04-18 21:43:49,983 - INFO - Daemon started (pid 2856). Tick every 30s.
+2026-04-18 21:43:49,983 - INFO - Tasks loaded: cold_snapshots, ilm_curator, retention_enforcer, restored_index_manager
+2026-04-18 21:43:49,983 - INFO - [dry-run] Would run cold_snapshots (jitter 300s).
+2026-04-18 21:43:49,983 - INFO - [dry-run] Would run restored_index_manager (jitter 288s).
+2026-04-18 21:47:34,842 - INFO - Elasticsearch Utilities Daemon starting...
+2026-04-18 21:47:34,843 - INFO - Using config: /Users/devin.acosta/Workspace/S3SERVER/daemon_config.yml
+2026-04-18 21:47:34,844 - INFO - Loaded task: cold_snapshots             type=interval  interval=30m  jitter=5m  enabled=True
+2026-04-18 21:47:34,844 - INFO - Loaded task: ilm_curator                type=window    interval=60m  jitter=10m  enabled=True
+2026-04-18 21:47:34,844 - INFO - Loaded task: retention_enforcer         type=window    interval=120m  jitter=15m  enabled=True
+2026-04-18 21:47:34,844 - INFO - Loaded task: restored_index_manager     type=interval  interval=360m  jitter=10m  enabled=True
+2026-04-18 21:47:34,844 - INFO - Daemon started (pid 4751). Tick every 30s.
+2026-04-18 21:47:34,844 - INFO - Tasks loaded: cold_snapshots, ilm_curator, retention_enforcer, restored_index_manager
+2026-04-18 21:47:34,845 - INFO - [dry-run] Would run cold_snapshots (jitter 11s).
+2026-04-18 21:47:34,845 - INFO - [dry-run] Would run restored_index_manager (jitter 71s).
+2026-04-19 07:55:57,743 - INFO - Elasticsearch Utilities Daemon starting...
+2026-04-19 07:55:57,744 - INFO - Using config: /Users/devin.acosta/Workspace/S3SERVER/daemon_config.yml
+2026-04-19 07:55:57,745 - INFO - Loaded task: cold_snapshots             type=interval  interval=30m  jitter=5m  enabled=True
+2026-04-19 07:55:57,745 - INFO - Loaded task: ilm_curator                type=window    interval=60m  jitter=10m  enabled=True
+2026-04-19 07:55:57,745 - INFO - Loaded task: retention_enforcer         type=window    interval=120m  jitter=15m  enabled=True
+2026-04-19 07:55:57,745 - INFO - Loaded task: restored_index_manager     type=interval  interval=360m  jitter=10m  enabled=True
+2026-04-19 07:55:57,745 - INFO - Daemon started (pid 2222). Tick every 30s.
+2026-04-19 07:55:57,745 - INFO - Tasks loaded: cold_snapshots, ilm_curator, retention_enforcer, restored_index_manager
+2026-04-19 07:55:57,746 - INFO - [dry-run] Would run cold_snapshots (jitter 97s).
+2026-04-19 07:55:57,746 - INFO - [dry-run] Would run restored_index_manager (jitter 397s).

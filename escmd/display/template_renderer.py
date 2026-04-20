@@ -341,7 +341,7 @@ class TemplateRenderer:
         # Sort templates alphabetically by name for consistent display
         sorted_templates = sorted(legacy_templates.items()) if legacy_templates else []
 
-        for name, template in sorted_templates:
+        for i, (name, template) in enumerate(sorted_templates):
             if name == 'error':
                 continue
 
@@ -366,7 +366,8 @@ class TemplateRenderer:
                 order,
                 settings_display,
                 mappings_display,
-                aliases_display
+                aliases_display,
+                style=self.style_system.get_zebra_style(i) if self.style_system else None,
             )
 
         return table
@@ -417,7 +418,7 @@ class TemplateRenderer:
         # Sort templates alphabetically by name for consistent display
         sorted_templates = sorted(composable_templates.items()) if composable_templates else []
 
-        for name, template in sorted_templates:
+        for i, (name, template) in enumerate(sorted_templates):
             if name == 'error':
                 continue
 
@@ -437,7 +438,8 @@ class TemplateRenderer:
                 patterns,
                 priority,
                 composed_of or "None",
-                data_stream
+                data_stream,
+                style=self.style_system.get_zebra_style(i) if self.style_system else None,
             )
 
         return table
@@ -485,7 +487,7 @@ class TemplateRenderer:
             table.add_column("Aliases", justify="center", style=self.get_themed_style('semantic_styles', 'info', 'blue'))
             table.add_column("Version", justify="right", style=self.get_themed_style('semantic_styles', 'secondary', 'magenta'))
 
-        for name, template in component_templates.items():
+        for i, (name, template) in enumerate(component_templates.items()):
             if name == 'error':
                 continue
 
@@ -510,7 +512,8 @@ class TemplateRenderer:
                 settings_display,
                 mappings_display,
                 aliases_display,
-                str(version)
+                str(version),
+                style=self.style_system.get_zebra_style(i) if self.style_system else None,
             )
 
         return table

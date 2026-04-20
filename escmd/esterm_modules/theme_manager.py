@@ -46,10 +46,8 @@ class EstermThemeManager:
 
     def _load_themes_file(self):
         """Load the esterm themes configuration file."""
-        # Get the directory where this module is located
-        module_dir = os.path.dirname(os.path.abspath(__file__))
-        # Go up one level to the escmd directory
-        escmd_dir = os.path.dirname(module_dir)
+        from utils import get_script_dir
+        escmd_dir = get_script_dir()
         # Look for esterm_themes.yml
         self._themes_file_path = os.path.join(escmd_dir, 'esterm_themes.yml')
 
@@ -59,10 +57,8 @@ class EstermThemeManager:
 
     def _load_config_file(self):
         """Load the esterm configuration file."""
-        # Get the directory where this module is located
-        module_dir = os.path.dirname(os.path.abspath(__file__))
-        # Go up one level to the escmd directory
-        escmd_dir = os.path.dirname(module_dir)
+        from utils import get_script_dir
+        escmd_dir = get_script_dir()
         # Look for esterm_config.yml
         self._config_file_path = os.path.join(escmd_dir, 'esterm_config.yml')
 
@@ -312,12 +308,11 @@ class EstermThemeManager:
         # 1. Check escmd.json (shared state file used by escmd set-theme)
         try:
             import json
-            module_dir = os.path.dirname(os.path.abspath(__file__))
-            escmd_dir = os.path.dirname(module_dir)
+            from utils import get_script_dir, load_json_tolerant
+            escmd_dir = get_script_dir()
             escmd_json_path = os.path.join(escmd_dir, 'escmd.json')
             if os.path.exists(escmd_json_path):
-                with open(escmd_json_path, 'r', encoding='utf-8') as f:
-                    state = json.load(f)
+                state = load_json_tolerant(escmd_json_path)
                 theme = state.get('display_theme')
                 if theme and theme in available:
                     return theme

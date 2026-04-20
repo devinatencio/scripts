@@ -555,7 +555,7 @@ class DanglingReport:
                 stderr=subprocess.PIPE,
                 universal_newlines=True,
                 timeout=60,
-                cwd=os.path.dirname(os.path.abspath(__file__ + "/../")),
+                cwd=os.path.dirname(os.path.abspath(sys.argv[0])),
             )
 
             if result.returncode == 0:

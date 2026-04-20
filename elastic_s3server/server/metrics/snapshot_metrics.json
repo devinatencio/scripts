@@ -1,0 +1,54 @@
+{
+  "daily_counters": {
+    "date": "2026-04-18",
+    "snapshots_created": 0,
+    "snapshots_deleted": 0,
+    "indices_deleted_ilm": 0
+  },
+  "utility_health": {},
+  "snapshot_statuses": {
+    "SUCCESS": 1
+  },
+  "daemon_heartbeat": {
+    "pid": 2222,
+    "timestamp": "2026-04-19T07:55:57",
+    "tasks": {
+      "cold_snapshots": {
+        "enabled": true,
+        "schedule_type": "interval",
+        "running": false,
+        "last_run_epoch": 0.0,
+        "interval_seconds": 1800,
+        "jitter_seconds": 300
+      },
+      "ilm_curator": {
+        "enabled": true,
+        "schedule_type": "window",
+        "running": false,
+        "last_run_epoch": 0.0,
+        "interval_seconds": 3600,
+        "jitter_seconds": 600,
+        "window_start": "00:00",
+        "window_end": "05:00"
+      },
+      "retention_enforcer": {
+        "enabled": true,
+        "schedule_type": "window",
+        "running": false,
+        "last_run_epoch": 0.0,
+        "interval_seconds": 7200,
+        "jitter_seconds": 900,
+        "window_start": "01:00",
+        "window_end": "04:00"
+      },
+      "restored_index_manager": {
+        "enabled": true,
+        "schedule_type": "interval",
+        "running": false,
+        "last_run_epoch": 0.0,
+        "interval_seconds": 21600,
+        "jitter_seconds": 600
+      }
+    }
+  }
+}

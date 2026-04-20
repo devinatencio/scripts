@@ -620,10 +620,12 @@ class IndexRenderer:
             )
 
         try:
+            from utils import get_script_dir
+            _sd = get_script_dir()
             config_file = os.path.join(
-                os.path.dirname(__file__), "..", "elastic_servers.yml"
+                _sd, "elastic_servers.yml"
             )
-            state_file = os.path.join(os.path.dirname(__file__), "..", "escmd.json")
+            state_file = os.path.join(_sd, "escmd.json")
             config_manager = ConfigurationManager(config_file, state_file)
             paging_enabled = getattr(
                 config_manager, "get_paging_enabled", lambda: False

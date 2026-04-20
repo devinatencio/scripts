@@ -158,7 +158,6 @@ class HelpHandler(BaseHandler):
         hint.append("detailed", style="dim cyan")
         hint.append(" = rich subcommand docs available", style="dim")
         console.print(Panel(Align.center(hint), border_style="dim", padding=(0, 1)))
-        console.print()
 
     def _show_command_help(self, command):
         """Show detailed help for a specific command."""

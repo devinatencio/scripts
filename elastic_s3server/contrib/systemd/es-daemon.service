@@ -1,0 +1,36 @@
+[Unit]
+Description=Elasticsearch Utilities Daemon
+Documentation=file:///opt/s3server/server/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=elastic
+Group=elastic
+WorkingDirectory=/opt/s3server
+ExecStart=/opt/s3server/venv/bin/python -m server.daemon --config /opt/s3server/daemon_config.yml
+ExecReload=/bin/kill -HUP $MAINPID
+
+Restart=on-failure
+RestartSec=30
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=es-daemon
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/s3server/logs /opt/s3server/server/metrics
+PrivateTmp=true
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

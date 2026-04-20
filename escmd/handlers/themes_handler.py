@@ -60,7 +60,8 @@ class ThemesHandler(BaseHandler):
         # Load themes.yml
         themes_file = config_manager.default_settings.get('themes_file', 'themes.yml')
         if not os.path.isabs(themes_file):
-            themes_file = os.path.join(os.path.dirname(config_manager.config_file_path), themes_file)
+            from utils import get_script_dir
+            themes_file = os.path.join(get_script_dir(), themes_file)
 
         try:
             with open(themes_file, 'r') as f:
@@ -189,7 +190,8 @@ class ThemesHandler(BaseHandler):
 
         themes_file = config_manager.default_settings.get('themes_file', 'themes.yml')
         if not os.path.isabs(themes_file):
-            themes_file = os.path.join(os.path.dirname(config_manager.config_file_path), themes_file)
+            from utils import get_script_dir
+            themes_file = os.path.join(get_script_dir(), themes_file)
 
         try:
             with open(themes_file, 'r') as f:

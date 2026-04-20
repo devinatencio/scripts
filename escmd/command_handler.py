@@ -304,6 +304,7 @@ class CommandHandler:
             "template-create": self.template_handler.handle_template_create,
             "list-backups": self.template_handler.handle_list_backups,
             # Action sequence commands
+            "actions": self.action_handler.handle_action,
             "action": self.action_handler.handle_action,
             "repositories": self.snapshot_handler.handle_repositories,
             "es-top": self.estop_handler.handle_es_top,

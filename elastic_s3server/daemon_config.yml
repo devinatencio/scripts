@@ -1,0 +1,70 @@
+# Daemon scheduler configuration
+# ──────────────────────────────────────────────────────────────────
+# Each task maps to an existing server utility.
+#
+# Global options:
+#   dry_run        - true/false.  When true every task runs in dry-run
+#                    mode: it goes through all the motions (connects to
+#                    ES, queries indices/snapshots, evaluates what it
+#                    *would* do) but never mutates anything and never
+#                    updates metrics counters.  Useful for validating
+#                    the schedule and task logic before production use.
+#
+# Schedule types:
+#   interval  - Run every N minutes (with optional random jitter).
+#   window    - Run only within a daily time window, at the given
+#               interval.  Times are 24-hour local time (HH:MM).
+#
+# Fields:
+#   enabled        - true/false to toggle the task.
+#   schedule_type  - "interval" or "window".
+#   interval_minutes - How often to run (applies to both types).
+#   window_start   - (window only) Earliest time to run, e.g. "00:00".
+#   window_end     - (window only) Latest time to start a run, e.g. "05:00".
+#   jitter_minutes - Random delay added before each run (0 = exact).
+#   description    - Human-readable note.
+# ──────────────────────────────────────────────────────────────────
+
+# Set to true to run all tasks in dry-run / no-action mode.
+# Tasks will log what they *would* do without making any changes.
+dry_run: false
+
+tasks:
+  cold_snapshots:
+    enabled: true
+    schedule_type: interval
+    interval_minutes: 30
+    jitter_minutes: 5
+    description: "Snapshot cold indices to S3"
+
+  ilm_curator:
+    enabled: true
+    schedule_type: window
+    interval_minutes: 60
+    window_start: "00:00"
+    window_end: "05:00"
+    jitter_minutes: 10
+    description: "Delete cold indices with verified snapshots"
+
+  retention_enforcer:
+    enabled: true
+    schedule_type: window
+    interval_minutes: 120
+    window_start: "01:00"
+    window_end: "04:00"
+    jitter_minutes: 15
+    description: "Purge old snapshots by retention policy"
+
+  restored_index_manager:
+    enabled: true
+    schedule_type: interval
+    interval_minutes: 360
+    jitter_minutes: 10
+    description: "Clean up aged restored indices"
+
+  snapshot_stats:
+    enabled: true
+    schedule_type: interval
+    interval_minutes: 30
+    jitter_minutes: 5
+    description: "Collect snapshot status distribution for the dashboard"

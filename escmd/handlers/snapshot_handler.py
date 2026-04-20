@@ -37,9 +37,7 @@ class SnapshotHandler(BaseHandler):
                 self.es_client.show_message_box(
                     "Error",
                     f"Unknown repositories action: {self.args.repositories_action}",
-                    message_style=self.es_client.style_system.get_semantic_style(
-                        "secondary"
-                    ),
+                    message_style="bold white",
                     panel_style=self.es_client.style_system.get_semantic_style("error"),
                 )
         else:
@@ -77,9 +75,7 @@ class SnapshotHandler(BaseHandler):
             self.es_client.show_message_box(
                 "Error",
                 f"Unknown snapshots action: {self.args.snapshots_action}",
-                message_style=self.es_client.style_system.get_semantic_style(
-                    "secondary"
-                ),
+                message_style="bold white",
                 panel_style=self.es_client.style_system.get_semantic_style("error"),
             )
 
@@ -175,12 +171,10 @@ class SnapshotHandler(BaseHandler):
 
         if not elastic_s3snapshot_repo:
             self.es_client.show_message_box(
-                "Configuration Error",
+                "❌ Configuration Error",
                 f"No 'elastic_s3snapshot_repo' configured for cluster '{self.args.locations}'.\n"
                 f"Please add 'elastic_s3snapshot_repo: \"your-repo-name\"' to the cluster configuration in elastic_servers.yml",
-                message_style=self.es_client.style_system.get_semantic_style(
-                    "secondary"
-                ),
+                message_style="bold white",
                 panel_style=self.es_client.style_system.get_semantic_style("error"),
             )
             return
@@ -227,9 +221,7 @@ class SnapshotHandler(BaseHandler):
                 self.es_client.show_message_box(
                     "Repository Error",
                     f"{last_error}",
-                    message_style=self.es_client.style_system.get_semantic_style(
-                        "secondary"
-                    ),
+                    message_style="bold white",
                     panel_style=self.es_client.style_system.get_semantic_style("error"),
                 )
                 return
@@ -289,9 +281,7 @@ class SnapshotHandler(BaseHandler):
             self.es_client.show_message_box(
                 "Error",
                 f"Error listing snapshots: {str(e)}",
-                message_style=self.es_client.style_system.get_semantic_style(
-                    "secondary"
-                ),
+                message_style="bold white",
                 panel_style=self.es_client.style_system.get_semantic_style("error"),
             )
 
@@ -645,9 +635,11 @@ class SnapshotHandler(BaseHandler):
         import os
 
         try:
-            config_file = os.path.join(os.path.dirname(__file__), "elastic_servers.yml")
+            from utils import get_script_dir
+            _sd = get_script_dir()
+            config_file = os.path.join(_sd, "elastic_servers.yml")
             config_manager = ConfigurationManager(
-                config_file, os.path.join(os.path.dirname(config_file), "escmd.json")
+                config_file, os.path.join(_sd, "escmd.json")
             )
 
             # Try to get paging settings with fallback to defaults
@@ -738,9 +730,7 @@ class SnapshotHandler(BaseHandler):
                 f"No snapshot repository specified.\n"
                 f"Either use --repository option or configure 'elastic_s3snapshot_repo' for cluster '{self.current_location}'.\n"
                 f"Please add 'elastic_s3snapshot_repo: \"your-repo-name\"' to the cluster configuration in elastic_servers.yml",
-                message_style=self.es_client.style_system.get_semantic_style(
-                    "secondary"
-                ),
+                message_style="bold white",
                 panel_style=self.es_client.style_system.get_semantic_style("error"),
             )
             return
@@ -756,9 +746,7 @@ class SnapshotHandler(BaseHandler):
                     "Snapshot Not Found",
                     f"Snapshot '{snapshot_name}' not found in repository '{repository_name}'.\n"
                     f"Use './escmd.py snapshots list' to see available snapshots.",
-                    message_style=self.es_client.style_system.get_semantic_style(
-                        "secondary"
-                    ),
+                    message_style="bold white",
                     panel_style=self.es_client.style_system.get_semantic_style("error"),
                 )
                 return
@@ -773,9 +761,7 @@ class SnapshotHandler(BaseHandler):
             self.es_client.show_message_box(
                 "Error",
                 f"Error getting snapshot status: {str(e)}",
-                message_style=self.es_client.style_system.get_semantic_style(
-                    "secondary"
-                ),
+                message_style="bold white",
                 panel_style=self.es_client.style_system.get_semantic_style("error"),
             )
 
@@ -861,9 +847,7 @@ class SnapshotHandler(BaseHandler):
                     self.es_client.show_message_box(
                         "No Matches",
                         f"No indices or datastreams found matching pattern: {target}",
-                        message_style=self.es_client.style_system.get_semantic_style(
-                            "secondary"
-                        ),
+                        message_style="bold white",
                         panel_style=self.es_client.style_system.get_semantic_style(
                             "warning"
                         ),
@@ -1059,9 +1043,8 @@ class SnapshotHandler(BaseHandler):
             )
         else:
             # Dual-file mode - config_file is None, create ConfigurationManager with default paths
-            script_directory = os.path.dirname(os.path.abspath(__file__))
-            parent_directory = os.path.dirname(script_directory)
-            state_file = os.path.join(parent_directory, "escmd.json")
+            from utils import get_script_dir
+            state_file = os.path.join(get_script_dir(), "escmd.json")
             config_manager = ConfigurationManager(state_file_path=state_file)
         current_styles = get_theme_styles(config_manager)
 
@@ -1196,11 +1179,11 @@ class SnapshotHandler(BaseHandler):
 
         if not elastic_s3snapshot_repo:
             self.es_client.show_message_box(
-                "Configuration Error",
+                "❌ Configuration Error",
                 f"No 'elastic_s3snapshot_repo' configured for cluster '{self.args.locations}'.\n"
                 f"Please add 'elastic_s3snapshot_repo: \"your-repo-name\"' to the cluster configuration in elastic_servers.yml",
                 message_style="bold white",
-                panel_style="red",
+                panel_style=self.es_client.style_system.get_semantic_style("error"),
             )
             return
 
@@ -1310,11 +1293,11 @@ class SnapshotHandler(BaseHandler):
 
         if not elastic_s3snapshot_repo:
             self.es_client.show_message_box(
-                "Configuration Error",
+                "❌ Configuration Error",
                 f"No 'elastic_s3snapshot_repo' configured for cluster '{self.args.locations}'.\n"
                 f"Please add 'elastic_s3snapshot_repo: \"your-repo-name\"' to the cluster configuration in elastic_servers.yml",
                 message_style="bold white",
-                panel_style="red",
+                panel_style=self.es_client.style_system.get_semantic_style("error"),
             )
             return
 
@@ -1630,9 +1613,7 @@ class SnapshotHandler(BaseHandler):
             self.es_client.show_message_box(
                 "Error",
                 error_msg,
-                message_style=self.es_client.style_system.get_semantic_style(
-                    "secondary"
-                ),
+                message_style="bold white",
                 panel_style=self.es_client.style_system.get_semantic_style("error"),
             )
 
@@ -1762,9 +1743,7 @@ class SnapshotHandler(BaseHandler):
                 self.es_client.show_message_box(
                     "Error",
                     error_msg,
-                    message_style=self.es_client.style_system.get_semantic_style(
-                        "secondary"
-                    ),
+                    message_style="bold white",
                     panel_style=self.es_client.style_system.get_semantic_style("error"),
                 )
 
@@ -1773,9 +1752,7 @@ class SnapshotHandler(BaseHandler):
             self.es_client.show_message_box(
                 "Error",
                 error_msg,
-                message_style=self.es_client.style_system.get_semantic_style(
-                    "secondary"
-                ),
+                message_style="bold white",
                 panel_style=self.es_client.style_system.get_semantic_style("error"),
             )
 
@@ -1791,9 +1768,7 @@ class SnapshotHandler(BaseHandler):
                 self.es_client.show_message_box(
                     "Error",
                     repositories_data["error"],
-                    message_style=self.es_client.style_system.get_semantic_style(
-                        "secondary"
-                    ),
+                    message_style="bold white",
                     panel_style=self.es_client.style_system.get_semantic_style("error"),
                 )
                 return
@@ -1812,9 +1787,7 @@ class SnapshotHandler(BaseHandler):
             self.es_client.show_message_box(
                 "Error",
                 error_msg,
-                message_style=self.es_client.style_system.get_semantic_style(
-                    "secondary"
-                ),
+                message_style="bold white",
                 panel_style=self.es_client.style_system.get_semantic_style("error"),
             )
 
@@ -1847,9 +1820,7 @@ class SnapshotHandler(BaseHandler):
                 self.es_client.show_message_box(
                     "Error",
                     verification_result["error"],
-                    message_style=self.es_client.style_system.get_semantic_style(
-                        "secondary"
-                    ),
+                    message_style="bold white",
                     panel_style=self.es_client.style_system.get_semantic_style("error"),
                 )
                 return
@@ -1869,9 +1840,7 @@ class SnapshotHandler(BaseHandler):
             self.es_client.show_message_box(
                 "Error",
                 error_msg,
-                message_style=self.es_client.style_system.get_semantic_style(
-                    "secondary"
-                ),
+                message_style="bold white",
                 panel_style=self.es_client.style_system.get_semantic_style("error"),
             )
 
@@ -1891,9 +1860,7 @@ class SnapshotHandler(BaseHandler):
                     self.es_client.show_message_box(
                         "Error",
                         "Location is required for filesystem repositories",
-                        message_style=self.es_client.style_system.get_semantic_style(
-                            "secondary"
-                        ),
+                        message_style="bold white",
                         panel_style=self.es_client.style_system.get_semantic_style(
                             "error"
                         ),
@@ -1906,9 +1873,7 @@ class SnapshotHandler(BaseHandler):
                     self.es_client.show_message_box(
                         "Error",
                         f"Bucket is required for {repo_type} repositories",
-                        message_style=self.es_client.style_system.get_semantic_style(
-                            "secondary"
-                        ),
+                        message_style="bold white",
                         panel_style=self.es_client.style_system.get_semantic_style(
                             "error"
                         ),
@@ -1973,9 +1938,7 @@ class SnapshotHandler(BaseHandler):
                     self.es_client.show_message_box(
                         "Info",
                         "Repository creation cancelled",
-                        message_style=self.es_client.style_system.get_semantic_style(
-                            "info"
-                        ),
+                        message_style="bold white",
                         panel_style=self.es_client.style_system.get_semantic_style(
                             "info"
                         ),
@@ -1991,18 +1954,14 @@ class SnapshotHandler(BaseHandler):
                 self.es_client.show_message_box(
                     "Error",
                     result["error"],
-                    message_style=self.es_client.style_system.get_semantic_style(
-                        "secondary"
-                    ),
+                    message_style="bold white",
                     panel_style=self.es_client.style_system.get_semantic_style("error"),
                 )
             else:
                 self.es_client.show_message_box(
                     "Success",
                     f"Repository '{repository_name}' created successfully",
-                    message_style=self.es_client.style_system.get_semantic_style(
-                        "success"
-                    ),
+                    message_style="bold white",
                     panel_style=self.es_client.style_system.get_semantic_style(
                         "success"
                     ),
@@ -2013,9 +1972,7 @@ class SnapshotHandler(BaseHandler):
             self.es_client.show_message_box(
                 "Error",
                 error_msg,
-                message_style=self.es_client.style_system.get_semantic_style(
-                    "secondary"
-                ),
+                message_style="bold white",
                 panel_style=self.es_client.style_system.get_semantic_style("error"),
             )
 
@@ -2078,9 +2035,7 @@ class SnapshotHandler(BaseHandler):
             self.es_client.show_message_box(
                 "Info",
                 "No snapshot repositories are configured.",
-                message_style=self.es_client.style_system.get_semantic_style(
-                    "secondary"
-                ),
+                message_style="bold white",
                 panel_style=self.es_client.style_system.get_semantic_style("info"),
             )
             return

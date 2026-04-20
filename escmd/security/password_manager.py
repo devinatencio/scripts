@@ -40,8 +40,8 @@ class PasswordManager:
     def _load_config(self) -> Dict[str, Any]:
         """Load configuration from escmd.json."""
         try:
-            with open(self.config_file, 'r') as f:
-                return json.load(f)
+            from utils import load_json_tolerant
+            return load_json_tolerant(self.config_file)
         except (FileNotFoundError, json.JSONDecodeError):
             return {}
 
@@ -389,8 +389,8 @@ class PasswordManager:
             return f"State file not found: {self.config_file}", None
 
         try:
-            with open(self.config_file, "r", encoding="utf-8") as f:
-                config = json.load(f)
+            from utils import load_json_tolerant
+            config = load_json_tolerant(self.config_file)
         except (OSError, json.JSONDecodeError) as e:
             return f"Failed to read state file: {e}", None
 
@@ -442,8 +442,8 @@ class PasswordManager:
             return False, f"State file not found: {self.config_file}", None
 
         try:
-            with open(self.config_file, "r", encoding="utf-8") as f:
-                config = json.load(f)
+            from utils import load_json_tolerant
+            config = load_json_tolerant(self.config_file)
         except (OSError, json.JSONDecodeError) as e:
             return False, f"Failed to read state file: {e}", None
 

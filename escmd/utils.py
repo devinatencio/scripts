@@ -4,6 +4,33 @@ Utility functions for escmd.
 Common utility functions used across multiple handlers and commands.
 """
 
+import os
+import re
+import sys
+
+
+def get_script_dir():
+    """
+    Return the directory where the escmd binary (or script) lives.
+
+    Under normal Python execution this is the directory containing escmd.py.
+    Under Nuitka onefile builds, __file__ for sub-modules points to the temp
+    extraction directory, so we use sys.argv[0] which always resolves to the
+    real binary location.
+    """
+    # sys.argv[0] reliably points to the actual script/binary in both
+    # normal Python and Nuitka onefile builds.
+    return os.path.dirname(os.path.abspath(sys.argv[0]))
+
+
+def load_json_tolerant(path):
+    """Load a JSON file, tolerating trailing commas before } or ]."""
+    import json
+    with open(path, "r") as f:
+        text = f.read()
+    text = re.sub(r",\s*([}\]])", r"\1", text)
+    return json.loads(text)
+
 def convert_size_to_bytes(size_str):
     """
     Convert Elasticsearch size string to bytes for sorting and comparison.

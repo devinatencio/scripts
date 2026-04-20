@@ -1,0 +1,3 @@
+2026-04-18 17:12:48,768 - escmd_storage - INFO - [escmd.py:557] - Starting escmd command: storage
+2026-04-18 17:12:48,817 - escmd_storage - INFO - [command_handler.py:316] - Executing command: storage
+2026-04-18 17:12:48,861 - escmd_storage - INFO - [escmd.py:655] - Command storage completed successfully

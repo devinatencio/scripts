@@ -293,7 +293,6 @@ class DanglingHandler(BaseHandler):
 
                 print()
                 console.print(actions_panel)
-                print()
                 return
 
             # Dangling indices found — add counts to subtitle
@@ -472,7 +471,6 @@ class DanglingHandler(BaseHandler):
             )
 
             console.print(Columns([warning_panel, recovery_panel], expand=True))
-            print()
 
         except Exception as e:
             self.es_client.show_message_box(
@@ -1854,7 +1852,7 @@ class DanglingHandler(BaseHandler):
                     stderr=subprocess.PIPE,
                     universal_newlines=True,
                     timeout=60,  # 1 minute timeout for scan
-                    cwd=os.path.dirname(os.path.abspath(__file__ + "/../")),
+                    cwd=os.path.dirname(os.path.abspath(sys.argv[0])),
                 )
 
                 if result.returncode == 0:
@@ -2036,7 +2034,7 @@ class DanglingHandler(BaseHandler):
                 stderr=subprocess.PIPE,
                 universal_newlines=True,
                 timeout=300,  # 5 minute timeout
-                cwd=os.path.dirname(os.path.abspath(__file__ + "/../")),
+                cwd=os.path.dirname(os.path.abspath(sys.argv[0])),
             )
 
             if result.returncode == 0:

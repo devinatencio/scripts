@@ -702,8 +702,10 @@ class IndicesCommands(BaseCommand):
         import os
 
         try:
-            config_file = os.path.join(os.path.dirname(__file__), '..', 'elastic_servers.yml')
-            state_file = os.path.join(os.path.dirname(__file__), '..', 'escmd.json')
+            from utils import get_script_dir
+            _sd = get_script_dir()
+            config_file = os.path.join(_sd, 'elastic_servers.yml')
+            state_file = os.path.join(_sd, 'escmd.json')
             config_manager = ConfigurationManager(config_file, state_file)
 
             # Try to get paging settings with fallback to defaults

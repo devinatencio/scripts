@@ -603,7 +603,7 @@ class PasswordCommands(BaseHandler):
             padding=(1, 2),
         )
 
-        self.console.print("\n")
+        self.console.print()
         self.console.print(cleanup_panel)
 
     def _show_session_panel(self, session_info):
@@ -752,7 +752,6 @@ class PasswordCommands(BaseHandler):
         warning_style = ss._get_style('semantic', 'warning', 'yellow') if ss else 'yellow'
         secondary_style = ss._get_style('semantic', 'secondary', 'magenta') if ss else 'magenta'
         box_style = ss.get_table_box() if ss else None
-        zebra = ss.get_zebra_style(1) if ss else "on grey11"
 
         if show_decrypted:
             table = Table(
@@ -762,10 +761,12 @@ class PasswordCommands(BaseHandler):
                 header_style=header_style,
                 show_header=True,
                 expand=True,
-                show_edge=False,
                 box=box_style,
             )
-            table.add_column("Details", style="white", no_wrap=False)
+            table.add_column("Environment", style=success_style, width=20)
+            table.add_column("Username", style=warning_style, width=25)
+            table.add_column("Type", style=secondary_style, width=12)
+            table.add_column("🔓 Password", no_wrap=False)
         else:
             table = Table(
                 title="Stored Password Environments",
@@ -801,7 +802,7 @@ class PasswordCommands(BaseHandler):
         # Add rows to table
         for env_index, env in enumerate(sorted(env_groups.keys())):
             passwords = env_groups[env]
-            env_row_style = zebra if env_index % 2 != 0 else ""
+            env_row_style = ss.get_zebra_style(env_index) if ss else ""
 
             for i, (pwd_type, username, full_key) in enumerate(passwords):
                 # Environment column - only show for first entry
@@ -816,17 +817,6 @@ class PasswordCommands(BaseHandler):
                     type_display = "Global"
 
                 if show_decrypted:
-                    # Create formatted content for single column
-                    env_text = (
-                        f"[bold green]Environment:[/bold green] {env}"
-                        if env_display
-                        else ""
-                    )
-                    user_text = (
-                        f"[bold yellow]Username:[/bold yellow] {username_display}"
-                    )
-                    type_text = f"[bold magenta]Type:[/bold magenta] {type_display}"
-
                     # Get password
                     try:
                         if pwd_type == "user":
@@ -837,24 +827,21 @@ class PasswordCommands(BaseHandler):
                             decrypted_password = self.password_manager.get_password(env)
 
                         if decrypted_password:
-                            password_text = f"[bold red]🔓 Password:[/bold red]\n{decrypted_password}"
+                            # Use the table header background for a prominent, theme-aware highlight
+                            highlight_bg = ss._get_style('table_styles', 'header_style', 'bold white on grey50') if ss else 'bold white on grey50'
+                            password_cell = Text.from_markup(f"[{highlight_bg}] {decrypted_password} [/{highlight_bg}]")
                         else:
-                            password_text = (
-                                "[dim red]🔓 Password: Failed to decrypt[/dim red]"
-                            )
+                            password_cell = Text.from_markup("[dim red]Failed to decrypt[/dim red]")
                     except Exception as e:
-                        password_text = (
-                            f"[dim red]🔓 Password: Decrypt error - {str(e)}[/dim red]"
-                        )
+                        password_cell = Text.from_markup(f"[dim red]Decrypt error - {str(e)}[/dim red]")
 
-                    if env_display:
-                        content = (
-                            f"{env_text}\n{user_text}\n{type_text}\n{password_text}"
-                        )
-                    else:
-                        content = f"{user_text}\n{type_text}\n{password_text}"
-
-                    table.add_row(content, style=env_row_style)
+                    table.add_row(
+                        Text(env_display, style=success_style),
+                        Text(username_display, style=warning_style),
+                        Text(type_display, style=secondary_style),
+                        password_cell,
+                        style=env_row_style,
+                    )
                 else:
                     table.add_row(
                         Text(env_display, style=success_style),

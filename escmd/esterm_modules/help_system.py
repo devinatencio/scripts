@@ -74,7 +74,7 @@ class HelpSystem:
                 "quit",
                 "disconnect",
                 "switch",
-                "action",
+                "actions",
             ]:
                 # Built-in esterm commands - show basic help
                 self.show_builtin_command_help(command)
@@ -106,7 +106,7 @@ class HelpSystem:
             "disconnect": "Disconnect from current cluster",
             "switch": "Show cluster selection menu",
             "theme": "Change terminal theme or show theme menu",
-            "action": "Execute predefined action sequences (list/show/run)",
+            "actions": "Execute predefined action sequences (list/show/run)",
             "clear": "Clear screen",
             "cls": "Clear screen (alias)",
             "exit": "Exit terminal",
@@ -125,7 +125,7 @@ class HelpSystem:
                 "status",
                 "info",
                 "watch",
-                "action",
+                "actions",
                 "cache-clear",
                 "cache-refresh",
                 "disconnect",
@@ -144,7 +144,7 @@ class HelpSystem:
             "connect",
             "status",
             "watch",
-            "action",
+            "actions",
             "theme",
             "switch",
             "cache-clear",
@@ -444,11 +444,11 @@ class HelpSystem:
                 "description": "Execute predefined action sequences",
                 "usage": "action <list|show|run> [arguments]",
                 "examples": [
-                    "action list            # List all available actions",
-                    "action show add-host   # Show details for add-host action",
-                    "action run add-host --param-host server01 # Execute action",
-                    "action run add-host --param-host server01 --dry-run # Test action",
-                    "action run add-host --param-host server01 --quiet # Quiet execution",
+                    "actions list            # List all available actions",
+                    "actions show add-host   # Show details for add-host action",
+                    "actions run add-host --param-host server01 # Execute action",
+                    "actions run add-host --param-host server01 --dry-run # Test action",
+                    "actions run add-host --param-host server01 --quiet # Quiet execution",
                 ],
             },
         }

@@ -1,4 +1,10 @@
 {
     "current_cluster": "default",
     "display_theme": "cyberpunk",
+    "security": {
+        "master_key": "j9RGnld1NBHi3EYurY6dsLr-rSgrnu5bHHcxGYLWkj4=",
+        "encrypted_passwords": {
+            "prod.devin": "Z0FBQUFBQnA1QnIxaGNqWDI1aDFSdHFERkdUQXg3TDQxWTNDYUZ1QWRtSlRUYUU5bmhDVFplN1pEUWQ5MGs5S0R0NVh1Z0ktQ1BHcmF3LXo5dkFrOFVXY0YzZXhIMjhhOFE9PQ=="
+        }
+    }
 }

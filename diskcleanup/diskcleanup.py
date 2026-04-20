@@ -164,7 +164,7 @@ def show_version_console():
     version_text.append(f"Version: ", style="bold")
     version_text.append(f"{SCRIPTVER}\n", style="green")
     version_text.append(f"Author: ", style="bold")
-    version_text.append(f"Devin Acosta\n", style="white")
+    version_text.append(f"Devin Atencio\n", style="white")
     version_text.append(f"Date: ", style="bold")
     version_text.append(f"{SCRIPTDATE}\n", style="white")
     version_text.append(f"License: ", style="bold")
@@ -182,10 +182,216 @@ def show_version_console():
     panel = Panel(version_text, title="Version Information", border_style="cyan")
     console.print(panel)
 
+
+def show_help_config():
+    """Display a rich-formatted configuration reference and usage guide."""
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+    from rich.columns import Columns
+    from diskcleanup.path import is_frozen
+
+    console = Console()
+
+    # Derive the command name from how the user actually invoked us
+    cmd = Path(sys.argv[0]).name if sys.argv[0] else "diskcleanup"
+    # For compiled binaries, drop "sudo python" prefix; for scripts, keep it
+    if is_frozen():
+        sudo_cmd = f"sudo ./{cmd}"
+        user_cmd = f"./{cmd}"
+    else:
+        sudo_cmd = f"sudo python {cmd}"
+        user_cmd = f"python {cmd}"
+
+    # ── Header ───────────────────────────────────────────────────────
+    header = Text()
+    header.append("Disk Cleanup Utility", style="bold cyan")
+    header.append(f"  v{SCRIPTVER}", style="green")
+    header.append(f"  ({SCRIPTDATE})\n", style="dim")
+    header.append(VERSION_DESCRIPTION, style="dim")
+    console.print(Panel(header, border_style="cyan", padding=(1, 2)))
+
+    # ── Usage Examples ───────────────────────────────────────────────
+    usage = Text()
+    usage.append("Usage Examples\n\n", style="bold yellow")
+    examples = [
+        ("Standard cleanup (requires root)", f"{sudo_cmd}"),
+        ("Dry-run preview", f"{sudo_cmd} --dry-run"),
+        ("Custom config file", f"{sudo_cmd} --config /etc/diskcleanup.yaml"),
+        ("Verbose output", f"{sudo_cmd} -v"),
+        ("Daemon mode (continuous)", f"{sudo_cmd} --daemon"),
+        ("Daemon with custom interval", f"{sudo_cmd} --daemon --interval 1800"),
+        ("Trending report", f"{user_cmd} --report"),
+        ("Report (last 50 runs)", f"{user_cmd} --report --last 50"),
+        ("Export CSV history", f"{user_cmd} --report-csv > history.csv"),
+        ("Version info", f"{user_cmd} --version"),
+    ]
+    for desc, cmd in examples:
+        usage.append(f"  {desc}\n", style="white")
+        usage.append(f"    $ {cmd}\n", style="bold green")
+    console.print(Panel(usage, border_style="yellow", padding=(0, 2)))
+
+    # ── CLI Flags ────────────────────────────────────────────────────
+    flags_table = Table(title="Command Line Flags", show_header=True,
+                        header_style="bold magenta", expand=True, padding=(0, 1))
+    flags_table.add_column("Flag", style="cyan", no_wrap=True)
+    flags_table.add_column("Description", style="white")
+    flags = [
+        ("-h, --help", "Show this help and configuration reference"),
+        ("--dry-run", "Preview what would be cleaned without deleting anything"),
+        ("--config PATH", "Path to YAML configuration file"),
+        ("-v, --verbose", "Increase verbosity (use -v or -vv for debug output)"),
+        ("--daemon", "Run continuously with a sleep interval between cycles"),
+        ("--interval SECONDS", "Override daemon sleep interval (default: config or 3600)"),
+        ("--report", "Show rich-formatted trending report from run history"),
+        ("--report-csv", "Export run history as CSV to stdout"),
+        ("--last N", "Number of recent runs to include in report (default: 20)"),
+        ("-V, --version", "Show version information"),
+        ("--version-dialog", "Show version in a GUI dialog (requires tkinter)"),
+    ]
+    for flag, desc in flags:
+        flags_table.add_row(flag, desc)
+    console.print(flags_table)
+    console.print()
+
+    # ── YAML: main section ───────────────────────────────────────────
+    main_table = Table(title="YAML — main Section", show_header=True,
+                       header_style="bold magenta", expand=True, padding=(0, 1))
+    main_table.add_column("Key", style="cyan", no_wrap=True)
+    main_table.add_column("Type", style="yellow", no_wrap=True)
+    main_table.add_column("Default", style="green", no_wrap=True)
+    main_table.add_column("Description", style="white")
+    main_opts = [
+        ("cleanup", "bool", "true", "Enable or disable cleanup operations"),
+        ("max_fileage", "int (days)", "—", "Delete files older than this many days"),
+        ("max_filesize", "size string", "—", "Global max file size before truncation (e.g. \"2 GiB\")"),
+        ("directories_to_check", "list", "—", "Directories for basic age+extension cleanup"),
+        ("file_extensions", "list", "—", "Regex patterns for file extensions to target"),
+        ("exclude_patterns", "list", "[]", "Regex patterns — matching files are never deleted"),
+        ("recursive", "bool", "false", "Scan directories_to_check recursively"),
+        ("audit_percent", "int (0-100)", "50", "Delete audit logs until disk usage drops below this %"),
+        ("abrt_maxage", "int (days)", "30", "Max age for ABRT crash dump directories"),
+        ("abrt_maxsize", "size string", "50 MB", "Purge ABRT dirs when total exceeds this size"),
+        ("abrt_directory", "path", "/var/log/crash/abrt", "Location of ABRT crash dump directories"),
+        ("check_services", "list", "[]", "Services to check for deleted open file handles"),
+        ("compressed_age_detection", "bool", "true", "Peek inside .gz/.tar.gz for true data age"),
+        ("log_file", "path", "diskcleanup.log", "Log file location (relative or absolute)"),
+        ("history_file", "path", "diskcleanup_history.jsonl", "JSONL run history for trending reports"),
+    ]
+    for key, typ, default, desc in main_opts:
+        main_table.add_row(key, typ, default, desc)
+    console.print(main_table)
+    console.print()
+
+    # ── YAML: files section ──────────────────────────────────────────
+    files_text = Text()
+    files_text.append("YAML — files Section\n\n", style="bold magenta")
+    files_text.append("Monitor individual files and truncate to 0 bytes when they exceed a size limit.\n", style="white")
+    files_text.append("Each entry maps a file path to a max size (or {} to use the global max_filesize).\n\n", style="white")
+    files_text.append('  files:\n', style="bold green")
+    files_text.append('    "/var/log/mysqld.log": "2 GiB"\n', style="green")
+    files_text.append('    "/var/log/app/app.log": {}          ', style="green")
+    files_text.append("# uses global max_filesize\n", style="dim")
+    console.print(Panel(files_text, border_style="magenta", padding=(0, 2)))
+
+    # ── YAML: directories section ────────────────────────────────────
+    dir_table = Table(title="YAML — directories Section (per-directory pattern cleanup)",
+                      show_header=True, header_style="bold magenta", expand=True, padding=(0, 1))
+    dir_table.add_column("Key", style="cyan", no_wrap=True)
+    dir_table.add_column("Type", style="yellow", no_wrap=True)
+    dir_table.add_column("Default", style="green", no_wrap=True)
+    dir_table.add_column("Description", style="white")
+    dir_opts = [
+        ("file_pattern", "regex", "—", "Regex to match filenames for deletion (required)"),
+        ("max_fileage", "int (days)", "global", "Override the global max_fileage for this directory"),
+        ("exclude_pattern", "regex / list", "[]", "Extra exclude patterns merged with global excludes"),
+        ("recursive", "bool", "true", "Scan subdirectories (set false for top-level only)"),
+    ]
+    for key, typ, default, desc in dir_opts:
+        dir_table.add_row(key, typ, default, desc)
+    console.print(dir_table)
+
+    dir_example = Text()
+    dir_example.append("\n  Example:\n", style="bold")
+    dir_example.append('  directories:\n', style="green")
+    dir_example.append('    "/var/log/haproxy":\n', style="green")
+    dir_example.append('      max_fileage: 10\n', style="green")
+    dir_example.append('      file_pattern: "haproxy-.*"\n', style="green")
+    dir_example.append('    "/var/log/app":\n', style="green")
+    dir_example.append('      max_fileage: 3\n', style="green")
+    dir_example.append('      file_pattern: ".*\\.csv"\n', style="green")
+    dir_example.append('      exclude_pattern: "important.*"\n', style="green")
+    dir_example.append('      recursive: false\n', style="green")
+    console.print(dir_example)
+    console.print()
+
+    # ── YAML: journald section ───────────────────────────────────────
+    jrnl_table = Table(title="YAML — journald Section (optional)",
+                       show_header=True, header_style="bold magenta", expand=True, padding=(0, 1))
+    jrnl_table.add_column("Key", style="cyan", no_wrap=True)
+    jrnl_table.add_column("Type", style="yellow", no_wrap=True)
+    jrnl_table.add_column("Default", style="green", no_wrap=True)
+    jrnl_table.add_column("Description", style="white")
+    jrnl_opts = [
+        ("cleanup", "bool", "false", "Enable journald vacuum cleanup"),
+        ("max_size", "size string", "500 MB", "Max total journal size (journalctl --vacuum-size)"),
+        ("max_age", "duration", "30d", "Max journal age (journalctl --vacuum-time)"),
+    ]
+    for key, typ, default, desc in jrnl_opts:
+        jrnl_table.add_row(key, typ, default, desc)
+    console.print(jrnl_table)
+    console.print()
+
+    # ── YAML: daemon section ─────────────────────────────────────────
+    daemon_table = Table(title="YAML — daemon Section (optional, used with --daemon)",
+                         show_header=True, header_style="bold magenta", expand=True, padding=(0, 1))
+    daemon_table.add_column("Key", style="cyan", no_wrap=True)
+    daemon_table.add_column("Type", style="yellow", no_wrap=True)
+    daemon_table.add_column("Default", style="green", no_wrap=True)
+    daemon_table.add_column("Description", style="white")
+    daemon_opts = [
+        ("interval", "int (seconds)", "3600", "Sleep time between cleanup cycles"),
+        ("pid_file", "path", "/var/run/diskcleanup.pid", "PID file to prevent duplicate instances"),
+        ("max_consecutive_errors", "int", "5", "Exit after this many consecutive cycle failures"),
+    ]
+    for key, typ, default, desc in daemon_opts:
+        daemon_table.add_row(key, typ, default, desc)
+    console.print(daemon_table)
+    console.print()
+
+    # ── Signals (daemon) ─────────────────────────────────────────────
+    sig_text = Text()
+    sig_text.append("Daemon Signals\n\n", style="bold yellow")
+    sig_text.append("  SIGTERM / SIGINT  ", style="bold cyan")
+    sig_text.append("Graceful shutdown — finishes current cycle, removes PID file\n", style="white")
+    sig_text.append("  SIGHUP            ", style="bold cyan")
+    sig_text.append("Interrupts sleep, starts next cycle immediately (config reload)\n", style="white")
+    console.print(Panel(sig_text, border_style="yellow", padding=(0, 2)))
+
+    # ── Compressed age detection note ────────────────────────────────
+    note = Text()
+    note.append("Compressed File Age Detection\n\n", style="bold yellow")
+    note.append(
+        "When compressed_age_detection is enabled (default), .gz and .tar.gz files are\n"
+        "inspected for their internal timestamp. The older of the filesystem mtime and\n"
+        "the internal timestamp is used for age comparison. This catches rotated logs\n"
+        "that have a recent mtime but contain old data. Only files whose mtime is newer\n"
+        "than the age threshold are inspected — already-qualifying files skip the check.\n",
+        style="white"
+    )
+    console.print(Panel(note, border_style="yellow", padding=(0, 2)))
+
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Advanced disk cleanup utility with health monitoring"
+        description="Advanced disk cleanup utility with health monitoring",
+        add_help=False
+    )
+    parser.add_argument(
+        '-h', '--help',
+        action='store_true',
+        help='Show detailed help with configuration reference'
     )
     parser.add_argument(
         '--version', '-V',
@@ -241,6 +447,11 @@ def parse_arguments():
         default=20,
         metavar='N',
         help='Number of recent runs to show in report (default: 20)'
+    )
+    parser.add_argument(
+        '--help-config',
+        action='store_true',
+        help='Show detailed configuration reference and exit'
     )
     return parser.parse_args()
 
@@ -347,7 +558,7 @@ def run_cleanup(args, yml_config, files, files_main_settings, directories_to_che
 
     # Show initial system status
     console.rule(f"[bold cyan]🚀 Disk Cleanup v{SCRIPTVER} Starting", style="cyan")
-    print_compact_health_summary(health_before, health_before)
+    print_compact_health_summary(health_before, health_before, console=console)
     console.rule(style="cyan")
 
     # Track potential/actual space savings
@@ -626,7 +837,7 @@ def run_cleanup(args, yml_config, files, files_main_settings, directories_to_che
                                           tracked=format_size(total_space_freed),
                                           note="df -h may not detect small changes on large filesystems"))
 
-        print_health_comparison(health_before, health_after, execution_time, space_freed_display)
+        print_health_comparison(health_before, health_after, execution_time, space_freed_display, console=console)
 
         diskcleanup_core.log.info(logger_helper.performance(mode="production",
                                    space_freed=format_size(space_freed_display),
@@ -742,12 +953,27 @@ def main():
         show_version_dialog()
         sys.exit(0)
 
-    script_name = Path(__file__).name
-    current_directory = str(Path(__file__).resolve().parent)
+    if args.help or args.help_config:
+        show_help_config()
+        sys.exit(0)
+
+    from diskcleanup.path import get_app_dir, get_bundle_dir, is_frozen, is_pyinstaller, is_nuitka
+    script_name = Path(sys.executable).name if is_frozen() else Path(__file__).name
+    current_directory = str(get_app_dir())
+
+    if args.verbose:
+        print(f"DEBUG path: is_frozen={is_frozen()}, is_pyinstaller={is_pyinstaller()}, is_nuitka={is_nuitka()}")
+        print(f"DEBUG path: sys.executable={sys.executable}")
+        print(f"DEBUG path: sys.frozen={getattr(sys, 'frozen', 'NOT SET')}")
+        print(f"DEBUG path: __file__={__file__}")
+        print(f"DEBUG path: get_app_dir()={get_app_dir()}")
+        print(f"DEBUG path: get_bundle_dir()={get_bundle_dir()}")
 
     yml_config = args.config if args.config else find_yaml_config()
     if yml_config is None:
         print("ERROR: No YAML configuration file found. Exiting.")
+        print(f"  Searched in: {get_app_dir()}")
+        print(f"  For: diskcleanup.yaml, diskcleanup.yml, config.yaml, config.yml")
         sys.exit(1)
 
     try:

@@ -64,7 +64,8 @@ class ClusterManager:
         """
         try:
             # Get the correct state file path (escmd.json in script directory)
-            script_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            from utils import get_script_dir
+            script_directory = get_script_dir()
             state_file = os.path.join(script_directory, 'escmd.json')
             self.config_manager = ConfigurationManager(state_file_path=state_file)
             return True
